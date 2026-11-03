@@ -390,9 +390,15 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
                         <div className="flex items-center gap-2">
                           <span>{tx.description}</span>
                           {tx.notes && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold">
-                              {tx.notes}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => onEditTransaction && onEditTransaction(tx)}
+                              className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-950 dark:hover:bg-blue-900 dark:text-blue-300 font-semibold flex items-center gap-1 cursor-pointer transition border border-blue-200/60 dark:border-blue-800"
+                              title="Clique para editar este lançamento / observação"
+                            >
+                              <span>{tx.notes}</span>
+                              <Edit3 className="w-2.5 h-2.5 opacity-70" />
+                            </button>
                           )}
                         </div>
                       </td>

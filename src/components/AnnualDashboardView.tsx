@@ -9,6 +9,7 @@ import { MONTH_NAMES, INITIAL_ANNUAL_DATA } from '../data/annualDashboardData';
 import { formatBRL } from '../utils/finance';
 import { AnnualBudgetGoalsView } from './AnnualBudgetGoalsView';
 import { DashboardMonthlyPdfModal } from './DashboardMonthlyPdfModal';
+import { EmergencyReserveCard } from './EmergencyReserveCard';
 import { Transaction, JarType, DreamGoal } from '../types';
 
 interface AnnualDashboardViewProps {
@@ -18,6 +19,7 @@ interface AnnualDashboardViewProps {
   jarLimits?: Record<JarType, number>;
   selectedMonth?: string;
   selectedMonthIndex?: number;
+  onUpdateDreamBalance?: (dreamId: string, newBalance: number) => void;
 }
 
 export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({ 
@@ -26,7 +28,8 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
   dreams = [],
   jarLimits = {} as Record<JarType, number>,
   selectedMonth = 'Outubro / 2026',
-  selectedMonthIndex = 2
+  selectedMonthIndex = 2,
+  onUpdateDreamBalance
 }) => {
   const [viewMode, setViewMode] = useState<'resumo' | 'detalhada' | 'graficos' | 'metas'>('resumo');
   const [annualData, setAnnualData] = useState(INITIAL_ANNUAL_DATA);
@@ -332,6 +335,14 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Componente de Reserva de Emergência (Gastos médios dos últimos 3 meses & Barra de Progresso) */}
+      <EmergencyReserveCard
+        annualDataDespesas={annualData.despesas}
+        referenceMonthIndex={9} // Outubro (mês referência atual)
+        dreams={dreams}
+        onUpdateDreamBalance={onUpdateDreamBalance}
+      />
 
       {/* ============================================================== */}
       {/* ABA 1: TELA COM RESUMO DOS DADOS (Cópia exata de image.png)    */}

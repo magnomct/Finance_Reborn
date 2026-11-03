@@ -202,12 +202,12 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                           e.stopPropagation();
                           handleOpenQuickNotes(tx);
                         }}
-                        className="group/badge px-2 py-0.5 rounded text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-950 dark:hover:bg-blue-900 dark:text-blue-300 font-semibold flex items-center gap-1 cursor-pointer transition shadow-xs"
-                        title="Clique para editar ou remover observação"
+                        className="group/badge px-2 py-0.5 rounded-md text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-950/80 dark:hover:bg-blue-900 dark:text-blue-300 font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-xs border border-blue-200/80 dark:border-blue-800"
+                        title="Clique para editar ou remover esta observação"
                         data-testid={`badge-obs-${tx.id}`}
                       >
                         <span>{tx.notes}</span>
-                        <Edit3 className="w-2.5 h-2.5 opacity-60 group-hover/badge:opacity-100 transition" />
+                        <Edit3 className="w-3 h-3 text-blue-600 dark:text-blue-400 opacity-80 group-hover/badge:opacity-100 group-hover/badge:scale-110 transition shrink-0" />
                       </button>
                     ) : (
                       <button

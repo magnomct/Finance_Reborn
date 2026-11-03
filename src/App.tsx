@@ -784,6 +784,9 @@ export default function App() {
                   setSelectedMonthIndex(monthIdx);
                 }
               }}
+              onUpdateDreamBalance={(dreamId, newBal) => {
+                setDreams(prev => prev.map(d => d.id === dreamId ? { ...d, current: newBal } : d));
+              }}
             />
           </div>
         )}
