@@ -1,0 +1,1256 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  Wallet, ShieldAlert, ArrowDownCircle, ArrowUpCircle, 
+  PiggyBank, BookOpen, Smile, Plane, Home, RefreshCw,
+  Building2, User, Plus, Trash2, CheckCircle2, AlertTriangle, 
+  CreditCard, ShoppingBag, Zap, TrendingDown, Calendar, Cloud,
+  LayoutGrid, BarChart3, Settings, ChevronLeft, ChevronRight,
+  Filter, Search, X, Check, ArrowUpRight, ArrowDownLeft,
+  Smartphone, Monitor, Sparkles, Moon, Sun, Clock
+} from 'lucide-react';
+
+export type JarType = 'NEC_55' | 'LIF_10' | 'PLP_10' | 'EDU_10' | 'DIV_10' | 'FER_5' | 'PJ_EXCLUIDO';
+export type CostCenter = 'Magno' | 'Nathan' | 'Suzy' | 'PJ';
+export type AccountType = 'Inter PF' | 'Inter PJ' | 'C6' | 'Passe' | 'Outro';
+export type ActiveScreen = 'hub' | 'agenda' | 'potes' | 'sonhos' | 'extratos' | 'pj' | 'relatorios';
+
+export interface Transaction {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: 'receita' | 'despesa' | 'reembolso';
+  jar: JarType;
+  costCenter: CostCenter;
+  account: AccountType;
+  status?: 'liquidado' | 'agendado';
+}
+
+export const INITIAL_TRANSACTIONS: Transaction[] = [
+  // 1. Entradas Separadas de Trabalho
+  { id: '1', date: '2026-10-10', description: 'Salário CLT (Magno)', amount: 2060.00, type: 'receita', jar: 'NEC_55', costCenter: 'Magno', account: 'Inter PF', status: 'liquidado' },
+  { id: '2', date: '2026-10-05', description: 'Serviço PJ / Faturamento', amount: 3060.86, type: 'receita', jar: 'PJ_EXCLUIDO', costCenter: 'PJ', account: 'Inter PJ', status: 'liquidado' },
+  
+  // 2. Financiamento Habitacional & Reembolso Nathan & Juros Cheque Especial
+  { id: '3', date: '2026-10-15', description: 'Reembolso Financiamento Apto (Nathan)', amount: 858.00, type: 'reembolso', jar: 'NEC_55', costCenter: 'Nathan', account: 'Inter PF', status: 'liquidado' },
+  { id: '4', date: '2026-10-25', description: 'Financiamento Apto - Parcela Habitacional', amount: -1290.00, type: 'despesa', jar: 'NEC_55', costCenter: 'Magno', account: 'Inter PF', status: 'liquidado' },
+  { id: '5', date: '2026-10-25', description: 'Juros de Cheque Especial (Apto / Conta PF)', amount: -140.00, type: 'despesa', jar: 'NEC_55', costCenter: 'Magno', account: 'Inter PF', status: 'liquidado' },
+  
+  // 3. Despesas Essenciais do Dia a Dia (Necessidades 55%)
+  { id: '6', date: '2026-10-07', description: 'Condução Semanal (Total Mês)', amount: -120.00, type: 'despesa', jar: 'NEC_55', costCenter: 'Magno', account: 'Passe', status: 'liquidado' },
+  { id: '7', date: '2026-10-15', description: 'Shopee / Despesas Básicas do Lar', amount: -142.00, type: 'despesa', jar: 'NEC_55', costCenter: 'Magno', account: 'Inter PF', status: 'liquidado' },
+  
+  // 4. Adiantamentos Salariais / Antecipação de Fluxo (Necessidades 55%)
+  { id: '8', date: '2026-10-16', description: 'Adiantamento de Salário (Blipay)', amount: -126.00, type: 'despesa', jar: 'NEC_55', costCenter: 'Magno', account: 'Inter PF', status: 'liquidado' },
+  { id: '9', date: '2026-10-15', description: 'Adiantamento de Salário (99Pay)', amount: -90.00, type: 'despesa', jar: 'NEC_55', costCenter: 'Magno', account: 'Inter PF', status: 'liquidado' },
+  
+  // 5. Cartão C6 Concentrador (Contas de Casa, Assinaturas, Transporte e Lazer)
+  { id: '10', date: '2026-10-22', description: 'Fatura Cartão C6 (Contas, Assinaturas, Transp.)', amount: -2000.00, type: 'despesa', jar: 'NEC_55', costCenter: 'Magno', account: 'C6', status: 'liquidado' },
+  { id: '11', date: '2026-10-22', description: 'Fatura Cartão C6 (Lazer & Estilo)', amount: -600.00, type: 'despesa', jar: 'DIV_10', costCenter: 'Magno', account: 'C6', status: 'liquidado' },
+  
+  // 6. Custos Operacionais PJ (Conta Inter PJ)
+  { id: '12', date: '2026-10-23', description: 'Convênio Médico PJ', amount: -1296.45, type: 'despesa', jar: 'PJ_EXCLUIDO', costCenter: 'PJ', account: 'Inter PJ', status: 'liquidado' },
+  { id: '13', date: '2026-10-20', description: 'Tributos DAS Simples Nacional', amount: -172.10, type: 'despesa', jar: 'PJ_EXCLUIDO', costCenter: 'PJ', account: 'Inter PJ', status: 'liquidado' }
+];
+
+export default function FinancialApp() {
+  const [activeScreen, setActiveScreen] = useState<ActiveScreen>('agenda');
+  const [viewScope, setViewScope] = useState<'PF' | 'PJ' | 'CONSOLIDADO'>('PF');
+  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
+  const [usePjProfitInPf, setUsePjProfitInPf] = useState<boolean>(true);
+  const [isMobileFrame, setIsMobileFrame] = useState<boolean>(false);
+  const [themeMode, setThemeMode] = useState<'clean' | 'dark'>('clean');
+  
+  // Filtros e busca da Agenda
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedJarFilter, setSelectedJarFilter] = useState<string>('ALL');
+  const [selectedMonth, setSelectedMonth] = useState('Outubro / 2026');
+
+  // Modal Novo Lançamento estilo Yupee
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [desc, setDesc] = useState('');
+  const [amount, setAmount] = useState('');
+  const [txDate, setTxDate] = useState('2026-10-27');
+  const [type, setType] = useState<'receita' | 'despesa' | 'reembolso'>('despesa');
+  const [jar, setJar] = useState<JarType>('NEC_55');
+  const [costCenter, setCostCenter] = useState<CostCenter>('Magno');
+  const [account, setAccount] = useState<AccountType>('Inter PF');
+  const [status, setStatus] = useState<'liquidado' | 'agendado'>('liquidado');
+
+  // Metas & Sonhos (Estilo Yupee)
+  const [sonhos, setSonhos] = useState([
+    {
+      id: '1',
+      title: 'Eliminar Juros de Cheque Especial',
+      target: 1000.00,
+      current: 0.00,
+      category: 'Economia Imediata',
+      impact: 'Economiza R$ 140,00/mês (R$ 1.680/ano)',
+      icon: Zap,
+      color: 'from-amber-500 to-orange-500'
+    },
+    {
+      id: '2',
+      title: 'Reserva de Emergência Familiar',
+      target: 18300.00,
+      current: 0.00,
+      category: 'Segurança (PLP 10%)',
+      impact: '6 meses de despesas básicas garantidas',
+      icon: ShieldAlert,
+      color: 'from-blue-500 to-indigo-500'
+    },
+    {
+      id: '3',
+      title: 'Férias & Viagens da Família',
+      target: 2500.00,
+      current: 0.00,
+      category: 'Experiências (FER 5%)',
+      impact: 'Viagem planejada sem endividamento',
+      icon: Plane,
+      color: 'from-emerald-500 to-teal-500'
+    }
+  ]);
+
+  // Cálculos Financeiros
+  const financialMetrics = useMemo(() => {
+    // 1. Entradas
+    const cltIncome = transactions
+      .filter(t => t.type === 'receita' && t.costCenter === 'Magno')
+      .reduce((acc, t) => acc + t.amount, 0);
+
+    const pjServiceIncome = transactions
+      .filter(t => t.type === 'receita' && t.costCenter === 'PJ')
+      .reduce((acc, t) => acc + t.amount, 0);
+
+    // 2. Financiamento Apto & Reembolso Nathan & Juros Cheque Especial
+    const aptoBaseParcel = transactions
+      .filter(t => t.description.toLowerCase().includes('parcela habitacional') && t.type === 'despesa')
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+    const overdraftInterest = transactions
+      .filter(t => t.description.toLowerCase().includes('cheque especial') && t.type === 'despesa')
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+    const nathanRefund = transactions
+      .filter(t => t.type === 'reembolso')
+      .reduce((acc, t) => acc + t.amount, 0);
+
+    const totalAptoDebit = aptoBaseParcel + overdraftInterest; // R$ 1.430,00
+    const magnoTotalNetApto = totalAptoDebit - nathanRefund;    // R$ 572,00
+    const magnoPureMortgage = magnoTotalNetApto - overdraftInterest; // R$ 432,00
+
+    // 3. Fatura C6 Total
+    const c6Total = transactions
+      .filter(t => t.account === 'C6' && t.type === 'despesa')
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+    // 4. Custos Operacionais PJ
+    const pjExpenses = transactions
+      .filter(t => t.type === 'despesa' && t.costCenter === 'PJ')
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+    const pjNetProfit = pjServiceIncome - pjExpenses;
+
+    // 5. Base Orçamentária dos 6 Potes
+    const effectiveIncomeBase = usePjProfitInPf && pjNetProfit > 0 
+      ? cltIncome + pjNetProfit 
+      : cltIncome;
+
+    // 6. Gastos Líquidos por Pote
+    const calcExpense = (targetJar: JarType) => {
+      const expenses = transactions
+        .filter(t => t.jar === targetJar && t.type === 'despesa')
+        .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+      
+      const refunds = transactions
+        .filter(t => t.jar === targetJar && t.type === 'reembolso')
+        .reduce((acc, t) => acc + t.amount, 0);
+
+      return expenses - refunds;
+    };
+
+    const jarNEC = calcExpense('NEC_55');
+    const jarLIF = calcExpense('LIF_10');
+    const jarPLP = calcExpense('PLP_10');
+    const jarEDU = calcExpense('EDU_10');
+    const jarDIV = calcExpense('DIV_10');
+    const jarFER = calcExpense('FER_5');
+    const totalSpentPF = jarNEC + jarLIF + jarPLP + jarEDU + jarDIV + jarFER;
+
+    // Totais Brutos da Agenda
+    const totalReceipts = transactions
+      .filter(t => t.type === 'receita' || t.type === 'reembolso')
+      .reduce((acc, t) => acc + t.amount, 0);
+
+    const totalPayments = transactions
+      .filter(t => t.type === 'despesa')
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+    return {
+      cltIncome,
+      pjServiceIncome,
+      totalGrossIncome: cltIncome + pjServiceIncome,
+      nathanRefund,
+      totalAptoDebit,
+      magnoTotalNetApto,
+      magnoPureMortgage,
+      overdraftInterest,
+      c6Total,
+      effectiveIncomeBase,
+      totalSpentPF,
+      netBalancePFIsolated: cltIncome - totalSpentPF,
+      netBalanceConsolidated: (cltIncome + (pjNetProfit > 0 ? pjNetProfit : 0)) - totalSpentPF,
+      
+      // Totais Agenda
+      totalReceipts,
+      totalPayments,
+
+      // PJ
+      pjExpenses,
+      pjNetProfit,
+      pjProfitMargin: pjServiceIncome > 0 ? (pjNetProfit / pjServiceIncome) * 100 : 0,
+
+      // Potes
+      jars: {
+        NEC_55: { name: 'Necessidades', desc: 'Contas, C6, Moradia, Condução', pct: 0.55, budget: effectiveIncomeBase * 0.55, spent: jarNEC, icon: Home, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/40' },
+        LIF_10: { name: 'Liberdade Fin.', desc: 'Investimentos & Renda Passiva', pct: 0.10, budget: effectiveIncomeBase * 0.10, spent: jarLIF, icon: Wallet, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40' },
+        PLP_10: { name: 'Reserva & Sonhos', desc: 'Poupança de Longo Prazo', pct: 0.10, budget: effectiveIncomeBase * 0.10, spent: jarPLP, icon: PiggyBank, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40' },
+        EDU_10: { name: 'Educação', desc: 'Cursos, Livros & Aprendizado', pct: 0.10, budget: effectiveIncomeBase * 0.10, spent: jarEDU, icon: BookOpen, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/40' },
+        DIV_10: { name: 'Diversão & Estilo', desc: 'Lazer no C6, Restaurantes', pct: 0.10, budget: effectiveIncomeBase * 0.10, spent: jarDIV, icon: Smile, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/40' },
+        FER_5:  { name: 'Férias & Doações', desc: 'Viagens & Generosidade', pct: 0.05, budget: effectiveIncomeBase * 0.05, spent: jarFER, icon: Plane, color: 'text-rose-500 bg-rose-50 dark:bg-rose-950/40' },
+      }
+    };
+  }, [transactions, usePjProfitInPf]);
+
+  const handleScopeChange = (scope: 'PF' | 'PJ' | 'CONSOLIDADO') => {
+    setViewScope(scope);
+    if (scope === 'PJ') {
+      setCostCenter('PJ');
+      setAccount('Inter PJ');
+      setJar('PJ_EXCLUIDO');
+    } else {
+      setCostCenter('Magno');
+      setAccount('Inter PF');
+      setJar('NEC_55');
+    }
+  };
+
+  const handleAddTransaction = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!desc || !amount) return;
+
+    const val = parseFloat(amount);
+    const newTx: Transaction = {
+      id: Date.now().toString(),
+      date: txDate,
+      description: desc,
+      amount: type === 'despesa' ? -Math.abs(val) : Math.abs(val),
+      type,
+      jar: viewScope === 'PJ' ? 'PJ_EXCLUIDO' : jar,
+      costCenter: viewScope === 'PJ' ? 'PJ' : costCenter,
+      account: viewScope === 'PJ' ? 'Inter PJ' : account,
+      status
+    };
+
+    setTransactions([newTx, ...transactions]);
+    setDesc('');
+    setAmount('');
+    setIsModalOpen(false);
+  };
+
+  const handleDeleteTransaction = (id: string) => {
+    setTransactions(transactions.filter(t => t.id !== id));
+  };
+
+  // Filtragem de transações para a Agenda / Extratos
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      // Filtro de Escopo
+      if (viewScope === 'PF' && t.costCenter === 'PJ') return false;
+      if (viewScope === 'PJ' && t.costCenter !== 'PJ') return false;
+
+      // Filtro de Pote
+      if (selectedJarFilter !== 'ALL' && t.jar !== selectedJarFilter) return false;
+
+      // Busca por texto
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return (
+          t.description.toLowerCase().includes(q) ||
+          t.account.toLowerCase().includes(q) ||
+          t.costCenter.toLowerCase().includes(q) ||
+          t.jar.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    }).sort((a, b) => a.date.localeCompare(b.date));
+  }, [transactions, viewScope, selectedJarFilter, searchQuery]);
+
+  // Cores dinâmicas para tema Clean vs Dark
+  const isDark = themeMode === 'dark';
+  const theme = {
+    bg: isDark ? 'bg-slate-950 text-slate-100' : 'bg-[#F4F6F9] text-slate-800',
+    card: isDark ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-md' : 'bg-white border-slate-200 text-slate-800 shadow-sm hover:shadow-md transition-shadow',
+    cardSubtle: isDark ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200/80',
+    headerBg: isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm',
+    footerBg: isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200 shadow-lg',
+    textMuted: isDark ? 'text-slate-400' : 'text-slate-500',
+    textHeading: isDark ? 'text-white' : 'text-slate-900',
+    inputBg: isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900',
+    border: isDark ? 'border-slate-800' : 'border-slate-200',
+    hoverRow: isDark ? 'hover:bg-slate-800/40' : 'hover:bg-blue-50/50',
+    accentBlue: isDark ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white',
+  };
+
+  return (
+    <div className={`min-h-screen ${theme.bg} font-sans transition-colors duration-200 pb-20`}>
+      
+      {/* Controles de Topo: Moldura Mobile e Modo Escuro */}
+      <div className="max-w-5xl mx-auto px-4 pt-3 flex justify-between items-center text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-slate-400">Referência Yupee Reborn:</span>
+          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold dark:bg-emerald-950 dark:text-emerald-300">
+            Design Moderno & Clean
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setIsMobileFrame(!isMobileFrame)}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border transition ${
+              isMobileFrame 
+                ? 'bg-blue-500 text-white border-blue-600 font-medium' 
+                : `${theme.cardSubtle} text-slate-500 hover:text-slate-900 dark:hover:text-white`
+            }`}
+          >
+            {isMobileFrame ? <Smartphone className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}
+            <span>{isMobileFrame ? 'Modo Smartphone' : 'Modo Expandido'}</span>
+          </button>
+
+          <button 
+            onClick={() => setThemeMode(isDark ? 'clean' : 'dark')}
+            className={`p-1.5 rounded-lg border ${theme.cardSubtle} text-slate-500 hover:text-slate-900 dark:hover:text-white transition`}
+            title={isDark ? 'Mudar para Tema Clean' : 'Mudar para Tema Dark'}
+          >
+            {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-slate-600" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Container Principal (Desktop ou Moldura Mobile estilo iPhone/Android) */}
+      <main className={`mx-auto transition-all duration-300 ${
+        isMobileFrame 
+          ? 'max-w-md my-4 rounded-[40px] shadow-2xl border-8 border-slate-800 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-950 relative min-h-[820px]' 
+          : 'max-w-5xl px-4 py-4 space-y-6'
+      }`}>
+
+        {/* ============================================================== */}
+        {/* CABEÇALHO YUPEE (Logo com as 5 letrinhas coloridas marcantes)    */}
+        {/* ============================================================== */}
+        <header className={`px-5 py-3.5 border-b ${theme.headerBg} flex items-center justify-between sticky top-0 z-30 backdrop-blur-md`}>
+          
+          {/* Logo Yupee */}
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveScreen('hub')}>
+            <div className="flex items-center gap-1 tracking-tight select-none">
+              <span className="w-6 h-6 rounded-md bg-rose-500 text-white font-black text-sm flex items-center justify-center shadow-sm">y</span>
+              <span className="w-6 h-6 rounded-md bg-amber-500 text-white font-black text-sm flex items-center justify-center shadow-sm">u</span>
+              <span className="w-6 h-6 rounded-md bg-emerald-500 text-white font-black text-sm flex items-center justify-center shadow-sm">p</span>
+              <span className="w-6 h-6 rounded-md bg-sky-500 text-white font-black text-sm flex items-center justify-center shadow-sm">e</span>
+              <span className="w-6 h-6 rounded-md bg-indigo-500 text-white font-black text-sm flex items-center justify-center shadow-sm">e</span>
+            </div>
+            <div className="hidden sm:block">
+              <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 block -mb-1">FINANÇAS</span>
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">6 Potes & Fluxo</span>
+            </div>
+          </div>
+
+          {/* Seletor de Escopo (PF, PJ, Consolidado) */}
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+            <button
+              onClick={() => handleScopeChange('PF')}
+              className={`px-3 py-1 rounded-lg transition ${viewScope === 'PF' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              PF
+            </button>
+            <button
+              onClick={() => handleScopeChange('PJ')}
+              className={`px-3 py-1 rounded-lg transition ${viewScope === 'PJ' ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              PJ
+            </button>
+            <button
+              onClick={() => handleScopeChange('CONSOLIDADO')}
+              className={`px-3 py-1 rounded-lg transition ${viewScope === 'CONSOLIDADO' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              Consolidado
+            </button>
+          </div>
+
+          {/* Botão Novo Lançamento estilo Yupee */}
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs shadow-sm transition active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Novo</span>
+          </button>
+        </header>
+
+        {/* ============================================================== */}
+        {/* BARRA DE NAVEGAÇÃO DE TELAS (Minhas Finanças / Agenda / Potes)  */}
+        {/* ============================================================== */}
+        <nav className="flex items-center gap-1 px-4 py-2 overflow-x-auto no-scrollbar border-b border-slate-200/60 dark:border-slate-800/80 text-xs font-semibold">
+          {[
+            { id: 'agenda', label: 'Agenda Financeira', icon: Calendar },
+            { id: 'hub', label: 'Minhas Finanças', icon: LayoutGrid },
+            { id: 'potes', label: '6 Potes', icon: Home },
+            { id: 'sonhos', label: 'Sonhos & Metas', icon: Cloud },
+            { id: 'extratos', label: 'Extratos', icon: BarChart3 },
+            { id: 'pj', label: 'Operação PJ', icon: Building2 },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeScreen === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveScreen(tab.id as ActiveScreen)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition whitespace-nowrap ${
+                  isActive 
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-900' 
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-500' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Notificação Estratégica: Alívio de Condução e Cheque Especial */}
+        <div className="px-4 pt-2">
+          <div className="bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-transparent p-3 rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="p-1.5 rounded-lg bg-emerald-500 text-white font-bold text-[10px]">OK</span>
+              <div>
+                <span className="font-bold text-slate-900 dark:text-white">Orçamento no Azul (+R$ 2,31)!</span>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  Condução ajustada para R$ 120 e Nathan reembolsando R$ 858 do financiamento.
+                </p>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <span className="text-[10px] text-slate-400 uppercase font-semibold">Saldo Mês</span>
+              <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">+R$ 2,31</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ============================================================== */}
+        {/* TELA 1: AGENDA FINANCEIRA (O Visual Diário Clássico do Yupee)    */}
+        {/* ============================================================== */}
+        {activeScreen === 'agenda' && (
+          <div className="px-4 space-y-4">
+            
+            {/* Navegador de Mês estilo Yupee (< Outubro/2026 >) */}
+            <div className={`${theme.card} p-3 rounded-2xl flex items-center justify-between`}>
+              <button 
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition"
+                onClick={() => alert('Visualizando mês anterior')}
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              
+              <div className="text-center">
+                <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedMonth}</span>
+                <span className="text-[11px] block text-slate-400">13 lançamentos registrados</span>
+              </div>
+
+              <button 
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition"
+                onClick={() => alert('Visualizando próximo mês')}
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Barra de Filtros Rápidos da Agenda */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
+              <button 
+                onClick={() => setSelectedJarFilter('ALL')}
+                className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition ${
+                  selectedJarFilter === 'ALL' 
+                    ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900 shadow-sm' 
+                    : 'bg-white dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                Todos ({transactions.length})
+              </button>
+              <button 
+                onClick={() => setSelectedJarFilter('NEC_55')}
+                className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition ${
+                  selectedJarFilter === 'NEC_55' 
+                    ? 'bg-blue-600 text-white shadow-sm' 
+                    : 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900'
+                }`}
+              >
+                55% Necessidades
+              </button>
+              <button 
+                onClick={() => setSelectedJarFilter('DIV_10')}
+                className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition ${
+                  selectedJarFilter === 'DIV_10' 
+                    ? 'bg-purple-600 text-white shadow-sm' 
+                    : 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-900'
+                }`}
+              >
+                10% Lazer / C6
+              </button>
+              <button 
+                onClick={() => setSelectedJarFilter('PJ_EXCLUIDO')}
+                className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition ${
+                  selectedJarFilter === 'PJ_EXCLUIDO' 
+                    ? 'bg-amber-600 text-white shadow-sm' 
+                    : 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900'
+                }`}
+              >
+                PJ Operacional
+              </button>
+            </div>
+
+            {/* Lista Cronológica Diária da Agenda (Estilo Feed Yupee) */}
+            <div className={`${theme.card} rounded-2xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/80`}>
+              {filteredTransactions.map((tx) => {
+                const day = tx.date.split('-')[2] || '01';
+                const isPositive = tx.type === 'receita' || tx.type === 'reembolso';
+                const isOverdraftAlert = tx.description.toLowerCase().includes('cheque especial');
+                const isMortgage = tx.description.toLowerCase().includes('financiamento');
+
+                return (
+                  <div 
+                    key={tx.id} 
+                    className={`p-3.5 flex items-center justify-between gap-3 ${theme.hoverRow} transition group`}
+                  >
+                    {/* Dia + Info */}
+                    <div className="flex items-center gap-3">
+                      {/* Badge do Dia (Destaque do Yupee) */}
+                      <div className="flex flex-col items-center justify-center w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800/90 text-slate-800 dark:text-slate-200 font-bold shrink-0">
+                        <span className="text-xs text-slate-400 -mb-1">DIA</span>
+                        <span className="text-sm font-black">{day}</span>
+                      </div>
+
+                      {/* Descrição e Pote */}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                            {tx.description}
+                          </h4>
+                          {isOverdraftAlert && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-semibold flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> Evitável
+                            </span>
+                          )}
+                          {isMortgage && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold">
+                              Nathan 60%
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Metadados (Conta, Centro, Pote) */}
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
+                          <span className="font-medium text-slate-500 dark:text-slate-300">{tx.account}</span>
+                          <span>•</span>
+                          <span>{tx.costCenter}</span>
+                          <span>•</span>
+                          <span className="text-blue-600 dark:text-blue-400 font-medium">
+                            {tx.jar === 'NEC_55' ? 'Necessidades 55%' : tx.jar === 'DIV_10' ? 'Diversão 10%' : 'Operação PJ'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Valor e Status */}
+                    <div className="flex items-center gap-3 text-right shrink-0">
+                      <div>
+                        <span className={`text-sm sm:text-base font-black ${
+                          isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-rose-400'
+                        }`}>
+                          {isPositive ? '+' : '-'} R$ {Math.abs(tx.amount).toFixed(2)}
+                        </span>
+                        
+                        <div className="flex items-center justify-end gap-1 text-[10px] text-slate-400 mt-0.5">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          <span>Liquidado</span>
+                        </div>
+                      </div>
+
+                      {/* Botão de Excluir */}
+                      <button 
+                        onClick={() => handleDeleteTransaction(tx.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded-lg text-slate-400 hover:text-rose-500 transition"
+                        title="Remover transação"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ============================================================== */}
+            {/* RODAPÉ DE RESUMO MENSAL (O Clássico Rodapé do Yupee)             */}
+            {/* ============================================================== */}
+            <div className={`${theme.card} p-4 rounded-2xl space-y-2 border-t-2 border-blue-500`}>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 font-medium">Total de recebimentos no mês:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                  +R$ {financialMetrics.totalReceipts.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 font-medium">Total de pagamentos no mês:</span>
+                <span className="font-bold text-rose-500 dark:text-rose-400 text-sm">
+                  -R$ {financialMetrics.totalPayments.toFixed(2)}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                <div>
+                  <span className="text-xs uppercase tracking-wider text-slate-400 font-bold block">
+                    Resultado Consolidado
+                  </span>
+                  <span className="text-[11px] text-slate-500">CLT R$ 2.060 + Lucro PJ R$ 1.592</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                    +R$ {financialMetrics.netBalanceConsolidated.toFixed(2)}
+                  </span>
+                  <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                    Superávit Confirmado 🎉
+                  </span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TELA 2: MINHAS FINANÇAS (Grid dos 6 Tiles / Hub Central Yupee)  */}
+        {/* ============================================================== */}
+        {activeScreen === 'hub' && (
+          <div className="px-4 space-y-5">
+            <div className="text-center sm:text-left">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Minhas Finanças</h2>
+              <p className="text-xs text-slate-400">Acesse qualquer módulo do seu controle financeiro integrado</p>
+            </div>
+
+            {/* Grid dos Grandes Botões Azuis Estilo Yupee (em versão clean moderna) */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5">
+              
+              {/* Tile 1: Agenda Financeira */}
+              <button 
+                onClick={() => setActiveScreen('agenda')}
+                className={`${theme.card} p-5 rounded-2xl flex flex-col items-center justify-center text-center gap-3 group hover:border-blue-400 transition relative overflow-hidden`}
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-sky-400 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                  <Calendar className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-white">Agenda Financeira</h3>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">Fluxo diário do mês</span>
+                </div>
+              </button>
+
+              {/* Tile 2: Sonhos & Metas */}
+              <button 
+                onClick={() => setActiveScreen('sonhos')}
+                className={`${theme.card} p-5 rounded-2xl flex flex-col items-center justify-center text-center gap-3 group hover:border-sky-400 transition relative overflow-hidden`}
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-500 to-teal-400 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                  <Cloud className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-white">Sonhos & Metas</h3>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">Zerar cheque especial</span>
+                </div>
+              </button>
+
+              {/* Tile 3: 6 Potes */}
+              <button 
+                onClick={() => setActiveScreen('potes')}
+                className={`${theme.card} p-5 rounded-2xl flex flex-col items-center justify-center text-center gap-3 group hover:border-indigo-400 transition relative overflow-hidden`}
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-500 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                  <Home className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-white">6 Potes Orçamento</h3>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">55% Necessidades & Lazer</span>
+                </div>
+              </button>
+
+              {/* Tile 4: Extratos */}
+              <button 
+                onClick={() => setActiveScreen('extratos')}
+                className={`${theme.card} p-5 rounded-2xl flex flex-col items-center justify-center text-center gap-3 group hover:border-emerald-400 transition relative overflow-hidden`}
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                  <BarChart3 className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-white">Extratos & Filtros</h3>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">Tabela com 13 itens</span>
+                </div>
+              </button>
+
+              {/* Tile 5: Operação PJ */}
+              <button 
+                onClick={() => setActiveScreen('pj')}
+                className={`${theme.card} p-5 rounded-2xl flex flex-col items-center justify-center text-center gap-3 group hover:border-amber-400 transition relative overflow-hidden`}
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-400 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                  <Building2 className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-white">Operação PJ</h3>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">DRE, DAS e Convênio</span>
+                </div>
+              </button>
+
+              {/* Tile 6: Relatórios */}
+              <button 
+                onClick={() => setActiveScreen('relatorios')}
+                className={`${theme.card} p-5 rounded-2xl flex flex-col items-center justify-center text-center gap-3 group hover:border-purple-400 transition relative overflow-hidden`}
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                  <Sparkles className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-white">Diagnóstico Geral</h3>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">Saúde financeira 100%</span>
+                </div>
+              </button>
+
+            </div>
+
+            {/* Cartão de Inteligência Financeira: C6 Concentrador & Apto */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className={`${theme.card} p-4 rounded-2xl space-y-2`}>
+                <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold text-xs">
+                  <CreditCard className="w-4 h-4" />
+                  <span>Cartão C6 Concentrador</span>
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-xl font-black text-slate-900 dark:text-white">R$ 2.600,00</span>
+                  <span className="text-[11px] text-slate-400">Total Fatura</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  R$ 2.000 em contas essenciais (água, luz, gás, mercado, transporte) + R$ 600 em lazer.
+                </p>
+              </div>
+
+              <div className={`${theme.card} p-4 rounded-2xl space-y-2 border-l-4 border-l-blue-500`}>
+                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-xs">
+                  <Home className="w-4 h-4" />
+                  <span>Financiamento Habitacional (Nathan)</span>
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-xl font-black text-slate-900 dark:text-white">R$ 572,00</span>
+                  <span className="text-[11px] text-slate-400">Custo Líquido Magno</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Débito de R$ 1.430 com R$ 858 reembolsados por Nathan. R$ 140 são juros de cheque especial.
+                </p>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TELA 3: OS 6 POTES DE T. HARV EKER (Orçamento Inteligente)       */}
+        {/* ============================================================== */}
+        {activeScreen === 'potes' && (
+          <div className="px-4 space-y-5">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Os 6 Potes Orçamentários</h2>
+                <p className="text-xs text-slate-400">Base de Renda Disponível: R$ {financialMetrics.effectiveIncomeBase.toFixed(2)}</p>
+              </div>
+              <button 
+                onClick={() => setUsePjProfitInPf(!usePjProfitInPf)}
+                className={`px-3 py-1 rounded-xl text-xs font-semibold border transition ${
+                  usePjProfitInPf ? 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-slate-100 text-slate-500'
+                }`}
+              >
+                {usePjProfitInPf ? 'Lucro PJ Integrado ✅' : 'Somente CLT PF'}
+              </button>
+            </div>
+
+            {/* Grid dos Potes com Barras de Progresso */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {Object.entries(financialMetrics.jars).map(([key, item]) => {
+                const Icon = item.icon;
+                const ratio = item.budget > 0 ? (item.spent / item.budget) * 100 : 0;
+                const isOver = item.spent > item.budget;
+
+                return (
+                  <div key={key} className={`${theme.card} p-4 rounded-2xl flex flex-col justify-between`}>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`p-2 rounded-xl ${item.color}`}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-slate-900 dark:text-white block">{item.name}</span>
+                            <span className="text-[10px] text-slate-400 font-semibold">{item.pct * 100}% Alvo</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-lg font-black text-slate-900 dark:text-white">
+                            R$ {item.spent.toFixed(2)}
+                          </span>
+                          <span className="text-xs text-slate-400 font-medium">
+                            Teto: R$ {item.budget.toFixed(2)}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{item.desc}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-500 ${
+                            isOver ? 'bg-rose-500' : ratio > 80 ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${Math.min(ratio, 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium mt-1.5">
+                        <span>{ratio.toFixed(0)}% Usado</span>
+                        <span className={isOver ? 'text-rose-500 font-bold' : 'text-emerald-600 dark:text-emerald-400'}>
+                          {isOver ? `Estouro: R$ ${(item.spent - item.budget).toFixed(2)}` : `Livre: R$ ${(item.budget - item.spent).toFixed(2)}`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TELA 4: SONHOS & METAS (Recriação fiel do conceito Yupee)        */}
+        {/* ============================================================== */}
+        {activeScreen === 'sonhos' && (
+          <div className="px-4 space-y-5">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Cloud className="w-5 h-5 text-sky-500" />
+                  Sonhos & Metas Financeiras
+                </h2>
+                <p className="text-xs text-slate-400">Planejamento de médio e longo prazo inspirado no Yupee</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {sonhos.map((sonho) => {
+                const Icon = sonho.icon;
+                const pct = (sonho.current / sonho.target) * 100;
+                return (
+                  <div key={sonho.id} className={`${theme.card} p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden`}>
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className={`p-3 rounded-2xl bg-gradient-to-tr ${sonho.color} text-white shadow-sm`}>
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                          {sonho.category}
+                        </span>
+                      </div>
+
+                      <h3 className="font-bold text-sm text-slate-900 dark:text-white">{sonho.title}</h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">{sonho.impact}</p>
+
+                      <div className="mt-4">
+                        <div className="flex justify-between text-xs font-bold mb-1">
+                          <span className="text-slate-400">R$ {sonho.current.toFixed(2)}</span>
+                          <span className="text-slate-800 dark:text-white">Alvo: R$ {sonho.target.toFixed(2)}</span>
+                        </div>
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full bg-gradient-to-r ${sonho.color} transition-all duration-500`}
+                            style={{ width: `${Math.max(pct, 4)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] flex justify-between items-center text-slate-400">
+                      <span>Progresso: {pct.toFixed(0)}%</span>
+                      <button 
+                        onClick={() => alert(`Aporte para meta: ${sonho.title}`)}
+                        className="text-blue-500 font-bold hover:underline"
+                      >
+                        + Aportar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Destaque: Como Zerar o Cheque Especial do Apto */}
+            <div className={`${theme.card} p-5 rounded-2xl border-l-4 border-l-amber-500 space-y-2`}>
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm">
+                <Zap className="w-5 h-5" />
+                <span>Estratégia Imediata: Economize R$ 1.680,00 por ano</span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                A parcela habitacional é de R$ 1.290,00 e Nathan reembolsa R$ 858,00. Os <strong>R$ 140,00 de cheque especial</strong> ocorrem apenas porque o débito cai antes do reembolso de Nathan ou do seu salário na conta Inter PF.
+              </p>
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl text-xs text-amber-800 dark:text-amber-300 font-semibold flex items-center justify-between">
+                <span>🛡️ Solução: Manter R$ 1.000 de colchão do lucro PJ na conta Inter PF para estancar o débito de R$ 140 todo mês!</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TELA 5: EXTRATOS & LANÇAMENTOS (Visão Completa em Tabela)       */}
+        {/* ============================================================== */}
+        {activeScreen === 'extratos' && (
+          <div className="px-4 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Extratos de Lançamentos</h2>
+                <p className="text-xs text-slate-400">Total de {transactions.length} movimentações no período</p>
+              </div>
+
+              {/* Caixa de Busca */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input 
+                  type="text" 
+                  placeholder="Buscar lançamento..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className={`w-full pl-9 pr-4 py-1.5 rounded-xl text-xs ${theme.inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
+            </div>
+
+            {/* Tabela de Extratos */}
+            <div className={`${theme.card} rounded-2xl overflow-hidden`}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 uppercase text-[10px] font-bold">
+                      <th className="py-3 px-3">Data</th>
+                      <th className="py-3 px-3">Descrição</th>
+                      <th className="py-3 px-3">Centro</th>
+                      <th className="py-3 px-3">Conta</th>
+                      <th className="py-3 px-3">Pote</th>
+                      <th className="py-3 px-3 text-right">Valor (R$)</th>
+                      <th className="py-3 px-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                    {filteredTransactions.map((tx) => {
+                      const isPositive = tx.type === 'receita' || tx.type === 'reembolso';
+                      return (
+                        <tr key={tx.id} className={`${theme.hoverRow} transition`}>
+                          <td className="py-3 px-3 text-slate-400 font-mono">{tx.date}</td>
+                          <td className="py-3 px-3 font-semibold text-slate-900 dark:text-white">{tx.description}</td>
+                          <td className="py-3 px-3 text-slate-500">{tx.costCenter}</td>
+                          <td className="py-3 px-3 text-slate-500">{tx.account}</td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">
+                              {tx.jar}
+                            </span>
+                          </td>
+                          <td className={`py-3 px-3 text-right font-black ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-rose-400'}`}>
+                            {isPositive ? '+' : '-'} R$ {Math.abs(tx.amount).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <button 
+                              onClick={() => handleDeleteTransaction(tx.id)}
+                              className="text-slate-400 hover:text-rose-500 transition p-1"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TELA 6: OPERAÇÃO PJ (DRE Simplificado & Distribuição de Lucros) */}
+        {/* ============================================================== */}
+        {activeScreen === 'pj' && (
+          <div className="px-4 space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  Demonstrativo da Operação PJ (Inter PJ)
+                </h2>
+                <p className="text-xs text-slate-400">Faturamento de R$ 3.060,86 quitando convênio médico e DAS</p>
+              </div>
+              <span className="px-3 py-1 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold text-xs rounded-xl">
+                Margem Líquida: {financialMetrics.pjProfitMargin.toFixed(1)}%
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className={`${theme.card} p-4 rounded-2xl`}>
+                <span className="text-[10px] text-slate-400 uppercase font-bold">1. Faturamento Bruto PJ</span>
+                <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                  +R$ {financialMetrics.pjServiceIncome.toFixed(2)}
+                </p>
+                <span className="text-[11px] text-slate-400">Entrada recebida na conta Inter PJ</span>
+              </div>
+
+              <div className={`${theme.card} p-4 rounded-2xl`}>
+                <span className="text-[10px] text-slate-400 uppercase font-bold">2. Custos Corporativos PJ</span>
+                <p className="text-xl font-black text-rose-500 dark:text-rose-400 mt-1">
+                  -R$ {financialMetrics.pjExpenses.toFixed(2)}
+                </p>
+                <span className="text-[11px] text-slate-400">Convênio (R$ 1.296,45) + DAS (R$ 172,10)</span>
+              </div>
+
+              <div className={`${theme.card} p-4 rounded-2xl border-l-4 border-l-amber-500`}>
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-bold">3. Lucro Líquido Livre PJ</span>
+                <p className="text-xl font-black text-amber-600 dark:text-amber-400 mt-1">
+                  +R$ {financialMetrics.pjNetProfit.toFixed(2)}
+                </p>
+                <span className="text-[11px] text-slate-400">Saldo 100% disponível para PF</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TELA 7: RELATÓRIOS & DIAGNÓSTICO (Visão Estratégica)             */}
+        {/* ============================================================== */}
+        {activeScreen === 'relatorios' && (
+          <div className="px-4 space-y-4">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Diagnóstico Geral das Finanças</h2>
+            <div className={`${theme.card} p-5 rounded-2xl space-y-3`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase text-slate-400">Status Geral do Orçamento</span>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold text-xs">
+                  Equilíbrio Orçamentário Atingido
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                  <span className="text-[10px] text-slate-400 block uppercase">Salário CLT</span>
+                  <span className="text-sm font-bold text-slate-800 dark:text-white">R$ 2.060,00</span>
+                </div>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                  <span className="text-[10px] text-slate-400 block uppercase">Lucro Líquido PJ</span>
+                  <span className="text-sm font-bold text-amber-600 dark:text-amber-400">R$ 1.592,31</span>
+                </div>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                  <span className="text-[10px] text-slate-400 block uppercase">Despesas Líquidas</span>
+                  <span className="text-sm font-bold text-slate-800 dark:text-white">R$ 3.650,00</span>
+                </div>
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl">
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block uppercase font-bold">Saldo Livre</span>
+                  <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">+R$ 2,31</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* ============================================================== */}
+      {/* MODAL DE NOVO LANÇAMENTO (Fiel ao Formulário Clássico do Yupee) */}
+      {/* ============================================================== */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className={`${theme.card} w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150`}>
+            
+            {/* Cabeçalho do Modal */}
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-0.5">
+                  <span className="w-4 h-4 rounded bg-rose-500 text-white font-bold text-[9px] flex items-center justify-center">y</span>
+                  <span className="w-4 h-4 rounded bg-amber-500 text-white font-bold text-[9px] flex items-center justify-center">u</span>
+                  <span className="w-4 h-4 rounded bg-emerald-500 text-white font-bold text-[9px] flex items-center justify-center">p</span>
+                </div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">Novo Lançamento</h3>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="p-1 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddTransaction} className="space-y-3.5 text-xs">
+              
+              {/* Segmented Control do Yupee: Tipo de Lançamento */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1">Tipo de Lançamento</label>
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setType('despesa')}
+                    className={`py-1.5 rounded-lg font-bold transition ${
+                      type === 'despesa' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    Pagamento (-)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setType('receita')}
+                    className={`py-1.5 rounded-lg font-bold transition ${
+                      type === 'receita' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    Recebimento (+)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setType('reembolso')}
+                    className={`py-1.5 rounded-lg font-bold transition ${
+                      type === 'reembolso' ? 'bg-blue-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    Reembolso
+                  </button>
+                </div>
+              </div>
+
+              {/* Data e Valor (Lado a Lado) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">Data</label>
+                  <input 
+                    type="date"
+                    value={txDate}
+                    onChange={e => setTxDate(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl text-xs font-medium ${theme.inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">Valor (R$)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl text-xs font-bold ${theme.inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                </div>
+              </div>
+
+              {/* Descrição */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1">Descrição</label>
+                <input 
+                  type="text"
+                  placeholder="Ex: Mercado, Uber, Salário, Internet"
+                  value={desc}
+                  onChange={e => setDesc(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-xl text-xs ${theme.inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
+
+              {/* Pote / Categoria dos 6 Potes */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1">Pote / Grupo Orçamentário</label>
+                <select
+                  value={jar}
+                  onChange={e => setJar(e.target.value as JarType)}
+                  className={`w-full px-3 py-2 rounded-xl text-xs ${theme.inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                >
+                  <option value="NEC_55">55% Necessidades Básicas (Contas, Casa, Transporte)</option>
+                  <option value="DIV_10">10% Diversão & Estilo (Lazer, Passeios, C6)</option>
+                  <option value="PLP_10">10% Reserva & Sonhos (Poupança a Longo Prazo)</option>
+                  <option value="LIF_10">10% Liberdade Financeira (Investimentos)</option>
+                  <option value="EDU_10">10% Educação Continuada (Cursos e Livros)</option>
+                  <option value="FER_5">5% Férias & Doações</option>
+                  <option value="PJ_EXCLUIDO">PJ - Operação da Empresa</option>
+                </select>
+              </div>
+
+              {/* Conta e Centro de Custos */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">Conta de Pagamento</label>
+                  <select
+                    value={account}
+                    onChange={e => setAccount(e.target.value as AccountType)}
+                    className={`w-full px-3 py-2 rounded-xl text-xs ${theme.inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  >
+                    <option value="Inter PF">Inter PF</option>
+                    <option value="Inter PJ">Inter PJ</option>
+                    <option value="C6">Cartão C6</option>
+                    <option value="Passe">Passe / Transporte</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">Centro de Custos</label>
+                  <select
+                    value={costCenter}
+                    onChange={e => setCostCenter(e.target.value as CostCenter)}
+                    className={`w-full px-3 py-2 rounded-xl text-xs ${theme.inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  >
+                    <option value="Magno">Magno</option>
+                    <option value="Nathan">Nathan</option>
+                    <option value="PJ">PJ</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Botões do Rodapé do Formulário (Salvar / Cancelar Yupee) */}
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-xl font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold shadow-md transition active:scale-95"
+                >
+                  Salvar Lançamento
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}

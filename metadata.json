@@ -1,0 +1,6 @@
+{
+  "name": "Yupee Reborn - Finanças Pessoais & 6 Potes",
+  "description": "App de finanças pessoais Reborn do lendário Yupee com gráficos intuitivos, gestão dos 6 Potes, agenda financeira diária e controle automático de gastos mensais.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

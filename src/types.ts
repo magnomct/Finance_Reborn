@@ -1,0 +1,124 @@
+export type JarType = 'NEC_55' | 'LIF_10' | 'PLP_10' | 'EDU_10' | 'DIV_10' | 'FER_5' | 'PJ_EXCLUIDO';
+export type CostCenter = 'Magno' | 'Nathan' | 'Suzy' | 'PJ';
+export type AccountType = 'Inter PF' | 'Inter PJ' | 'C6' | 'Passe' | 'Outro';
+export type ActiveScreen = 'dashboard' | 'agenda' | 'graficos' | 'potes' | 'sonhos' | 'automacoes' | 'extratos' | 'pj' | 'hub';
+
+export interface AnnualItem {
+  id: string;
+  name: string;
+  category: string;
+  group: 'rendas' | 'investimentos' | 'despesas';
+  subgroup?: string; // e.g. 'Habitação', 'Transporte', 'Bancos', 'Cartões'
+  pctTotal?: number;
+  monthlyValues: number[]; // 12 numbers (Jan to Dec)
+}
+
+export type RecurrenceFrequency = 'diaria' | 'semanal' | 'quinzenal' | 'mensal';
+
+export interface Transaction {
+  id: string;
+  date: string; // YYYY-MM-DD
+  description: string;
+  amount: number; // positive for income/refund, negative for expense
+  amountPlanned?: number; // Valor Previsto / Orçado
+  amountRealized?: number; // Valor Efetivamente Realizado
+  type: 'receita' | 'despesa' | 'reembolso';
+  jar: JarType;
+  costCenter: CostCenter;
+  account: AccountType;
+  status: 'liquidado' | 'agendado';
+  isRecurring?: boolean;
+  recurringId?: string;
+  category?: string;
+  notes?: string; // Observações / notas adicionais (ex: 'Nathan 60%')
+  reminderDaysBefore?: number; // Dias de antecedência para lembrete visual de vencimento
+}
+
+export interface DreamGoal {
+  id: string;
+  title: string;
+  target: number;
+  current: number;
+  monthlyDeposit: number;
+  category: string;
+  impact: string;
+  targetDate?: string;
+  iconName: string;
+  gradient: string;
+}
+
+export interface MonthlyDepositCheckitem {
+  dreamId: string;
+  month: string; // YYYY-MM
+  amount: number;
+  isCompleted: boolean;
+  completedAt?: string;
+}
+
+export interface MonthlyChecklistProgress {
+  totalPlanned: number;
+  totalCompleted: number;
+  completedCount: number;
+  totalCount: number;
+  completionPercent: number;
+}
+
+export interface RecurringExpense {
+  id: string;
+  description: string;
+  amount: number;
+  amountPlanned: number; // Valor Previsto / Orçado
+  amountRealized?: number; // Valor Efetivamente Realizado
+  type: 'receita' | 'despesa' | 'reembolso';
+  frequency: RecurrenceFrequency; // 'diaria' | 'semanal' | 'quinzenal' | 'mensal'
+  dayOfMonth?: number; // 1 - 31
+  dayOfWeek?: number; // 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb, 7 = Dom
+  jar: JarType;
+  account: AccountType;
+  costCenter: CostCenter;
+  isActive: boolean;
+  category?: string;
+  notes?: string;
+}
+
+export interface AutoCategoryRule {
+  id: string;
+  keyword: string;
+  jar: JarType;
+  category: string;
+  costCenter: CostCenter;
+  account: AccountType;
+}
+
+export interface JarInfo {
+  id: JarType;
+  name: string;
+  shortName: string;
+  desc: string;
+  pct: number;
+  colorHex: string;
+  bgClass: string;
+  textClass: string;
+  iconName: string;
+}
+
+export type BudgetAlertStatus = 'OK' | 'WARNING' | 'EXCEEDED';
+
+export interface JarBudgetLimit {
+  jarId: JarType;
+  limit: number;
+}
+
+export interface JarBudgetAlert {
+  jarId: JarType;
+  jarName: string;
+  shortName: string;
+  colorHex: string;
+  limit: number;
+  spent: number;
+  remaining: number;
+  usagePercent: number;
+  threshold80: number; // 80% of limit
+  status: BudgetAlertStatus; // 'OK' | 'WARNING' | 'EXCEEDED'
+}
+
