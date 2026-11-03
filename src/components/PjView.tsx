@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { calculateFinancialMetrics, formatBRL } from '../utils/finance';
+import { PjDreComparative } from './PjDreComparative';
 
 interface PjViewProps {
   transactions: Transaction[];
@@ -126,6 +127,9 @@ export const PjView: React.FC<PjViewProps> = ({ transactions, onAddTransaction, 
         </div>
 
       </div>
+
+      {/* DRE Comparativo: Mês Atual vs Média 3 Meses */}
+      <PjDreComparative transactions={transactions} initialMonth="2026-10" />
 
       {/* Tabela de Lançamentos PJ */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">

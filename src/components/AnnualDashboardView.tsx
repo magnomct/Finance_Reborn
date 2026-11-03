@@ -10,6 +10,7 @@ import { formatBRL } from '../utils/finance';
 import { AnnualBudgetGoalsView } from './AnnualBudgetGoalsView';
 import { DashboardMonthlyPdfModal } from './DashboardMonthlyPdfModal';
 import { EmergencyReserveCard } from './EmergencyReserveCard';
+import { SeasonalCashFlowChart } from './SeasonalCashFlowChart';
 import { Transaction, JarType, DreamGoal } from '../types';
 
 interface AnnualDashboardViewProps {
@@ -31,7 +32,7 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
   selectedMonthIndex = 2,
   onUpdateDreamBalance
 }) => {
-  const [viewMode, setViewMode] = useState<'resumo' | 'detalhada' | 'graficos' | 'metas'>('resumo');
+  const [viewMode, setViewMode] = useState<'resumo' | 'fluxo' | 'detalhada' | 'graficos' | 'metas'>('resumo');
   const [annualData, setAnnualData] = useState(INITIAL_ANNUAL_DATA);
   const [selectedColMonth, setSelectedColMonth] = useState<number | null>(null);
   const [editingCell, setEditingCell] = useState<{ section: string; rowId: string; monthIndex: number } | null>(null);
@@ -140,6 +141,18 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
       totalDespesasAno,
       totalSaldoPrevistoAno,
       totalSaldoResumoAno: sumTotal(saldoResumoValues),
+      categoryBreakdownPerMonth: {
+        'Habitação': hab,
+        'Alimentação': alim,
+        'Transporte': trans,
+        'Saúde': sau,
+        'Educação': edu,
+        'Cuidados': cuid,
+        'Lazer': laz,
+        'Bancos': banc,
+        'Cartões': card,
+        'Reserva': res
+      },
       sumTotal
     };
   }, [annualData]);
@@ -237,7 +250,7 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
 
             <button
               onClick={() => setViewMode('metas')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition cursor-pointer ${
                 viewMode === 'metas'
                   ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
@@ -245,6 +258,19 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
             >
               <Target className="w-3.5 h-3.5" />
               <span>Metas de Orçamento</span>
+            </button>
+
+            <button
+              onClick={() => setViewMode('fluxo')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition cursor-pointer ${
+                viewMode === 'fluxo'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400'
+              }`}
+              data-testid="tab-fluxo-sazonal"
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Fluxo Sazonal</span>
             </button>
 
             <button
@@ -343,6 +369,17 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
         dreams={dreams}
         onUpdateDreamBalance={onUpdateDreamBalance}
       />
+
+      {/* Gráfico Comparativo de Fluxo de Caixa Sazonal (Flutuações 12 Meses, Picos Atípicos e Previsão de Liquidez) */}
+      {(viewMode === 'resumo' || viewMode === 'fluxo') && (
+        <SeasonalCashFlowChart
+          totalReceitas={computed.totalReceitas}
+          totalDespesas={computed.totalDespesas}
+          investimentos={computed.investRealValues}
+          categoryBreakdownPerMonth={computed.categoryBreakdownPerMonth}
+          onSelectMonth={onSelectMonth}
+        />
+      )}
 
       {/* ============================================================== */}
       {/* ABA 1: TELA COM RESUMO DOS DADOS (Cópia exata de image.png)    */}

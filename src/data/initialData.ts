@@ -449,6 +449,7 @@ export const INITIAL_DREAMS: DreamGoal[] = [
     category: 'Economia Imediata',
     impact: 'Estanca sangria de R$ 140,00/mês (R$ 1.680/ano economizados)',
     targetDate: '2026-12-31',
+    urgencyDaysThreshold: 60,
     iconName: 'Zap',
     gradient: 'from-amber-500 to-orange-500'
   },
@@ -461,6 +462,7 @@ export const INITIAL_DREAMS: DreamGoal[] = [
     category: 'Segurança (PLP 10%)',
     impact: 'Proteção financeira total para família e moradia',
     targetDate: '2027-12-31',
+    urgencyDaysThreshold: 90,
     iconName: 'ShieldAlert',
     gradient: 'from-blue-600 to-indigo-600'
   },
@@ -473,6 +475,7 @@ export const INITIAL_DREAMS: DreamGoal[] = [
     category: 'Experiências (FER 5%)',
     impact: 'Viagem planejada à vista, sem contrair dívidas no cartão',
     targetDate: '2026-12-20',
+    urgencyDaysThreshold: 60,
     iconName: 'Plane',
     gradient: 'from-emerald-500 to-teal-500'
   },

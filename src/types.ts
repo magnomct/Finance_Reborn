@@ -43,6 +43,7 @@ export interface DreamGoal {
   category: string;
   impact: string;
   targetDate?: string;
+  urgencyDaysThreshold?: number; // Prazo de urgência em dias de antecedência para aviso de meta crítica (ex: 30, 60, 90)
   iconName: string;
   gradient: string;
 }

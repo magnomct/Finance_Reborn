@@ -43,6 +43,9 @@ import { BudgetAlertsBanner } from './components/BudgetAlertsBanner';
 import { BudgetLimitsModal } from './components/BudgetLimitsModal';
 import { loadJarLimits, saveJarLimits, calculateJarBudgetAlerts } from './utils/budgetAlerts';
 import { Sliders } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ScreenTransition } from './components/ScreenTransition';
+import { TAB_INDICATOR_TRANSITION } from './utils/motionTransitions';
 
 export default function App() {
   // Screens & Navigation - Default to the complete Dashboard with Resumo dos Dados
@@ -690,19 +693,29 @@ export default function App() {
               <button
                 key={tab.id}
                 onClick={() => setActiveScreen(tab.id as ActiveScreen)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition whitespace-nowrap cursor-pointer ${
+                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition whitespace-nowrap cursor-pointer ${
                   isActive 
-                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-900 shadow-sm' 
+                    ? 'text-blue-600 dark:text-blue-400 font-bold' 
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
                 }`}
+                data-testid={`nav-tab-${tab.id}`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-500' : 'text-slate-400'}`} />
-                <span>{tab.label}</span>
-                {tab.id === 'potes' && activeAlertsCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500 text-slate-950">
-                    {activeAlertsCount}
-                  </span>
+                {isActive && (
+                  <motion.div
+                    layoutId="activeNavigationTab"
+                    transition={TAB_INDICATOR_TRANSITION}
+                    className="absolute inset-0 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 rounded-xl shadow-xs -z-0"
+                  />
                 )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-500' : 'text-slate-400'}`} />
+                  <span>{tab.label}</span>
+                  {tab.id === 'potes' && activeAlertsCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500 text-slate-950">
+                      {activeAlertsCount}
+                    </span>
+                  )}
+                </span>
               </button>
             );
           })}
@@ -729,10 +742,12 @@ export default function App() {
           </div>
         </div>
 
-        {/* ============================================================== */}
-        {/* TELA PRINCIPAL: DASHBOARD COMPLETO & RESUMO DOS DADOS          */}
-        {/* ============================================================== */}
-        {activeScreen === 'dashboard' && (
+        {/* Conteúdo com Transição Animada Suave (Framer Motion) */}
+        <ScreenTransition screenKey={activeScreen}>
+          {/* ============================================================== */}
+          {/* TELA PRINCIPAL: DASHBOARD COMPLETO & RESUMO DOS DADOS          */}
+          {/* ============================================================== */}
+          {activeScreen === 'dashboard' && (
           <div className="px-4 space-y-4">
             {/* Banner de Lembretes de Vencimento com Antecedência */}
             {activeReminders.length > 0 && (
@@ -1087,6 +1102,7 @@ export default function App() {
 
           </div>
         )}
+        </ScreenTransition>
 
       </main>
 

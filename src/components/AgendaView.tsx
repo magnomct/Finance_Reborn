@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { 
   ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, 
-  Trash2, Edit3, Tag, X, Plus, Bell 
+  Trash2, Edit3, Tag, X, Plus, Bell, List, CalendarDays 
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { formatBRL, calculateFinancialMetrics } from '../utils/finance';
 import { calculateReminderStatus } from '../utils/reminders';
+import { AgendaWeeklyGrid } from './AgendaWeeklyGrid';
 
 interface AgendaViewProps {
   selectedMonth: string;
@@ -46,6 +47,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 }) => {
   const [quickNotesTx, setQuickNotesTx] = useState<Transaction | null>(null);
   const [quickNotesValue, setQuickNotesValue] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'diario' | 'semanal'>('diario');
 
   const handleOpenQuickNotes = (tx: Transaction) => {
     setQuickNotesTx(tx);
@@ -81,32 +83,68 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
       
-      {/* Navegador de Mês estilo Yupee (< Outubro / 2026 >) */}
-      <div className={`${theme.card} p-3 rounded-2xl flex items-center justify-between`}>
-        <button 
-          className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition disabled:opacity-30"
-          onClick={() => setSelectedMonthIndex(Math.max(0, selectedMonthIndex - 1))}
-          disabled={selectedMonthIndex === 0}
-          title="Mês anterior"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        
-        <div className="text-center">
-          <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedMonth}</span>
-          <span className="text-[11px] block text-slate-400">
-            {filteredTransactions.length} lançamentos registrados
-          </span>
+      {/* Navegador de Mês estilo Yupee (< Outubro / 2026 >) + Alternador Diário / Semanal */}
+      <div className={`${theme.card} p-3 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs`}>
+        <div className="flex items-center justify-between w-full sm:w-auto gap-2">
+          <button 
+            className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition disabled:opacity-30 cursor-pointer"
+            onClick={() => setSelectedMonthIndex(Math.max(0, selectedMonthIndex - 1))}
+            disabled={selectedMonthIndex === 0}
+            title="Mês anterior"
+            data-testid="btn-prev-month"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          
+          <div className="text-center px-2">
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedMonth}</span>
+            <span className="text-[11px] block text-slate-400">
+              {filteredTransactions.length} lançamentos registrados
+            </span>
+          </div>
+
+          <button 
+            className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition disabled:opacity-30 cursor-pointer"
+            onClick={() => setSelectedMonthIndex(Math.min(months.length - 1, selectedMonthIndex + 1))}
+            disabled={selectedMonthIndex === months.length - 1}
+            title="Próximo mês"
+            data-testid="btn-next-month"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
         </div>
 
-        <button 
-          className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition disabled:opacity-30"
-          onClick={() => setSelectedMonthIndex(Math.min(months.length - 1, selectedMonthIndex + 1))}
-          disabled={selectedMonthIndex === months.length - 1}
-          title="Próximo mês"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
+        {/* Toggle Diário / Semanal */}
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl self-center sm:self-auto border border-slate-200/60 dark:border-slate-700/60" data-testid="agenda-mode-toggle">
+          <button
+            type="button"
+            onClick={() => setViewMode('diario')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              viewMode === 'diario'
+                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+            data-testid="toggle-view-diario"
+            title="Visualização Diária Cronológica"
+          >
+            <List className="w-3.5 h-3.5" />
+            <span>Diário</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('semanal')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              viewMode === 'semanal'
+                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+            data-testid="toggle-view-semanal"
+            title="Visualização Semanal com fluxo de caixa acumulado"
+          >
+            <CalendarDays className="w-3.5 h-3.5" />
+            <span>Semanal</span>
+          </button>
+        </div>
       </div>
 
       {/* Quick Filter Pills */}
@@ -167,8 +205,10 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
         </button>
       </div>
 
-      {/* Daily Feed Cronológico */}
-      <div className={`${theme.card} rounded-3xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/80`}>
+      {/* Alternância entre Visualização Diária e Visualização Semanal */}
+      {viewMode === 'diario' ? (
+        /* Daily Feed Cronológico */
+        <div className={`${theme.card} rounded-3xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/80`} data-testid="agenda-daily-feed">
         {filteredTransactions.map((tx) => {
           const day = tx.date.split('-')[2] || '01';
           const isPositive = tx.type === 'receita' || tx.type === 'reembolso';
@@ -336,6 +376,18 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           );
         })}
       </div>
+      ) : (
+        /* Visualização Semanal em Grid com Fluxo Acumulado */
+        <AgendaWeeklyGrid
+          transactions={filteredTransactions}
+          selectedMonth={selectedMonth}
+          onToggleStatus={onToggleStatus}
+          onDeleteTransaction={onDeleteTransaction}
+          onEditTransaction={onEditTransaction}
+          onOpenQuickNotes={handleOpenQuickNotes}
+          theme={theme}
+        />
+      )}
 
       {/* Clássico Rodapé Yupee de Totais */}
       <div className={`${theme.card} p-4 rounded-3xl space-y-2 border-t-2 border-blue-500`}>

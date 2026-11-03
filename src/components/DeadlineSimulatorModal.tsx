@@ -9,6 +9,10 @@ import {
   calculateRemainingMonths, 
   calculateSuggestedMonthlyDeposit 
 } from '../utils/dreamCalculations';
+import { 
+  calculateDreamUrgency, 
+  DEFAULT_URGENCY_DAYS_THRESHOLD 
+} from '../utils/dreamUrgency';
 
 interface DeadlineSimulatorModalProps {
   isOpen: boolean;
