@@ -42,7 +42,9 @@ import { DicaDoDiaCard } from './components/DicaDoDiaCard';
 import { FinanceReadingCard } from './components/FinanceReadingCard';
 import { BudgetAlertsBanner } from './components/BudgetAlertsBanner';
 import { BudgetLimitsModal } from './components/BudgetLimitsModal';
+import { ResetEnvironmentModal } from './components/ResetEnvironmentModal';
 import { loadJarLimits, saveJarLimits, calculateJarBudgetAlerts } from './utils/budgetAlerts';
+import { EnvironmentSetupOutput, purgeAllApplicationStorage, persistFreshEnvironment } from './utils/environmentSetup';
 import { Sliders } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ScreenTransition } from './components/ScreenTransition';
@@ -108,12 +110,23 @@ export default function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isLimitsModalOpen, setIsLimitsModalOpen] = useState(false);
   const [isGlobalPdfModalOpen, setIsGlobalPdfModalOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetNotification, setResetNotification] = useState<string | null>(null);
   const [jarLimits, setJarLimits] = useState<Record<JarType, number>>(() => loadJarLimits());
 
   const handleSaveJarLimits = (newLimits: Record<JarType, number>) => {
     setJarLimits(newLimits);
     saveJarLimits(newLimits);
   };
+
+  // Auto-dismiss reset notification
+  useEffect(() => {
+    if (!resetNotification) return;
+    const timer = setTimeout(() => {
+      setResetNotification(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [resetNotification]);
 
   // Save to LocalStorage
   useEffect(() => {
@@ -328,15 +341,31 @@ export default function App() {
     setTransactions([bufferTx, ...updated]);
   };
 
-  // Reset data to initial reference
+  // Reset data to initial reference demo model
   const handleResetData = () => {
     if (confirm('Deseja restaurar os lançamentos e configurações padrão do Yupee?')) {
+      purgeAllApplicationStorage();
       setTransactions(INITIAL_TRANSACTIONS);
       setRecurringList(INITIAL_RECURRING);
       setDreams(INITIAL_DREAMS);
       setAutoRules(INITIAL_AUTO_RULES);
       setCushionApplied(false);
+      setResetNotification('🔄 Modelo padrão de demonstração restaurado com sucesso.');
     }
+  };
+
+  // Apply fresh custom environment configured by the user
+  const handleApplyFreshEnvironment = (newEnv: EnvironmentSetupOutput, feedbackMessage: string) => {
+    purgeAllApplicationStorage();
+    persistFreshEnvironment(newEnv);
+    setTransactions(newEnv.transactions);
+    setRecurringList(newEnv.recurringList);
+    setDreams(newEnv.dreams);
+    setAutoRules(newEnv.autoRules);
+    handleSaveJarLimits(newEnv.jarLimits);
+    setCushionApplied(false);
+    setActiveScreen('dashboard');
+    setResetNotification(feedbackMessage);
   };
 
   // Filtered transactions for Agenda & Extratos
@@ -387,10 +416,21 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Botão de Reset e Configuração do Ambiente do Zero */}
+          <button
+            onClick={() => setIsResetModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800/80 font-bold transition cursor-pointer active:scale-95 shadow-xs"
+            title="Começar do zero e configurar todo o ambiente financeiro"
+            data-testid="btn-reset-environment"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Começar do Zero (Reset)</span>
+          </button>
+
           <button
             onClick={handleResetData}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition"
-            title="Restaurar dados iniciais"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+            title="Restaurar dados iniciais de demonstração"
           >
             <RotateCcw className="w-3 h-3" />
             <span className="hidden sm:inline">Restaurar Modelo</span>
@@ -417,6 +457,25 @@ export default function App() {
           </button>
         </div>
       </div>
+
+      {/* Toast Notification Banner for Environment Setup */}
+      {resetNotification && (
+        <div className="max-w-5xl mx-auto px-4 mt-2">
+          <div className="bg-emerald-600 dark:bg-emerald-700 text-white p-3 rounded-2xl shadow-lg flex items-center justify-between text-xs font-bold animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-200" />
+              <span>{resetNotification}</span>
+            </div>
+            <button
+              onClick={() => setResetNotification(null)}
+              className="p-1 rounded-lg hover:bg-white/20 transition cursor-pointer"
+              title="Fechar aviso"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Container */}
       <main className={`mx-auto transition-all duration-300 ${
@@ -1070,15 +1129,16 @@ export default function App() {
               </button>
 
               <button 
-                onClick={handleResetData}
-                className={`${theme.card} p-5 rounded-3xl flex flex-col items-center justify-center text-center gap-3 group hover:border-slate-400 transition relative overflow-hidden`}
+                onClick={() => setIsResetModalOpen(true)}
+                className={`${theme.card} p-5 rounded-3xl flex flex-col items-center justify-center text-center gap-3 group hover:border-amber-400 transition relative overflow-hidden`}
+                data-testid="card-reset-environment-hub"
               >
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-slate-600 to-slate-400 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
-                  <RotateCcw className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                  <Sparkles className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white">Restaurar Dados</h3>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">Recarregar modelo</span>
+                  <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white">Começar do Zero</h3>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">Reset & Novo Ambiente</span>
                 </div>
               </button>
 
@@ -1154,6 +1214,17 @@ export default function App() {
         dreams={dreams}
         jarLimits={jarLimits}
         defaultMonthName={selectedMonth}
+      />
+
+      {/* Modal de Reset e Configuração do Ambiente do Zero */}
+      <ResetEnvironmentModal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        onApplyEnvironment={handleApplyFreshEnvironment}
+        onRestoreDemoModel={() => {
+          handleResetData();
+          setResetNotification('🔄 Modelo de demonstração restaurado com sucesso.');
+        }}
       />
 
     </div>

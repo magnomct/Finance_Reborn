@@ -11,6 +11,7 @@ import { AnnualBudgetGoalsView } from './AnnualBudgetGoalsView';
 import { DashboardMonthlyPdfModal } from './DashboardMonthlyPdfModal';
 import { EmergencyReserveCard } from './EmergencyReserveCard';
 import { SeasonalCashFlowChart } from './SeasonalCashFlowChart';
+import { SavingsTrendsBarChart } from './SavingsTrendsBarChart';
 import { Transaction, JarType, DreamGoal } from '../types';
 
 interface AnnualDashboardViewProps {
@@ -377,6 +378,16 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
           totalDespesas={computed.totalDespesas}
           investimentos={computed.investRealValues}
           categoryBreakdownPerMonth={computed.categoryBreakdownPerMonth}
+          onSelectMonth={onSelectMonth}
+        />
+      )}
+
+      {/* Gráfico de Barras Comparativo dos Últimos 6 Meses (Receitas x Despesas x Saldo Consolidado + Tendências de Economia) */}
+      {(viewMode === 'resumo' || viewMode === 'fluxo' || viewMode === 'graficos') && (
+        <SavingsTrendsBarChart
+          annualReceitas={computed.totalReceitas}
+          annualDespesas={computed.totalDespesas}
+          referenceMonthIndex={9} // Outubro (mês referência corrente)
           onSelectMonth={onSelectMonth}
         />
       )}
