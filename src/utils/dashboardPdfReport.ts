@@ -331,7 +331,115 @@ export function generateDashboardMonthlyPDF(
   doc.setTextColor(124, 58, 237); // Purple 600
   doc.text(`${summary.dreamOverallCompletion}% Concluído`, card4X + 3, y + 13);
 
-  y += cardH + 7;
+  y += cardH + 5;
+
+  // 3.5 GRÁFICOS PRINCIPAIS VETORIAIS (CONSUMO DOS POTES vs TETO & BALANÇO DE FLUXO)
+  const chartBoxW = 182;
+  const chartBoxH = 39;
+  doc.setFillColor(248, 250, 252); // Slate 50
+  doc.setDrawColor(226, 232, 240); // Slate 200
+  doc.roundedRect(14, y, chartBoxW, chartBoxH, 2, 2, 'FD');
+
+  // Chart Header
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text('GRÁFICOS PRINCIPAIS: CONSUMO DOS POTES vs LIMITES & FLUXO CONSOLIDADO', 18, y + 5);
+
+  // Left Section: Potes Horizontal Progress Bars
+  const leftX = 18;
+  const barMaxW = 38;
+  const displayJars = summary.jarItems.filter(j => j.jarId !== 'PJ_EXCLUIDO').slice(0, 6);
+
+  const jarColors: Record<string, [number, number, number]> = {
+    NEC_55: [59, 130, 246], // Blue
+    DIV_10: [245, 158, 11], // Amber
+    PLP_10: [16, 185, 129], // Emerald
+    LIF_10: [139, 92, 246], // Violet
+    EDU_10: [99, 102, 241], // Indigo
+    FER_5: [236, 72, 153],  // Pink
+  };
+
+  let jarY = y + 8;
+  displayJars.forEach(item => {
+    const jarColor = jarColors[item.jarId] || [100, 116, 139];
+    const usageClamped = Math.min(100, Math.max(0, item.usagePercent));
+    const fillWidth = (usageClamped / 100) * barMaxW;
+
+    // Label
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(51, 65, 85);
+    doc.text(item.shortName, leftX, jarY + 2.8);
+
+    // Track
+    const trackX = leftX + 16;
+    doc.setFillColor(226, 232, 240);
+    doc.roundedRect(trackX, jarY, barMaxW, 3, 0.8, 0.8, 'F');
+
+    // Fill
+    if (fillWidth > 0) {
+      if (item.usagePercent > 100) {
+        doc.setFillColor(225, 29, 72); // Rose
+      } else if (item.usagePercent >= 80) {
+        doc.setFillColor(245, 158, 11); // Amber
+      } else {
+        doc.setFillColor(jarColor[0], jarColor[1], jarColor[2]);
+      }
+      doc.roundedRect(trackX, jarY, fillWidth, 3, 0.8, 0.8, 'F');
+    }
+
+    // Text info
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(`${item.usagePercent.toFixed(0)}% • ${formatBRL(item.spent)}`, trackX + barMaxW + 2, jarY + 2.4);
+
+    jarY += 4.8;
+  });
+
+  // Right Section: Macro Cash Flow Inflow vs Outflow
+  const rightX = 114;
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 41, 59);
+  doc.text('Comparativo de Entradas vs Saídas', rightX, y + 9);
+
+  const maxFlow = Math.max(summary.totalIncome, summary.totalExpenses, 1);
+  const flowBarMaxW = 56;
+  const incomeBarW = Math.max(2, (summary.totalIncome / maxFlow) * flowBarMaxW);
+  const expenseBarW = Math.max(2, (summary.totalExpenses / maxFlow) * flowBarMaxW);
+
+  // Receitas bar
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(21, 128, 61);
+  doc.text(`Receitas: ${formatBRL(summary.totalIncome)}`, rightX, y + 14.5);
+  doc.setFillColor(220, 252, 231);
+  doc.roundedRect(rightX, y + 16, flowBarMaxW, 3.5, 0.8, 0.8, 'F');
+  doc.setFillColor(34, 197, 94);
+  doc.roundedRect(rightX, y + 16, incomeBarW, 3.5, 0.8, 0.8, 'F');
+
+  // Despesas bar
+  doc.setTextColor(225, 29, 72);
+  doc.text(`Despesas: ${formatBRL(summary.totalExpenses)}`, rightX, y + 23.5);
+  doc.setFillColor(254, 226, 226);
+  doc.roundedRect(rightX, y + 25, flowBarMaxW, 3.5, 0.8, 0.8, 'F');
+  doc.setFillColor(239, 68, 68);
+  doc.roundedRect(rightX, y + 25, expenseBarW, 3.5, 0.8, 0.8, 'F');
+
+  // Net note
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  if (summary.netBalance >= 0) {
+    doc.setTextColor(21, 128, 61);
+    doc.text(`Superávit Líquido: +${formatBRL(summary.netBalance)} (Poupança: ${summary.savingsRate.toFixed(1)}%)`, rightX, y + 33.5);
+  } else {
+    doc.setTextColor(225, 29, 72);
+    doc.text(`Déficit Líquido: ${formatBRL(summary.netBalance)} (Alerta de Saída)`, rightX, y + 33.5);
+  }
+
+  y += chartBoxH + 6;
 
   // 4. TABELA 1: RESUMO DE GASTOS POR POTE
   doc.setFontSize(10);

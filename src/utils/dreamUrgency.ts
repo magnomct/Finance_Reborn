@@ -15,9 +15,15 @@ export interface DreamUrgencyStatus {
   statusLabel: string;
   urgencyLevel: 'critical' | 'warning' | 'normal' | 'overdue' | 'completed';
   urgencyMessage: string;
+  // Aliases for component convenience
+  requiredMonthlyDeposit: number;
+  deficitPerMonth: number;
+  description: string;
+  needsDepositAdjustment: boolean;
 }
 
 export const DEFAULT_URGENCY_DAYS_THRESHOLD = 60; // 60 dias de antecedência por padrão
+export const URGENCY_PRESET_DAYS = [30, 60, 90, 120] as const;
 
 /**
  * UTC-safe calculation of calendar day difference between target date and reference date.
@@ -67,6 +73,10 @@ export function calculateDreamUrgency(
       currentMonthlyDeposit: dream.monthlyDeposit,
       recalculatedMonthlyDeposit: 0,
       monthlyDepositDeficit: 0,
+      requiredMonthlyDeposit: 0,
+      deficitPerMonth: 0,
+      description: 'Parabéns! O objetivo já foi 100% atingido.',
+      needsDepositAdjustment: false,
       statusLabel: 'Meta Concluída 🎉',
       urgencyLevel: 'completed',
       urgencyMessage: 'Parabéns! O objetivo já foi 100% atingido.'
@@ -85,6 +95,10 @@ export function calculateDreamUrgency(
       currentMonthlyDeposit: dream.monthlyDeposit,
       recalculatedMonthlyDeposit: dream.monthlyDeposit,
       monthlyDepositDeficit: 0,
+      requiredMonthlyDeposit: dream.monthlyDeposit,
+      deficitPerMonth: 0,
+      description: 'Defina uma data limite para calcular o prazo de urgência e aportes ideais.',
+      needsDepositAdjustment: false,
       statusLabel: 'Sem data limite',
       urgencyLevel: 'normal',
       urgencyMessage: 'Defina uma data limite para calcular o prazo de urgência e aportes ideais.'
@@ -152,6 +166,10 @@ export function calculateDreamUrgency(
     currentMonthlyDeposit: dream.monthlyDeposit,
     recalculatedMonthlyDeposit,
     monthlyDepositDeficit,
+    requiredMonthlyDeposit: recalculatedMonthlyDeposit,
+    deficitPerMonth: monthlyDepositDeficit,
+    description: urgencyMessage,
+    needsDepositAdjustment: monthlyDepositDeficit > 0,
     statusLabel,
     urgencyLevel,
     urgencyMessage

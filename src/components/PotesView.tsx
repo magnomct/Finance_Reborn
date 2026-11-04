@@ -6,6 +6,7 @@ import {
 import { Transaction, JarType } from '../types';
 import { calculateFinancialMetrics, formatBRL } from '../utils/finance';
 import { Sliders, AlertOctagon } from 'lucide-react';
+import { PotesDonutChart } from './PotesDonutChart';
 
 interface PotesViewProps {
   transactions: Transaction[];
@@ -94,6 +95,15 @@ export const PotesView: React.FC<PotesViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Gráfico de Rosca Interativo de Consumo vs Limite */}
+      <PotesDonutChart
+        jars={metrics.jars}
+        jarLimits={jarLimits}
+        selectedJarKey={selectedJarKey}
+        onSelectJar={setSelectedJarKey}
+        onOpenLimitsModal={onOpenLimitsModal}
+      />
 
       {/* Grid dos 6 Potes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

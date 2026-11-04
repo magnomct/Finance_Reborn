@@ -4,8 +4,9 @@ import {
   Plus, Trash2, CheckCircle2, AlertTriangle, CreditCard, 
   Smartphone, Monitor, Moon, Sun, ChevronLeft, ChevronRight,
   Filter, Search, Clock, Zap, Sparkles, RefreshCw, RotateCcw,
-  FileSpreadsheet, Table, Bell, X, Edit3, BellRing
+  FileSpreadsheet, Table, Bell, X, Edit3, BellRing, FileText, Download
 } from 'lucide-react';
+import { DashboardMonthlyPdfModal } from './components/DashboardMonthlyPdfModal';
 
 import { 
   Transaction, JarType, CostCenter, AccountType, ActiveScreen, 
@@ -106,6 +107,7 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isLimitsModalOpen, setIsLimitsModalOpen] = useState(false);
+  const [isGlobalPdfModalOpen, setIsGlobalPdfModalOpen] = useState(false);
   const [jarLimits, setJarLimits] = useState<Record<JarType, number>>(() => loadJarLimits());
 
   const handleSaveJarLimits = (newLimits: Record<JarType, number>) => {
@@ -466,6 +468,19 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Botão Baixar Relatório Mensal Consolidado em PDF */}
+            <button
+              type="button"
+              onClick={() => setIsGlobalPdfModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-500/30 bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/80 text-xs font-bold transition cursor-pointer shadow-2xs"
+              title="Gerar e baixar resumo mensal consolidado das finanças em PDF"
+              data-testid="btn-header-pdf"
+            >
+              <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span className="hidden sm:inline">Relatório</span>
+              <span>PDF</span>
+            </button>
+
             {/* Botão Alertas de Orçamento */}
             <button
               onClick={() => setIsLimitsModalOpen(true)}
@@ -1129,6 +1144,16 @@ export default function App() {
         onSaveLimits={handleSaveJarLimits}
         transactions={transactions}
         effectiveIncomeBase={financialMetrics.effectiveIncomeBase}
+      />
+
+      {/* Modal Relatório Mensal Consolidado em PDF */}
+      <DashboardMonthlyPdfModal
+        isOpen={isGlobalPdfModalOpen}
+        onClose={() => setIsGlobalPdfModalOpen(false)}
+        transactions={transactions}
+        dreams={dreams}
+        jarLimits={jarLimits}
+        defaultMonthName={selectedMonth}
       />
 
     </div>

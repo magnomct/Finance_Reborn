@@ -30,6 +30,7 @@ export const DeadlineSimulatorModal: React.FC<DeadlineSimulatorModalProps> = ({
   if (!isOpen || !dream) return null;
 
   const [targetDate, setTargetDate] = useState<string>(dream.targetDate || '');
+  const [urgencyDaysThreshold, setUrgencyDaysThreshold] = useState<number>(dream.urgencyDaysThreshold ?? DEFAULT_URGENCY_DAYS_THRESHOLD);
   const [customDeposit, setCustomDeposit] = useState<string>(String(dream.monthlyDeposit || ''));
 
   const remainingAmount = Math.max(0, dream.target - dream.current);
@@ -40,6 +41,12 @@ export const DeadlineSimulatorModal: React.FC<DeadlineSimulatorModalProps> = ({
     isCompleted,
     isPastDeadline
   } = calculateSuggestedMonthlyDeposit(dream.target, dream.current, targetDate);
+
+  const urgency = calculateDreamUrgency({
+    ...dream,
+    targetDate: targetDate || undefined,
+    urgencyDaysThreshold
+  }, '2026-10-25');
 
   // Quick preset helper
   const applyPresetMonths = (monthsToAdd: number) => {
@@ -67,6 +74,7 @@ export const DeadlineSimulatorModal: React.FC<DeadlineSimulatorModalProps> = ({
     onSave({
       ...dream,
       targetDate: targetDate || undefined,
+      urgencyDaysThreshold,
       monthlyDeposit: depositToSave
     });
     onClose();
@@ -168,6 +176,58 @@ export const DeadlineSimulatorModal: React.FC<DeadlineSimulatorModalProps> = ({
               ))}
             </div>
           </div>
+
+          {/* Prazo de Urgência Configuration */}
+          <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                Prazo de Urgência (Antecedência para Alerta Crítico)
+              </label>
+              <span className="text-[11px] font-mono font-bold text-amber-600 dark:text-amber-400">
+                {urgencyDaysThreshold} dias
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                { label: '30 dias', days: 30 },
+                { label: '60 dias (Padrão)', days: 60 },
+                { label: '90 dias', days: 90 },
+                { label: '120 dias', days: 120 },
+              ].map(preset => (
+                <button
+                  key={preset.days}
+                  type="button"
+                  onClick={() => setUrgencyDaysThreshold(preset.days)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    urgencyDaysThreshold === preset.days
+                      ? 'bg-amber-500 text-slate-950 shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}
+                  data-testid={`btn-urgency-threshold-${preset.days}`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Critical Alert Warning if within urgency window */}
+          {urgency.isCritical && (
+            <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-200 space-y-1.5 animate-in fade-in duration-150" data-testid="simulator-critical-alert">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-black text-xs text-amber-700 dark:text-amber-400">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>Meta Crítica Detectada!</span>
+                </div>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                  {urgency.daysRemaining} dias restantes
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                Por estar a menos de <strong>{urgencyDaysThreshold} dias</strong> da data limite, o aporte foi recalculado automaticamente para <strong>{formatBRL(urgency.recalculatedMonthlyDeposit)}/mês</strong> para garantir a conclusão a tempo.
+              </p>
+            </div>
+          )}
 
           {/* Suggested Contribution Calculation Result */}
           {targetDate ? (
