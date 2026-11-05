@@ -78,3 +78,48 @@ export function getScreenTransitionConfig(screenId: string) {
     exit: 'exit'
   };
 }
+
+/**
+ * Slide-up entrance animation (fade-in com slide ascendente) for transaction list items.
+ * Starts slightly shifted downwards (y: 16) and fades in while moving up to natural position (y: 0).
+ */
+export const TRANSACTION_ITEM_VARIANTS: Variants = {
+  initial: {
+    opacity: 0,
+    y: 16,
+  },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.28,
+      ease: [0.22, 1, 0.36, 1],
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: -8,
+    transition: {
+      duration: 0.16,
+      ease: [0.22, 1, 0.36, 1],
+    },
+  },
+};
+
+/**
+ * Returns staggered entrance transition parameters for individual transaction items,
+ * preventing long list delay saturation with a smooth cap.
+ */
+export function getTransactionItemTransition(
+  index: number,
+  stepDelay: number = 0.025,
+  maxDelay: number = 0.22
+) {
+  const calculatedDelay = Math.min(index * stepDelay, maxDelay);
+  return {
+    duration: 0.28,
+    ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
+    delay: calculatedDelay,
+  };
+}
+

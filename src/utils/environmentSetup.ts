@@ -255,6 +255,7 @@ export const ALL_YUPPEE_STORAGE_KEYS = [
   'yupee_read_article_ids',
   'yupee_bookmarked_article_ids',
   'yupee_last_tip_v2',
+  'yupee_offline_sync_queue_v1',
 ];
 
 /**

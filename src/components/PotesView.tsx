@@ -7,6 +7,7 @@ import { Transaction, JarType } from '../types';
 import { calculateFinancialMetrics, formatBRL } from '../utils/finance';
 import { Sliders, AlertOctagon } from 'lucide-react';
 import { PotesDonutChart } from './PotesDonutChart';
+import { AnimatedCurrencyCounter } from './AnimatedCurrencyCounter';
 
 interface PotesViewProps {
   transactions: Transaction[];
@@ -64,8 +65,13 @@ export const PotesView: React.FC<PotesViewProps> = ({
           <h2 className="text-xl font-black text-slate-900 dark:text-white">
             Divisão Inteligente de Gastos
           </h2>
-          <p className="text-xs text-slate-500">
-            Base Orçamentária Atual: <strong>{formatBRL(metrics.effectiveIncomeBase)}</strong>
+          <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+            <span>Base Orçamentária Atual:</span>
+            <AnimatedCurrencyCounter
+              value={metrics.effectiveIncomeBase}
+              showDirectionBadge={true}
+              className="font-black text-slate-900 dark:text-white"
+            />
           </p>
         </div>
 
@@ -179,13 +185,13 @@ export const PotesView: React.FC<PotesViewProps> = ({
                     <div>
                       <span className="text-[10px] text-slate-400 block uppercase font-bold">Gasto Líquido</span>
                       <span className="text-base font-black text-slate-900 dark:text-white">
-                        {formatBRL(jar.spent)}
+                        <AnimatedCurrencyCounter value={jar.spent} showDirectionBadge={true} />
                       </span>
                     </div>
                     <div className="text-right">
                       <span className="text-[10px] text-slate-400 block uppercase font-bold">Limite Máximo</span>
                       <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                        {formatBRL(customLimit)}
+                        <AnimatedCurrencyCounter value={customLimit} />
                       </span>
                     </div>
                   </div>
@@ -205,7 +211,7 @@ export const PotesView: React.FC<PotesViewProps> = ({
                     title="Marca de 80%"
                   />
                   <div
-                    className="h-full rounded-full transition-all duration-500"
+                    className="h-full rounded-full transition-all duration-700 ease-out"
                     style={{
                       width: `${Math.min(usagePercent, 100)}%`,
                       backgroundColor: isExceeded ? '#EF4444' : isWarning ? '#F59E0B' : jar.colorHex,
@@ -215,12 +221,18 @@ export const PotesView: React.FC<PotesViewProps> = ({
 
                 <div className="flex justify-between items-center text-[10px] font-medium mt-1.5">
                   <span className={isExceeded ? 'text-rose-600 font-bold' : isWarning ? 'text-amber-600 font-bold' : 'text-slate-400'}>
-                    {usagePercent.toFixed(0)}% utilizado (alerta em 80%)
+                    <AnimatedCurrencyCounter value={usagePercent} isPercent={true} percentDecimals={0} /> utilizado (alerta em 80%)
                   </span>
                   <span className={customLimit - jar.spent < 0 ? 'text-rose-500 font-bold' : 'text-emerald-600 dark:text-emerald-400 font-bold'}>
-                    {customLimit - jar.spent < 0 
-                      ? `Excedido: ${formatBRL(jar.spent - customLimit)}` 
-                      : `Disponível: ${formatBRL(customLimit - jar.spent)}`}
+                    {customLimit - jar.spent < 0 ? (
+                      <span className="inline-flex items-center gap-1">
+                        Excedido: <AnimatedCurrencyCounter value={jar.spent - customLimit} showDirectionBadge={true} />
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        Disponível: <AnimatedCurrencyCounter value={customLimit - jar.spent} showDirectionBadge={true} />
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>

@@ -4,6 +4,8 @@ import { Transaction, JarType, CostCenter, AccountType, AutoCategoryRule } from 
 import { applyAutoRules } from '../utils/finance';
 import { validateTransactionInput, normalizeTransactionData } from '../utils/transactionEditor';
 import { getReminderPresetLabel } from '../utils/reminders';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { Wifi, WifiOff } from 'lucide-react';
 
 export interface TransactionModalProps {
   isOpen: boolean;
@@ -28,6 +30,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   defaultDate = '2026-10-27',
   defaultScope = 'PF'
 }) => {
+  const isOnline = useOnlineStatus();
   const isEditing = Boolean(transactionToEdit);
 
   const [desc, setDesc] = useState('');
@@ -213,6 +216,30 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Offline & PWA Sync Status Banner */}
+        <div className={`px-3 py-1.5 rounded-xl text-[11px] font-medium flex items-center justify-between border ${
+          !isOnline
+            ? 'bg-amber-500/10 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+            : 'bg-emerald-500/10 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+        }`}>
+          <div className="flex items-center gap-1.5">
+            {!isOnline ? (
+              <>
+                <WifiOff className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span><strong>Modo Offline Ativo:</strong> Salvo no aparelho e pronto para uso</span>
+              </>
+            ) : (
+              <>
+                <Wifi className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span><strong>PWA Offline-First:</strong> Funciona mesmo sem internet</span>
+              </>
+            )}
+          </div>
+          <span className="text-[10px] font-bold opacity-80 uppercase tracking-wider">
+            {!isOnline ? 'Offline' : 'Online'}
+          </span>
         </div>
 
         {formError && (

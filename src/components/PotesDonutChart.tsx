@@ -11,6 +11,7 @@ import {
   describeDonutArc, 
   PoteDonutSlice 
 } from '../utils/potesDonut';
+import { AnimatedCurrencyCounter } from './AnimatedCurrencyCounter';
 
 interface PotesDonutChartProps {
   jars: Record<JarType, any>;
@@ -198,21 +199,21 @@ export const PotesDonutChart: React.FC<PotesDonutChartProps> = ({
                   {activeSlice.name}
                 </span>
                 <div className="font-mono text-xs font-black text-slate-900 dark:text-white">
-                  {formatBRL(activeSlice.spent)}
+                  <AnimatedCurrencyCounter value={activeSlice.spent} showDirectionBadge={true} />
                 </div>
                 <div className="text-[10px] font-bold">
                   {activeSlice.remaining > 0 ? (
-                    <span className="text-emerald-600 dark:text-emerald-400">
-                      Resta {formatBRL(activeSlice.remaining)}
+                    <span className="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-0.5">
+                      Resta <AnimatedCurrencyCounter value={activeSlice.remaining} showDirectionBadge={true} />
                     </span>
                   ) : (
-                    <span className="text-rose-600 dark:text-rose-400 font-extrabold">
-                      Estourou +{formatBRL(activeSlice.overspent)}
+                    <span className="text-rose-600 dark:text-rose-400 font-extrabold inline-flex items-center gap-0.5">
+                      Estourou +<AnimatedCurrencyCounter value={activeSlice.overspent} showDirectionBadge={true} />
                     </span>
                   )}
                 </div>
                 <span className="text-[9px] text-slate-400 block font-semibold">
-                  {activeSlice.usagePercent.toFixed(0)}% do teto ({formatBRL(activeSlice.budgetLimit)})
+                  <AnimatedCurrencyCounter value={activeSlice.usagePercent} isPercent={true} percentDecimals={0} /> do teto (<AnimatedCurrencyCounter value={activeSlice.budgetLimit} />)
                 </span>
               </div>
             ) : (
@@ -221,10 +222,10 @@ export const PotesDonutChart: React.FC<PotesDonutChartProps> = ({
                   Total Gasto
                 </span>
                 <span className="text-sm font-black text-slate-900 dark:text-white block font-mono">
-                  {formatBRL(donutData.totalSpent)}
+                  <AnimatedCurrencyCounter value={donutData.totalSpent} showDirectionBadge={true} />
                 </span>
                 <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                  Teto: {formatBRL(donutData.totalBudgetLimit)}
+                  Teto: <AnimatedCurrencyCounter value={donutData.totalBudgetLimit} />
                 </div>
                 <div className="pt-0.5">
                   <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-md ${
@@ -232,9 +233,15 @@ export const PotesDonutChart: React.FC<PotesDonutChartProps> = ({
                       ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                       : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
                   }`}>
-                    {donutData.totalRemaining >= 0 
-                      ? `Resta ${formatBRL(donutData.totalRemaining)}` 
-                      : `Estourado ${formatBRL(donutData.totalOverspent)}`}
+                    {donutData.totalRemaining >= 0 ? (
+                      <span className="inline-flex items-center gap-0.5">
+                        Resta <AnimatedCurrencyCounter value={donutData.totalRemaining} showDirectionBadge={true} />
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5">
+                        Estourado <AnimatedCurrencyCounter value={donutData.totalOverspent} showDirectionBadge={true} />
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>

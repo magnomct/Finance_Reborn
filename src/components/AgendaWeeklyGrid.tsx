@@ -14,6 +14,8 @@ import {
   DayColumn, 
   WEEKDAY_SHORT 
 } from '../utils/agendaWeekly';
+import { motion } from 'framer-motion';
+import { getTransactionItemTransition } from '../utils/motionTransitions';
 
 interface AgendaWeeklyGridProps {
   transactions: Transaction[];
@@ -263,14 +265,18 @@ export const AgendaWeeklyGrid: React.FC<AgendaWeeklyGridProps> = ({
                           {/* Transactions in Day */}
                           <div className="mt-2.5 space-y-2">
                             {hasTxs ? (
-                              dayCol.transactions.map(tx => {
+                              dayCol.transactions.map((tx, tIndex) => {
                                 const isPositive = tx.type === 'receita' || tx.type === 'reembolso';
                                 const jarDef = JAR_DEFINITIONS[tx.jar] || JAR_DEFINITIONS.NEC_55;
                                 const reminder = calculateReminderStatus(tx, '2026-10-25');
 
                                 return (
-                                  <div
-                                    key={tx.id}
+                                  <motion.div
+                                    key={`${selectedMonth}-${tx.id}`}
+                                    layout="position"
+                                    initial={{ opacity: 0, y: 12 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={getTransactionItemTransition(tIndex, 0.02, 0.15)}
                                     className={`p-2 rounded-xl border text-xs transition relative group/tx ${
                                       tx.status === 'liquidado'
                                         ? 'bg-slate-50/80 dark:bg-slate-800/50 border-slate-200/70 dark:border-slate-700/60'
@@ -368,7 +374,7 @@ export const AgendaWeeklyGrid: React.FC<AgendaWeeklyGridProps> = ({
                                         <Trash2 className="w-2.5 h-2.5" />
                                       </button>
                                     </div>
-                                  </div>
+                                  </motion.div>
                                 );
                               })
                             ) : (

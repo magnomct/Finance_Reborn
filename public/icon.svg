@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="50%" stop-color="#4338ca"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="coinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+
+  <!-- Subtle glow inner contour -->
+  <rect x="16" y="16" width="480" height="480" rx="98" fill="none" stroke="#818cf8" stroke-width="4" stroke-opacity="0.25"/>
+
+  <!-- Main stylized Yupee Jar / Vault Symbol -->
+  <g filter="url(#glow)">
+    <!-- Base Vault Jar -->
+    <path d="M144 200 C144 160 176 128 216 128 L296 128 C336 128 368 160 368 200 L368 240 C388 250 400 270 400 296 C400 364 346 416 256 416 C166 416 112 364 112 296 C112 270 124 250 144 240 Z" fill="#1e293b" stroke="#6366f1" stroke-width="8"/>
+
+    <!-- Vault Ring -->
+    <ellipse cx="256" cy="180" rx="88" ry="24" fill="#312e81" stroke="#818cf8" stroke-width="6"/>
+
+    <!-- Glowing Coin in Center -->
+    <circle cx="256" cy="304" r="64" fill="url(#coinGrad)" stroke="#6ee7b7" stroke-width="6"/>
+
+    <!-- Yupee 'Y' inside the Coin -->
+    <path d="M228 274 L256 304 L284 274 M256 304 L256 338" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- 6 Potes Sparks (6 micro dots representing the 6 jars) -->
+    <circle cx="180" cy="304" r="8" fill="url(#accentGrad)"/>
+    <circle cx="332" cy="304" r="8" fill="url(#accentGrad)"/>
+    <circle cx="204" cy="240" r="7" fill="#60a5fa"/>
+    <circle cx="308" cy="240" r="7" fill="#f43f5e"/>
+    <circle cx="204" cy="368" r="7" fill="#a855f7"/>
+    <circle cx="308" cy="368" r="7" fill="#38bdf8"/>
+  </g>
+</svg>

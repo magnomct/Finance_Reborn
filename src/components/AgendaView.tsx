@@ -8,6 +8,8 @@ import { JAR_DEFINITIONS } from '../data/initialData';
 import { formatBRL, calculateFinancialMetrics } from '../utils/finance';
 import { calculateReminderStatus } from '../utils/reminders';
 import { AgendaWeeklyGrid } from './AgendaWeeklyGrid';
+import { motion, AnimatePresence } from 'framer-motion';
+import { TRANSACTION_ITEM_VARIANTS, getTransactionItemTransition } from '../utils/motionTransitions';
 
 interface AgendaViewProps {
   selectedMonth: string;
@@ -209,18 +211,30 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
       {viewMode === 'diario' ? (
         /* Daily Feed Cronológico */
         <div className={`${theme.card} rounded-3xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/80`} data-testid="agenda-daily-feed">
-        {filteredTransactions.map((tx) => {
-          const day = tx.date.split('-')[2] || '01';
-          const isPositive = tx.type === 'receita' || tx.type === 'reembolso';
-          const isOverdraftAlert = tx.description.toLowerCase().includes('cheque especial');
-          const isMortgage = tx.description.toLowerCase().includes('financiamento');
-          const jarDef = JAR_DEFINITIONS[tx.jar] || JAR_DEFINITIONS.NEC_55;
+        {filteredTransactions.length === 0 ? (
+          <div className="p-8 text-center text-xs text-slate-400 space-y-2">
+            <List className="w-8 h-8 mx-auto opacity-40 text-slate-400" />
+            <p className="font-semibold">Nenhuma movimentação encontrada para o filtro selecionado.</p>
+          </div>
+        ) : (
+          <AnimatePresence mode="popLayout" initial={true}>
+            {filteredTransactions.map((tx, idx) => {
+              const day = tx.date.split('-')[2] || '01';
+              const isPositive = tx.type === 'receita' || tx.type === 'reembolso';
+              const isOverdraftAlert = tx.description.toLowerCase().includes('cheque especial');
+              const isMortgage = tx.description.toLowerCase().includes('financiamento');
+              const jarDef = JAR_DEFINITIONS[tx.jar] || JAR_DEFINITIONS.NEC_55;
 
-          return (
-            <div 
-              key={tx.id} 
-              className={`p-3.5 flex items-center justify-between gap-3 ${theme.hoverRow} transition group`}
-            >
+              return (
+                <motion.div 
+                  key={`${selectedMonth}-${selectedJarFilter}-${tx.id}`}
+                  layout="position"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={getTransactionItemTransition(idx)}
+                  className={`p-3.5 flex items-center justify-between gap-3 ${theme.hoverRow} transition group`}
+                >
               {/* Day badge & info */}
               <div className="flex items-center gap-3">
                 <div className="flex flex-col items-center justify-center w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold shrink-0">
@@ -372,9 +386,11 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                   </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           );
         })}
+        </AnimatePresence>
+        )}
       </div>
       ) : (
         /* Visualização Semanal em Grid com Fluxo Acumulado */

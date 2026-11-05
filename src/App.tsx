@@ -43,12 +43,25 @@ import { FinanceReadingCard } from './components/FinanceReadingCard';
 import { BudgetAlertsBanner } from './components/BudgetAlertsBanner';
 import { BudgetLimitsModal } from './components/BudgetLimitsModal';
 import { ResetEnvironmentModal } from './components/ResetEnvironmentModal';
+import { AndroidTestingModal } from './components/AndroidTestingModal';
 import { loadJarLimits, saveJarLimits, calculateJarBudgetAlerts } from './utils/budgetAlerts';
 import { EnvironmentSetupOutput, purgeAllApplicationStorage, persistFreshEnvironment } from './utils/environmentSetup';
-import { Sliders } from 'lucide-react';
+import { Sliders, QrCode } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ScreenTransition } from './components/ScreenTransition';
 import { TAB_INDICATOR_TRANSITION } from './utils/motionTransitions';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import {
+  loadOfflineQueue,
+  saveOfflineQueue,
+  enqueueOfflineItem,
+  markItemsAsSynced,
+  countPendingOffline,
+  OfflineQueueItem
+} from './utils/offlineSync';
+import { Wifi, WifiOff } from 'lucide-react';
 
 export default function App() {
   // Screens & Navigation - Default to the complete Dashboard with Resumo dos Dados
@@ -111,6 +124,7 @@ export default function App() {
   const [isLimitsModalOpen, setIsLimitsModalOpen] = useState(false);
   const [isGlobalPdfModalOpen, setIsGlobalPdfModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isAndroidModalOpen, setIsAndroidModalOpen] = useState(false);
   const [resetNotification, setResetNotification] = useState<string | null>(null);
   const [jarLimits, setJarLimits] = useState<Record<JarType, number>>(() => loadJarLimits());
 
@@ -118,6 +132,35 @@ export default function App() {
     setJarLimits(newLimits);
     saveJarLimits(newLimits);
   };
+
+  // PWA Offline Queue & Connectivity State
+  const isOnline = useOnlineStatus();
+  const [offlineQueue, setOfflineQueue] = useState<OfflineQueueItem[]>(() => loadOfflineQueue());
+  const [isSyncingOffline, setIsSyncingOffline] = useState(false);
+  const [offlineToast, setOfflineToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!offlineToast) return;
+    const timer = setTimeout(() => setOfflineToast(null), 4500);
+    return () => clearTimeout(timer);
+  }, [offlineToast]);
+
+  const handleSyncOfflineQueue = async () => {
+    if (offlineQueue.length === 0) return;
+    setIsSyncingOffline(true);
+    await new Promise(res => setTimeout(res, 500));
+    const count = offlineQueue.length;
+    setOfflineQueue([]);
+    saveOfflineQueue([]);
+    setIsSyncingOffline(false);
+    setOfflineToast(`Conexão restabelecida! ${count} transação(ões) offline sincronizada(s) com sucesso.`);
+  };
+
+  useEffect(() => {
+    if (isOnline && offlineQueue.length > 0) {
+      handleSyncOfflineQueue();
+    }
+  }, [isOnline]);
 
   // Auto-dismiss reset notification
   useEffect(() => {
@@ -260,6 +303,13 @@ export default function App() {
       isRecurring: newTxData.isRecurring,
     };
     setTransactions(prev => [newTx, ...prev]);
+
+    if (!isOnline) {
+      const updatedQueue = enqueueOfflineItem(offlineQueue, newTx, 'create');
+      setOfflineQueue(updatedQueue);
+      saveOfflineQueue(updatedQueue);
+      setOfflineToast('⚡ Transação gravada localmente com sucesso! Modo offline ativo.');
+    }
   };
 
   // Import batch of transactions from OFX or CSV
@@ -270,9 +320,17 @@ export default function App() {
 
   // Delete transaction
   const handleDeleteTransaction = (id: string) => {
+    const txToDelete = transactions.find(t => t.id === id);
     setTransactions(prev => prev.filter(t => t.id !== id));
     if (editingTransaction && editingTransaction.id === id) {
       setEditingTransaction(null);
+    }
+
+    if (!isOnline && txToDelete) {
+      const updatedQueue = enqueueOfflineItem(offlineQueue, txToDelete, 'delete');
+      setOfflineQueue(updatedQueue);
+      saveOfflineQueue(updatedQueue);
+      setOfflineToast('⚡ Exclusão registrada localmente! Modo offline ativo.');
     }
   };
 
@@ -287,6 +345,13 @@ export default function App() {
     setTransactions(prev => updateTransactionInList(prev, updatedTx));
     setEditingTransaction(null);
     setIsModalOpen(false);
+
+    if (!isOnline) {
+      const updatedQueue = enqueueOfflineItem(offlineQueue, updatedTx, 'update');
+      setOfflineQueue(updatedQueue);
+      saveOfflineQueue(updatedQueue);
+      setOfflineToast('⚡ Alteração salva localmente! Modo offline ativo.');
+    }
   };
 
   // Update specific transaction notes
@@ -446,6 +511,18 @@ export default function App() {
           >
             {isMobileFrame ? <Smartphone className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">{isMobileFrame ? 'Smartphone' : 'Expandido'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsAndroidModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-xs transition cursor-pointer"
+            title="Gerenciar e testar no smartphone Android via QR Code e WebAPK"
+            data-testid="btn-open-android-testing"
+          >
+            <QrCode className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="hidden sm:inline">Testar no Android</span>
+            <span className="sm:hidden">Android</span>
           </button>
 
           <button 
@@ -731,6 +808,9 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {/* Botão Instalar PWA */}
+            <PWAInstallButton onOpenAndroidGuide={() => setIsAndroidModalOpen(true)} />
 
             {/* Botão Novo Lançamento */}
             <button 
@@ -1226,6 +1306,35 @@ export default function App() {
           setResetNotification('🔄 Modelo de demonstração restaurado com sucesso.');
         }}
       />
+
+      {/* Modal de Gerenciamento e Teste no Android */}
+      <AndroidTestingModal
+        isOpen={isAndroidModalOpen}
+        onClose={() => setIsAndroidModalOpen(false)}
+        onToggleMobilePreview={() => setIsMobileFrame(!isMobileFrame)}
+        isMobilePreviewActive={isMobileFrame}
+      />
+
+      {/* Offline Connectivity Status Pill & Manual Sync */}
+      <OfflineIndicator
+        pendingCount={countPendingOffline(offlineQueue)}
+        onSyncNow={handleSyncOfflineQueue}
+        isSyncing={isSyncingOffline}
+      />
+
+      {/* Offline Toast Notification */}
+      {offlineToast && (
+        <div className="fixed top-16 right-4 z-50 flex items-center gap-2 rounded-2xl bg-slate-900/90 text-white border border-slate-700/80 px-4 py-2.5 text-xs font-semibold shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>{offlineToast}</span>
+          <button
+            onClick={() => setOfflineToast(null)}
+            className="ml-2 p-1 text-slate-400 hover:text-white cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
     </div>
   );
