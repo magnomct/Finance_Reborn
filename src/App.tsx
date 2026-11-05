@@ -469,65 +469,67 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen ${theme.bg} font-sans transition-colors duration-200 pb-20`}>
+    <div className={`min-h-screen ${theme.bg} font-sans transition-colors duration-200 pb-20 overflow-x-hidden w-full max-w-full`}>
       
       {/* Top Device & Mode Bar */}
-      <div className="max-w-5xl mx-auto px-4 pt-3 flex justify-between items-center text-xs">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-slate-400">Yupee Reborn:</span>
-          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold dark:bg-emerald-950 dark:text-emerald-300">
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 pt-2.5 sm:pt-3 flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 text-xs">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <span className="font-bold text-slate-700 dark:text-slate-300">Yupee Reborn</span>
+          <span className="hidden sm:inline px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold dark:bg-emerald-950 dark:text-emerald-300 text-[11px]">
             Finanças Pessoais & 6 Potes
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar max-w-full py-0.5 shrink-0">
           {/* Botão de Reset e Configuração do Ambiente do Zero */}
           <button
             onClick={() => setIsResetModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800/80 font-bold transition cursor-pointer active:scale-95 shadow-xs"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800/80 font-bold transition cursor-pointer active:scale-95 shadow-xs shrink-0"
             title="Começar do zero e configurar todo o ambiente financeiro"
             data-testid="btn-reset-environment"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-            <span>Começar do Zero (Reset)</span>
+            <span className="hidden sm:inline">Começar do Zero (Reset)</span>
+            <span className="sm:hidden text-[11px]">Reset</span>
           </button>
 
           <button
             onClick={handleResetData}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer shrink-0"
             title="Restaurar dados iniciais de demonstração"
           >
             <RotateCcw className="w-3 h-3" />
-            <span className="hidden sm:inline">Restaurar Modelo</span>
+            <span className="hidden md:inline">Restaurar Modelo</span>
           </button>
 
           <button 
             onClick={() => setIsMobileFrame(!isMobileFrame)}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border transition ${
+            className={`hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-lg border transition shrink-0 ${
               isMobileFrame 
                 ? 'bg-blue-500 text-white border-blue-600 font-medium' 
                 : `${theme.cardSubtle} text-slate-500 hover:text-slate-900 dark:hover:text-white`
             }`}
+            title="Alternar modo smartphone na tela do computador"
           >
             {isMobileFrame ? <Smartphone className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{isMobileFrame ? 'Smartphone' : 'Expandido'}</span>
+            <span className="hidden md:inline">{isMobileFrame ? 'Smartphone' : 'Expandido'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsAndroidModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-xs transition cursor-pointer"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-xs transition cursor-pointer shrink-0"
             title="Gerenciar e testar no smartphone Android via QR Code e WebAPK"
             data-testid="btn-open-android-testing"
           >
             <QrCode className="w-3.5 h-3.5 text-emerald-500" />
             <span className="hidden sm:inline">Testar no Android</span>
-            <span className="sm:hidden">Android</span>
+            <span className="sm:hidden text-[11px]">Android</span>
           </button>
 
           <button 
             onClick={() => setThemeMode(isDark ? 'clean' : 'dark')}
-            className={`p-1.5 rounded-lg border ${theme.cardSubtle} text-slate-500 hover:text-slate-900 dark:hover:text-white transition`}
+            className={`p-1.5 rounded-lg border ${theme.cardSubtle} text-slate-500 hover:text-slate-900 dark:hover:text-white transition shrink-0`}
             title={isDark ? 'Mudar para Tema Clean' : 'Mudar para Tema Dark'}
           >
             {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-slate-600" />}
@@ -555,274 +557,307 @@ export default function App() {
       )}
 
       {/* Main Container */}
-      <main className={`mx-auto transition-all duration-300 ${
+      <main className={`mx-auto transition-all duration-300 w-full max-w-full overflow-x-hidden ${
         isMobileFrame 
           ? 'max-w-md my-4 rounded-[40px] shadow-2xl border-8 border-slate-800 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-950 relative min-h-[840px]' 
-          : 'max-w-5xl px-4 py-4 space-y-5'
+          : 'max-w-5xl px-3 sm:px-4 py-3 sm:py-4 space-y-4 sm:space-y-5'
       }`}>
 
         {/* ============================================================== */}
         {/* CABEÇALHO YUPEE (Logo com as 5 letrinhas coloridas marcantes)    */}
         {/* ============================================================== */}
-        <header className={`px-5 py-3.5 border-b ${theme.headerBg} flex items-center justify-between sticky top-0 z-30 backdrop-blur-md`}>
+        {/* ============================================================== */}
+        {/* CABEÇALHO YUPEE (Logo com as 5 letrinhas coloridas marcantes)    */}
+        {/* ============================================================== */}
+        <header className={`px-3 sm:px-5 py-2 sm:py-3.5 border-b ${theme.headerBg} sticky top-0 z-30 backdrop-blur-md`}>
           
-          {/* Logo Yupee */}
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveScreen('hub')}>
-            <div className="flex items-center gap-1 tracking-tight select-none">
-              <span className="w-6 h-6 rounded-md bg-rose-500 text-white font-black text-sm flex items-center justify-center shadow-sm">y</span>
-              <span className="w-6 h-6 rounded-md bg-amber-500 text-white font-black text-sm flex items-center justify-center shadow-sm">u</span>
-              <span className="w-6 h-6 rounded-md bg-emerald-500 text-white font-black text-sm flex items-center justify-center shadow-sm">p</span>
-              <span className="w-6 h-6 rounded-md bg-sky-500 text-white font-black text-sm flex items-center justify-center shadow-sm">e</span>
-              <span className="w-6 h-6 rounded-md bg-indigo-500 text-white font-black text-sm flex items-center justify-center shadow-sm">e</span>
+          {/* Linha Principal: Logo + Seletor Desktop + Ações */}
+          <div className="flex items-center justify-between gap-2 w-full">
+            
+            {/* Logo Yupee */}
+            <div className="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onClick={() => setActiveScreen('hub')}>
+              <div className="flex items-center gap-0.5 sm:gap-1 tracking-tight select-none">
+                <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-rose-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">y</span>
+                <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-amber-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">u</span>
+                <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-emerald-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">p</span>
+                <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-sky-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">e</span>
+                <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-indigo-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">e</span>
+              </div>
+              <div className="hidden sm:block">
+                <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 block -mb-1">REBORN</span>
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Controle Inteligente</span>
+              </div>
             </div>
-            <div className="hidden sm:block">
-              <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 block -mb-1">REBORN</span>
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Controle Inteligente</span>
+
+            {/* Scope Selector no Desktop (PF, PJ, Consolidado) */}
+            <div className="hidden md:flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold shrink-0">
+              <button
+                onClick={() => handleScopeChange('PF')}
+                className={`px-3 py-1 rounded-lg transition cursor-pointer ${viewScope === 'PF' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                PF
+              </button>
+              <button
+                onClick={() => handleScopeChange('PJ')}
+                className={`px-3 py-1 rounded-lg transition cursor-pointer ${viewScope === 'PJ' ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                PJ
+              </button>
+              <button
+                onClick={() => handleScopeChange('CONSOLIDADO')}
+                className={`px-3 py-1 rounded-lg transition cursor-pointer ${viewScope === 'CONSOLIDADO' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Consolidado
+              </button>
             </div>
-          </div>
 
-          {/* Scope Selector (PF, PJ, Consolidado) */}
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
-            <button
-              onClick={() => handleScopeChange('PF')}
-              className={`px-3 py-1 rounded-lg transition ${viewScope === 'PF' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-            >
-              PF
-            </button>
-            <button
-              onClick={() => handleScopeChange('PJ')}
-              className={`px-3 py-1 rounded-lg transition ${viewScope === 'PJ' ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-            >
-              PJ
-            </button>
-            <button
-              onClick={() => handleScopeChange('CONSOLIDADO')}
-              className={`px-3 py-1 rounded-lg transition ${viewScope === 'CONSOLIDADO' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-            >
-              Consolidado
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Botão Baixar Relatório Mensal Consolidado em PDF */}
-            <button
-              type="button"
-              onClick={() => setIsGlobalPdfModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-500/30 bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/80 text-xs font-bold transition cursor-pointer shadow-2xs"
-              title="Gerar e baixar resumo mensal consolidado das finanças em PDF"
-              data-testid="btn-header-pdf"
-            >
-              <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span className="hidden sm:inline">Relatório</span>
-              <span>PDF</span>
-            </button>
-
-            {/* Botão Alertas de Orçamento */}
-            <button
-              onClick={() => setIsLimitsModalOpen(true)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs ${
-                activeAlertsCount > 0
-                  ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
-              }`}
-              title="Definir teto máximo para cada pote e receber alerta aos 80%"
-            >
-              <Sliders className="w-3.5 h-3.5 text-amber-500" />
-              <span>Alertas</span>
-              <span className="hidden md:inline">de Orçamento</span>
-              {activeAlertsCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500 text-slate-950">
-                  {activeAlertsCount}
-                </span>
-              )}
-            </button>
-
-            {/* Botão Notificação Visual de Vencimentos */}
-            <div className="relative">
+            {/* Ações do Cabeçalho */}
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              {/* Botão Baixar Relatório Mensal Consolidado em PDF */}
               <button
                 type="button"
-                onClick={() => setIsRemindersOpen(prev => !prev)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs ${
-                  activeReminders.length > 0
-                    ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100'
+                onClick={() => setIsGlobalPdfModalOpen(true)}
+                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl border border-teal-500/30 bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/80 text-xs font-bold transition cursor-pointer shadow-2xs shrink-0"
+                title="Gerar e baixar resumo mensal consolidado das finanças em PDF"
+                data-testid="btn-header-pdf"
+              >
+                <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span className="hidden sm:inline">Relatório</span>
+                <span>PDF</span>
+              </button>
+
+              {/* Botão Alertas de Orçamento */}
+              <button
+                onClick={() => setIsLimitsModalOpen(true)}
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs shrink-0 ${
+                  activeAlertsCount > 0
+                    ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100'
                     : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
                 }`}
-                title="Lembretes de vencimento para despesas agendadas"
-                data-testid="btn-reminders-bell"
+                title="Definir teto máximo para cada pote e receber alerta aos 80%"
               >
-                <Bell className={`w-3.5 h-3.5 ${activeReminders.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`} />
-                <span>Lembretes</span>
-                {activeReminders.length > 0 && (
-                  <span 
-                    className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white animate-pulse"
-                    data-testid="badge-active-reminders-count"
-                  >
-                    {activeReminders.length}
+                <Sliders className="w-3.5 h-3.5 text-amber-500" />
+                <span className="hidden sm:inline">Alertas</span>
+                {activeAlertsCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500 text-slate-950">
+                    {activeAlertsCount}
                   </span>
                 )}
               </button>
 
-              {/* Popover de Lembretes Ativos */}
-              {isRemindersOpen && (
-                <div 
-                  className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-4 z-50 space-y-3 animate-in fade-in zoom-in-95"
-                  data-testid="popover-reminders"
+              {/* Botão Notificação Visual de Vencimentos */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsRemindersOpen(prev => !prev)}
+                  className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs ${
+                    activeReminders.length > 0
+                      ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
+                  }`}
+                  title="Lembretes de vencimento para despesas agendadas"
+                  data-testid="btn-reminders-bell"
                 >
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold">
-                        <Bell className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">Lembretes de Vencimento</h4>
-                        <span className="text-[10px] text-slate-400">Despesas agendadas com aviso prévio</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsRemindersOpen(false)}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                  <Bell className={`w-3.5 h-3.5 ${activeReminders.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`} />
+                  <span className="hidden sm:inline">Lembretes</span>
+                  {activeReminders.length > 0 && (
+                    <span 
+                      className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white animate-pulse"
+                      data-testid="badge-active-reminders-count"
                     >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {activeReminders.length === 0 ? (
-                    <div className="py-6 text-center text-xs text-slate-400 space-y-1">
-                      <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto opacity-70" />
-                      <p className="font-semibold text-slate-600 dark:text-slate-300">Nenhum vencimento pendente</p>
-                      <p className="text-[10px]">Todas as suas despesas agendadas estão em dia ou sem lembretes ativos.</p>
-                    </div>
-                  ) : (
-                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 space-y-1 pr-1">
-                      {activeReminders.map(item => (
-                        <div 
-                          key={item.transaction.id} 
-                          className="pt-2 pb-2 first:pt-0 last:pb-0 flex items-center justify-between gap-2 text-xs"
-                          data-testid={`reminder-item-${item.transaction.id}`}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-slate-900 dark:text-white truncate">
-                                {item.transaction.description}
-                              </span>
-                              <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
-                                item.status.urgency === 'overdue' 
-                                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' 
-                                  : item.status.urgency === 'today'
-                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-black animate-pulse'
-                                  : 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                              }`}>
-                                {item.status.message}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                              <span>{item.transaction.date}</span>
-                              <span>•</span>
-                              <span className="font-semibold text-rose-600 dark:text-rose-400">
-                                {formatBRL(Math.abs(item.transaction.amount))}
-                              </span>
-                              <span>•</span>
-                              <span>{item.transaction.account}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleToggleStatus(item.transaction.id);
-                              }}
-                              className="px-2 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[10px] shadow-2xs transition active:scale-95 cursor-pointer"
-                              title="Marcar como liquidado / pago"
-                              data-testid={`btn-liquidate-reminder-${item.transaction.id}`}
-                            >
-                              Liquidar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsRemindersOpen(false);
-                                handleOpenEditTransaction(item.transaction);
-                              }}
-                              className="p-1 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                              title="Editar lembrete ou lançamento"
-                              data-testid={`btn-edit-reminder-${item.transaction.id}`}
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                      {activeReminders.length}
+                    </span>
                   )}
+                </button>
 
-                  {/* Seção API de Notificações do Navegador (Alerta a 2 dias do vencimento) */}
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
-                        <BellRing className="w-3.5 h-3.5 text-blue-500" />
-                        <span>Notificações no Sistema (OS)</span>
+                {/* Popover de Lembretes Ativos */}
+                {isRemindersOpen && (
+                  <div 
+                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-4 z-50 space-y-3 animate-in fade-in zoom-in-95 max-w-[calc(100vw-24px)]"
+                    data-testid="popover-reminders"
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold">
+                          <Bell className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white">Lembretes de Vencimento</h4>
+                          <span className="text-[10px] text-slate-400">Despesas agendadas com aviso prévio</span>
+                        </div>
                       </div>
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${
-                        notificationPermission === 'granted'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                          : notificationPermission === 'denied'
-                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                      }`} data-testid="badge-notification-permission">
-                        {notificationPermission === 'granted' ? 'Ativo' : notificationPermission === 'denied' ? 'Bloqueado' : 'Desativado'}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsRemindersOpen(false)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
 
-                    <p className="text-[10px] text-slate-400 leading-tight">
-                      Dispara alertas nativos no sistema operacional (Windows/Mac/Linux/Android) quando uma despesa estiver a <strong>2 dias do vencimento</strong>.
-                    </p>
+                    {activeReminders.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-slate-400 space-y-1">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto opacity-70" />
+                        <p className="font-semibold text-slate-600 dark:text-slate-300">Nenhum vencimento pendente</p>
+                        <p className="text-[10px]">Todas as suas despesas agendadas estão em dia ou sem lembretes ativos.</p>
+                      </div>
+                    ) : (
+                      <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 space-y-1 pr-1">
+                        {activeReminders.map(item => (
+                          <div 
+                            key={item.transaction.id} 
+                            className="pt-2 pb-2 first:pt-0 last:pb-0 flex items-center justify-between gap-2 text-xs"
+                            data-testid={`reminder-item-${item.transaction.id}`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-slate-900 dark:text-white truncate">
+                                  {item.transaction.description}
+                                </span>
+                                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
+                                  item.status.urgency === 'overdue' 
+                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' 
+                                    : item.status.urgency === 'today'
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-black animate-pulse'
+                                    : 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                }`}>
+                                  {item.status.message}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                                <span>{item.transaction.date}</span>
+                                <span>•</span>
+                                <span className="font-semibold text-rose-600 dark:text-rose-400">
+                                  {formatBRL(Math.abs(item.transaction.amount))}
+                                </span>
+                                <span>•</span>
+                                <span>{item.transaction.account}</span>
+                              </div>
+                            </div>
 
-                    <div className="flex items-center gap-2 pt-0.5">
-                      {notificationPermission !== 'granted' ? (
-                        <button
-                          type="button"
-                          onClick={handleEnableNotifications}
-                          className="flex-1 py-1.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shadow-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                          data-testid="btn-enable-browser-notifications"
-                        >
-                          <BellRing className="w-3.5 h-3.5" />
-                          <span>Ativar Alertas Nativos (2 dias)</span>
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-2 w-full">
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleToggleStatus(item.transaction.id);
+                                }}
+                                className="px-2 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[10px] shadow-2xs transition active:scale-95 cursor-pointer"
+                                title="Marcar como liquidado / pago"
+                                data-testid={`btn-liquidate-reminder-${item.transaction.id}`}
+                              >
+                                Liquidar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsRemindersOpen(false);
+                                  handleOpenEditTransaction(item.transaction);
+                                }}
+                                className="p-1 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                                title="Editar lembrete ou lançamento"
+                                data-testid={`btn-edit-reminder-${item.transaction.id}`}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Seção API de Notificações do Navegador */}
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                          <BellRing className="w-3.5 h-3.5 text-blue-500" />
+                          <span>Notificações no Sistema (OS)</span>
+                        </div>
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${
+                          notificationPermission === 'granted'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : notificationPermission === 'denied'
+                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        }`} data-testid="badge-notification-permission">
+                          {notificationPermission === 'granted' ? 'Ativo' : notificationPermission === 'denied' ? 'Bloqueado' : 'Desativado'}
+                        </span>
+                      </div>
+
+                      <p className="text-[10px] text-slate-400 leading-tight">
+                        Dispara alertas nativos no sistema operacional quando uma despesa estiver a <strong>2 dias do vencimento</strong>.
+                      </p>
+
+                      <div className="flex items-center gap-2 pt-0.5">
+                        {notificationPermission !== 'granted' ? (
                           <button
                             type="button"
-                            onClick={handleTestNotification}
-                            className="flex-1 py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                            data-testid="btn-test-browser-notification"
+                            onClick={handleEnableNotifications}
+                            className="flex-1 py-1.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shadow-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                            data-testid="btn-enable-browser-notifications"
                           >
-                            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                            <span>Testar Alerta Nativo</span>
+                            <BellRing className="w-3.5 h-3.5" />
+                            <span>Ativar Alertas Nativos (2 dias)</span>
                           </button>
-                        </div>
-                      )}
+                        ) : (
+                          <div className="flex items-center gap-2 w-full">
+                            <button
+                              type="button"
+                              onClick={handleTestNotification}
+                              className="flex-1 py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                              data-testid="btn-test-browser-notification"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                              <span>Testar Alerta Nativo</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+
+              {/* Botão Instalar PWA */}
+              <div className="shrink-0">
+                <PWAInstallButton onOpenAndroidGuide={() => setIsAndroidModalOpen(true)} />
+              </div>
+
+              {/* Botão Novo Lançamento */}
+              <button 
+                onClick={() => {
+                  setEditingTransaction(null);
+                  setIsModalOpen(true);
+                }}
+                className="flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Novo</span>
+              </button>
             </div>
+          </div>
 
-            {/* Botão Instalar PWA */}
-            <PWAInstallButton onOpenAndroidGuide={() => setIsAndroidModalOpen(true)} />
-
-            {/* Botão Novo Lançamento */}
-            <button 
-              onClick={() => {
-                setEditingTransaction(null);
-                setIsModalOpen(true);
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Novo</span>
-            </button>
+          {/* Linha Secundária Mobile: Seletor de Escopo (PF, PJ, Consolidado) para telas pequenas */}
+          <div className="flex md:hidden items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-2">
+            <div className="flex items-center gap-1 w-full bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl text-xs font-semibold">
+              <button
+                onClick={() => handleScopeChange('PF')}
+                className={`flex-1 py-1 rounded-lg text-center transition cursor-pointer ${viewScope === 'PF' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' : 'text-slate-500'}`}
+              >
+                PF
+              </button>
+              <button
+                onClick={() => handleScopeChange('PJ')}
+                className={`flex-1 py-1 rounded-lg text-center transition cursor-pointer ${viewScope === 'PJ' ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs' : 'text-slate-500'}`}
+              >
+                PJ
+              </button>
+              <button
+                onClick={() => handleScopeChange('CONSOLIDADO')}
+                className={`flex-1 py-1 rounded-lg text-center transition cursor-pointer ${viewScope === 'CONSOLIDADO' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500'}`}
+              >
+                Consolidado
+              </button>
+            </div>
           </div>
         </header>
 
