@@ -1,4 +1,4 @@
-import { Transaction, JarType, JarBudgetAlert, BudgetAlertStatus } from '../types';
+import { Transaction, JarType, JarBudgetAlert, BudgetAlertStatus, JarSavingsProgress } from '../types';
 import { JAR_DEFINITIONS } from '../data/initialData';
 
 export const DEFAULT_JAR_LIMITS: Record<JarType, number> = {
@@ -11,7 +11,18 @@ export const DEFAULT_JAR_LIMITS: Record<JarType, number> = {
   PJ_EXCLUIDO: 600,
 };
 
+export const DEFAULT_JAR_SAVINGS_TARGETS: Record<JarType, number> = {
+  NEC_55: 200,
+  DIV_10: 100,
+  PLP_10: 360,
+  LIF_10: 150,
+  EDU_10: 150,
+  FER_5: 90,
+  PJ_EXCLUIDO: 0,
+};
+
 const STORAGE_KEY = 'yupee_budget_jar_limits';
+const SAVINGS_TARGETS_STORAGE_KEY = 'yupee_budget_jar_savings_targets';
 
 /**
  * Loads custom limits from localStorage, falling back to default limits
@@ -41,6 +52,36 @@ export function saveJarLimits(limits: Record<JarType, number>): void {
     console.warn('Erro ao salvar limites de potes no localStorage:', err);
   }
 }
+
+/**
+ * Loads custom savings goals from localStorage, falling back to default targets
+ */
+export function loadJarSavingsTargets(): Record<JarType, number> {
+  if (typeof window === 'undefined') return { ...DEFAULT_JAR_SAVINGS_TARGETS };
+  try {
+    const saved = localStorage.getItem(SAVINGS_TARGETS_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { ...DEFAULT_JAR_SAVINGS_TARGETS, ...parsed };
+    }
+  } catch (err) {
+    console.warn('Erro ao carregar metas de economia de potes do localStorage:', err);
+  }
+  return { ...DEFAULT_JAR_SAVINGS_TARGETS };
+}
+
+/**
+ * Saves custom savings goals to localStorage
+ */
+export function saveJarSavingsTargets(targets: Record<JarType, number>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(SAVINGS_TARGETS_STORAGE_KEY, JSON.stringify(targets));
+  } catch (err) {
+    console.warn('Erro ao salvar metas de economia de potes no localStorage:', err);
+  }
+}
+
 
 /**
  * Calculates net spending for a specific jar (expenses minus refunds)
@@ -120,3 +161,50 @@ export function suggestLimitsFromIncome(effectiveIncomeBase: number): Record<Jar
     PJ_EXCLUIDO: Math.round(base * 0.15),
   };
 }
+
+/**
+ * Recommends custom savings targets for each jar based on the user's monthly income
+ */
+export function suggestSavingsTargetsFromIncome(effectiveIncomeBase: number): Record<JarType, number> {
+  const base = effectiveIncomeBase > 0 ? effectiveIncomeBase : 3652.31;
+  return {
+    NEC_55: Math.round(base * 0.05), // 5% de margem residual em necessidades
+    DIV_10: Math.round(base * 0.03), // 3% de poupança em diversão
+    PLP_10: Math.round(base * 0.10), // 10% integral (100% da cota PLP)
+    LIF_10: Math.round(base * 0.05), // 5% para investimentos de liberdade
+    EDU_10: Math.round(base * 0.05), // 5% para capacitação futura
+    FER_5: Math.round(base * 0.03),  // 3% para férias e descanso
+    PJ_EXCLUIDO: 0,
+  };
+}
+
+/**
+ * Calculates the progress towards a jar's custom savings goal.
+ * Current savings corresponds to the unspent budget/limit remaining in the jar.
+ */
+export function calculateJarSavingsProgress(
+  jarId: JarType,
+  spent: number,
+  limit: number,
+  savingsTarget: number,
+  jarBudget?: number
+): JarSavingsProgress {
+  const effectiveCap = limit > 0 ? limit : (jarBudget !== undefined && jarBudget > 0 ? jarBudget : 0);
+  const currentSavings = Math.max(0, effectiveCap - spent);
+  const target = Math.max(0, savingsTarget);
+  const remainingToTarget = Math.max(0, target - currentSavings);
+  const progressPercent = target > 0 
+    ? Math.min(100, Math.round((currentSavings / target) * 1000) / 10) 
+    : (currentSavings > 0 ? 100 : 0);
+  const isTargetReached = target > 0 ? currentSavings >= target : false;
+
+  return {
+    jarId,
+    savingsTarget: target,
+    currentSavings,
+    remainingToTarget,
+    progressPercent,
+    isTargetReached,
+  };
+}
+

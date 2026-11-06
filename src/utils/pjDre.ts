@@ -1,18 +1,31 @@
 import { Transaction } from '../types';
 
+export interface DreExpenseDetail {
+  id: string;
+  description: string;
+  amount: number;
+  category: string;
+  isFixed: boolean;
+}
+
 export interface MonthDreBreakdown {
   month: string; // YYYY-MM
   monthLabel: string; // e.g. "Outubro/2026"
   grossRevenue: number; // Receita Operacional Bruta (Faturamento)
   dasTaxes: number; // Tributos DAS Simples Nacional
   netRevenue: number; // Receita Líquida (Bruta - DAS)
+  fixedExpenses: number; // Despesas Fixas (Convênio Médico, Contabilidade, Assinaturas)
+  variableExpenses: number; // Despesas Variáveis (Tarifas, transporte, alimentação PJ, custos eventuais)
   healthInsurance: number; // Convênio Médico PJ
   bankAndSoftwareFees: number; // Tarifas bancárias, licenças, softwares
   otherExpenses: number; // Outros custos operacionais PJ
-  totalOperatingExpenses: number; // Soma de despesas operacionais
+  totalOperatingExpenses: number; // Soma de despesas operacionais (Fixas + Variáveis)
   netProfit: number; // Lucro Líquido (Receita Líquida - Despesas Operacionais)
   netMarginPct: number; // (Lucro Líquido / Receita Bruta) * 100
+  effectiveTaxRatePct: number; // (DAS / Receita Bruta) * 100
   transactionCount: number;
+  fixedDetails?: DreExpenseDetail[];
+  variableDetails?: DreExpenseDetail[];
 }
 
 export type DreLineCategory = 'receita' | 'deducao' | 'subtotal' | 'despesa' | 'subdespesa' | 'resultado' | 'indicador';
@@ -153,10 +166,13 @@ export function calculateMonthDre(
     const healthInsurance = hist.healthInsurance || 0;
     const bankAndSoftwareFees = hist.bankAndSoftwareFees || 0;
     const otherExpenses = hist.otherExpenses || 0;
+    const fixedExpenses = healthInsurance;
+    const variableExpenses = bankAndSoftwareFees + otherExpenses;
     const netRevenue = Math.max(0, grossRevenue - dasTaxes);
-    const totalOperatingExpenses = healthInsurance + bankAndSoftwareFees + otherExpenses;
+    const totalOperatingExpenses = fixedExpenses + variableExpenses;
     const netProfit = netRevenue - totalOperatingExpenses;
     const netMarginPct = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
+    const effectiveTaxRatePct = grossRevenue > 0 ? (dasTaxes / grossRevenue) * 100 : 0;
 
     return {
       month: yearMonth,
@@ -164,13 +180,22 @@ export function calculateMonthDre(
       grossRevenue,
       dasTaxes,
       netRevenue,
+      fixedExpenses,
+      variableExpenses,
       healthInsurance,
       bankAndSoftwareFees,
       otherExpenses,
       totalOperatingExpenses,
       netProfit,
       netMarginPct,
-      transactionCount: hist.transactionCount || 0
+      effectiveTaxRatePct,
+      transactionCount: hist.transactionCount || 0,
+      fixedDetails: [
+        { id: `hist-health-${yearMonth}`, description: 'Convênio Médico PJ', amount: healthInsurance, category: 'Saúde & Benefícios', isFixed: true }
+      ],
+      variableDetails: bankAndSoftwareFees > 0 ? [
+        { id: `hist-fees-${yearMonth}`, description: 'Tarifas Bancárias & Softwares', amount: bankAndSoftwareFees, category: 'Tarifas Bancárias', isFixed: false }
+      ] : []
     };
   }
 
@@ -179,6 +204,10 @@ export function calculateMonthDre(
   let healthInsurance = 0;
   let bankAndSoftwareFees = 0;
   let otherExpenses = 0;
+  let fixedExpenses = 0;
+  let variableExpenses = 0;
+  const fixedDetails: DreExpenseDetail[] = [];
+  const variableDetails: DreExpenseDetail[] = [];
 
   for (const t of monthTransactions) {
     const desc = (t.description || '').toLowerCase();
@@ -188,29 +217,66 @@ export function calculateMonthDre(
     if (t.type === 'receita') {
       grossRevenue += amountAbs;
     } else if (t.type === 'despesa') {
-      // Check DAS / Simples Nacional / Impostos
+      // 1. Tributos DAS Simples Nacional (Dedução da Receita)
       if (desc.includes('das') || desc.includes('simples') || desc.includes('imposto') || cat.includes('imposto')) {
         dasTaxes += amountAbs;
       }
-      // Check Plano de Saúde / Convênio Médico
+      // 2. Despesas Fixas (Convênio Médico / Saúde Corporativa)
       else if (desc.includes('convênio') || desc.includes('convenio') || desc.includes('saúde') || desc.includes('saude') || cat.includes('saúde') || cat.includes('saude')) {
         healthInsurance += amountAbs;
+        fixedExpenses += amountAbs;
+        fixedDetails.push({
+          id: t.id,
+          description: t.description || 'Convênio Médico PJ',
+          amount: amountAbs,
+          category: 'Saúde & Benefícios',
+          isFixed: true
+        });
       }
-      // Check Tarifas Bancárias, Softwares, Licenças
+      // 3. Despesas Fixas (Contabilidade, Assinaturas Fixas de Software, Licenças)
+      else if (desc.includes('contabilidade') || desc.includes('software fixo') || desc.includes('assinatura') || desc.includes('hospedagem') || cat.includes('contabilidade')) {
+        bankAndSoftwareFees += amountAbs;
+        fixedExpenses += amountAbs;
+        fixedDetails.push({
+          id: t.id,
+          description: t.description || 'Software / Contabilidade Fixa',
+          amount: amountAbs,
+          category: 'Contabilidade & Softwares',
+          isFixed: true
+        });
+      }
+      // 4. Despesas Variáveis (Tarifas Bancárias por Operação, Manutenção Inter PJ)
       else if (desc.includes('tarifa') || desc.includes('banco') || desc.includes('software') || desc.includes('inter') || cat.includes('tarifa')) {
         bankAndSoftwareFees += amountAbs;
+        variableExpenses += amountAbs;
+        variableDetails.push({
+          id: t.id,
+          description: t.description || 'Tarifa Bancária Inter PJ',
+          amount: amountAbs,
+          category: 'Tarifas Bancárias',
+          isFixed: false
+        });
       }
-      // Outros custos PJ
+      // 5. Outras Despesas Variáveis (Deslocamento, alimentação PJ, equipamentos eventuais)
       else {
         otherExpenses += amountAbs;
+        variableExpenses += amountAbs;
+        variableDetails.push({
+          id: t.id,
+          description: t.description || 'Outros Custos PJ',
+          amount: amountAbs,
+          category: cat || 'Despesas Variáveis',
+          isFixed: false
+        });
       }
     }
   }
 
   const netRevenue = Math.max(0, grossRevenue - dasTaxes);
-  const totalOperatingExpenses = healthInsurance + bankAndSoftwareFees + otherExpenses;
+  const totalOperatingExpenses = fixedExpenses + variableExpenses;
   const netProfit = netRevenue - totalOperatingExpenses;
   const netMarginPct = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
+  const effectiveTaxRatePct = grossRevenue > 0 ? (dasTaxes / grossRevenue) * 100 : 0;
 
   return {
     month: yearMonth,
@@ -218,13 +284,18 @@ export function calculateMonthDre(
     grossRevenue,
     dasTaxes,
     netRevenue,
+    fixedExpenses,
+    variableExpenses,
     healthInsurance,
     bankAndSoftwareFees,
     otherExpenses,
     totalOperatingExpenses,
     netProfit,
     netMarginPct,
-    transactionCount: monthTransactions.length
+    effectiveTaxRatePct,
+    transactionCount: monthTransactions.length,
+    fixedDetails,
+    variableDetails
   };
 }
 
@@ -284,9 +355,12 @@ export function calculatePjDreComparison(
   const avgHealthInsurance = precedingBreakdowns.reduce((sum, b) => sum + b.healthInsurance, 0) / denominator;
   const avgBankAndSoftwareFees = precedingBreakdowns.reduce((sum, b) => sum + b.bankAndSoftwareFees, 0) / denominator;
   const avgOtherExpenses = precedingBreakdowns.reduce((sum, b) => sum + b.otherExpenses, 0) / denominator;
+  const avgFixedExpenses = precedingBreakdowns.reduce((sum, b) => sum + (b.fixedExpenses || 0), 0) / denominator;
+  const avgVariableExpenses = precedingBreakdowns.reduce((sum, b) => sum + (b.variableExpenses || 0), 0) / denominator;
   const avgTotalOperatingExpenses = precedingBreakdowns.reduce((sum, b) => sum + b.totalOperatingExpenses, 0) / denominator;
   const avgNetProfit = precedingBreakdowns.reduce((sum, b) => sum + b.netProfit, 0) / denominator;
   const avgNetMarginPct = avgGrossRevenue > 0 ? (avgNetProfit / avgGrossRevenue) * 100 : 0;
+  const avgEffectiveTaxRatePct = avgGrossRevenue > 0 ? (avgDasTaxes / avgGrossRevenue) * 100 : 0;
 
   const avg3Months: MonthDreBreakdown = {
     month: 'AVG-3M',
@@ -297,9 +371,12 @@ export function calculatePjDreComparison(
     healthInsurance: avgHealthInsurance,
     bankAndSoftwareFees: avgBankAndSoftwareFees,
     otherExpenses: avgOtherExpenses,
+    fixedExpenses: avgFixedExpenses,
+    variableExpenses: avgVariableExpenses,
     totalOperatingExpenses: avgTotalOperatingExpenses,
     netProfit: avgNetProfit,
     netMarginPct: avgNetMarginPct,
+    effectiveTaxRatePct: avgEffectiveTaxRatePct,
     transactionCount: Math.round(precedingBreakdowns.reduce((sum, b) => sum + b.transactionCount, 0) / denominator)
   };
 

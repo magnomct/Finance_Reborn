@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { 
   X, Calendar, Clock, Sparkles, Check, ArrowRight, 
-  TrendingUp, AlertCircle, DollarSign, Target
+  TrendingUp, AlertCircle, DollarSign, Target, Flame, Zap, Hourglass
 } from 'lucide-react';
-import { DreamGoal } from '../types';
+import { DreamGoal, DreamPriority } from '../types';
 import { formatBRL } from '../utils/finance';
 import { 
   calculateRemainingMonths, 
@@ -13,6 +13,7 @@ import {
   calculateDreamUrgency, 
   DEFAULT_URGENCY_DAYS_THRESHOLD 
 } from '../utils/dreamUrgency';
+import { calculateDreamCountdown } from '../utils/dreamCountdown';
 
 interface DeadlineSimulatorModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export const DeadlineSimulatorModal: React.FC<DeadlineSimulatorModalProps> = ({
   if (!isOpen || !dream) return null;
 
   const [targetDate, setTargetDate] = useState<string>(dream.targetDate || '');
+  const [priority, setPriority] = useState<DreamPriority>(dream.priority || 'media');
   const [urgencyDaysThreshold, setUrgencyDaysThreshold] = useState<number>(dream.urgencyDaysThreshold ?? DEFAULT_URGENCY_DAYS_THRESHOLD);
   const [customDeposit, setCustomDeposit] = useState<string>(String(dream.monthlyDeposit || ''));
 
@@ -75,6 +77,7 @@ export const DeadlineSimulatorModal: React.FC<DeadlineSimulatorModalProps> = ({
       ...dream,
       targetDate: targetDate || undefined,
       urgencyDaysThreshold,
+      priority,
       monthlyDeposit: depositToSave
     });
     onClose();
@@ -140,7 +143,7 @@ export const DeadlineSimulatorModal: React.FC<DeadlineSimulatorModalProps> = ({
           {/* Date Picker Input */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
-              Data Limite Desejada (Prazo Final)
+              Data Limite Desejada (Prazo Estimado)
             </label>
             <div className="relative">
               <input
@@ -149,6 +152,70 @@ export const DeadlineSimulatorModal: React.FC<DeadlineSimulatorModalProps> = ({
                 onChange={e => setTargetDate(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
+            </div>
+          </div>
+
+          {/* Contagem Regressiva em Tempo Real */}
+          {targetDate && (() => {
+            const previewCountdown = calculateDreamCountdown(targetDate);
+            return (
+              <div className={`p-3 rounded-2xl border flex items-center gap-2.5 text-xs ${previewCountdown.badgeColorClass}`}>
+                <Hourglass className="w-4 h-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                <div className="truncate">
+                  <div className="font-bold flex items-center gap-1.5 truncate">
+                    <span>Contagem Regressiva:</span>
+                    <strong className="underline decoration-dotted">{previewCountdown.countdownLabel}</strong>
+                  </div>
+                  <p className="text-[10px] opacity-80 truncate">
+                    Alvo: {previewCountdown.formattedTargetDate} • {previewCountdown.countdownSubtext}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Seletor de Prioridade no Modal */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+              Nível de Prioridade
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setPriority('alta')}
+                className={`py-2 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                  priority === 'alta'
+                    ? 'bg-rose-600 text-white border-rose-600 shadow-2xs font-black'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <Flame className="w-3.5 h-3.5 text-rose-500" />
+                <span>Alta</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPriority('media')}
+                className={`py-2 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                  priority === 'media'
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-2xs font-black'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                <span>Média</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPriority('baixa')}
+                className={`py-2 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                  priority === 'baixa'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-black'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Baixa</span>
+              </button>
             </div>
           </div>
 

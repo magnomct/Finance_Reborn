@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { calculateSavingsTrends, MonthTrendPoint } from '../utils/savingsTrends';
 import { formatBRL } from '../utils/finance';
+import { useMobileLayout } from '../context/MobileContext';
 
 export interface SavingsTrendsBarChartProps {
   annualReceitas: number[];
@@ -20,6 +21,7 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
   referenceMonthIndex = 9,
   onSelectMonth
 }) => {
+  const { isMobile } = useMobileLayout();
   const [selectedMonthIdx, setSelectedMonthIdx] = useState<number>(referenceMonthIndex);
   const [viewMode, setViewMode] = useState<'grouped' | 'netOnly'>('grouped');
 
@@ -51,29 +53,29 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
 
   return (
     <div 
-      className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5 animate-in fade-in duration-150"
+      className="bg-white dark:bg-slate-900 p-3.5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5 animate-in fade-in duration-150"
       data-testid="savings-trends-barchart"
     >
       {/* Header with Title and Trend Badge */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="p-1 rounded-lg bg-emerald-500 text-white shadow-2xs">
+      <div className={`flex justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 w-full ${isMobile ? 'flex-col items-start' : 'flex-col lg:flex-row items-start lg:items-center'}`}>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className="p-1 rounded-lg bg-emerald-500 text-white shadow-2xs shrink-0">
               <BarChart3 className="w-3.5 h-3.5" />
             </span>
             <span className="text-[11px] uppercase font-bold tracking-wider text-emerald-600 dark:text-emerald-400">
               Tendências de Economia & Poupança
             </span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase flex items-center gap-1 ${
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase flex items-center gap-1 shrink-0 ${
               trends.trendDirection === 'up'
                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
                 : trends.trendDirection === 'down'
                 ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
                 : 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-300 dark:border-teal-800'
             }`}>
-              {trends.trendDirection === 'up' && <TrendingUp className="w-3 h-3 text-emerald-600" />}
-              {trends.trendDirection === 'down' && <TrendingDown className="w-3 h-3 text-rose-600" />}
-              {trends.trendDirection === 'stable' && <Sparkles className="w-3 h-3 text-teal-600" />}
+              {trends.trendDirection === 'up' && <TrendingUp className="w-3 h-3 text-emerald-600 shrink-0" />}
+              {trends.trendDirection === 'down' && <TrendingDown className="w-3 h-3 text-rose-600 shrink-0" />}
+              {trends.trendDirection === 'stable' && <Sparkles className="w-3 h-3 text-teal-600 shrink-0" />}
               <span>{trends.trendLabel}</span>
             </span>
           </div>
@@ -87,13 +89,13 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
         </div>
 
         {/* View Mode Toggle Buttons */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold self-stretch sm:self-auto justify-center">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold w-full sm:w-auto self-stretch sm:self-auto justify-center overflow-x-auto no-scrollbar shrink-0">
           <button
             type="button"
             onClick={() => setViewMode('grouped')}
-            className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+            className={`flex-1 sm:flex-none text-center px-2.5 sm:px-3 py-1.5 rounded-xl transition cursor-pointer text-xs ${
               viewMode === 'grouped'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
                 : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
             }`}
             data-testid="btn-mode-grouped"
@@ -103,9 +105,9 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
           <button
             type="button"
             onClick={() => setViewMode('netOnly')}
-            className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+            className={`flex-1 sm:flex-none text-center px-2.5 sm:px-3 py-1.5 rounded-xl transition cursor-pointer text-xs ${
               viewMode === 'netOnly'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
                 : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
             }`}
             data-testid="btn-mode-net"
@@ -116,7 +118,7 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
       </div>
 
       {/* 4 Executive KPI Cards of the 6-Month Period */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className={`grid gap-3 ${isMobile ? 'grid-cols-2 keep-grid-2' : 'grid-cols-2 lg:grid-cols-4'}`}>
         <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
           <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
             Saldo Médio Consolidado
@@ -196,8 +198,8 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
       </div>
 
       {/* Comparative Bar Chart Visualization */}
-      <div className="bg-slate-50/70 dark:bg-slate-950/40 p-4 sm:p-5 rounded-3xl border border-slate-200/70 dark:border-slate-800/80">
-        <div className="grid grid-cols-6 gap-2 sm:gap-4 items-end h-56 pt-6 pb-2">
+      <div className="bg-slate-50/70 dark:bg-slate-950/40 p-3 sm:p-5 rounded-3xl border border-slate-200/70 dark:border-slate-800/80 overflow-x-auto no-scrollbar max-w-full">
+        <div className="grid grid-cols-6 gap-1.5 sm:gap-4 items-end h-56 pt-6 pb-2 min-w-[300px] sm:min-w-0">
           {trends.months.map(m => {
             const isSelected = m.monthIndex === selectedMonthIdx;
             

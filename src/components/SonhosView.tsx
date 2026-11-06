@@ -2,9 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { 
   Cloud, Plus, Zap, ShieldAlert, Plane, Wallet, PiggyBank, 
   BookOpen, Smile, TrendingUp, CheckCircle2, Calendar, Target,
-  Sparkles, DollarSign, Clock, AlertTriangle, AlertOctagon, Flame
+  Sparkles, DollarSign, Clock, AlertTriangle, AlertOctagon, Flame,
+  Hourglass, X, Filter
 } from 'lucide-react';
-import { DreamGoal, Transaction } from '../types';
+import { DreamGoal, DreamPriority, Transaction } from '../types';
 import { formatBRL } from '../utils/finance';
 import { DreamDepositChecklist } from './DreamDepositChecklist';
 import { DreamsDonutChart } from './DreamsDonutChart';
@@ -17,6 +18,12 @@ import {
   DEFAULT_URGENCY_DAYS_THRESHOLD,
   URGENCY_PRESET_DAYS 
 } from '../utils/dreamUrgency';
+import { 
+  calculateDreamCountdown, 
+  updateDreamPriority, 
+  updateDreamTargetDate,
+  getPriorityConfig 
+} from '../utils/dreamCountdown';
 
 interface SonhosViewProps {
   dreams: DreamGoal[];
@@ -40,11 +47,26 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   const [target, setTarget] = useState('');
   const [monthlyDeposit, setMonthlyDeposit] = useState('');
   const [targetDate, setTargetDate] = useState('');
+  const [priority, setPriority] = useState<DreamPriority>('media');
   const [category, setCategory] = useState('Reserva (PLP 10%)');
   const [impact, setImpact] = useState('');
   const [urgencyThreshold, setUrgencyThreshold] = useState<number>(DEFAULT_URGENCY_DAYS_THRESHOLD);
+  const [priorityFilter, setPriorityFilter] = useState<'ALL' | DreamPriority>('ALL');
 
   const criticalGoals = useMemo(() => getCriticalDreams(dreams), [dreams]);
+
+  const displayedDreams = useMemo(() => {
+    if (priorityFilter === 'ALL') return dreams;
+    return dreams.filter(d => (d.priority || 'media') === priorityFilter);
+  }, [dreams, priorityFilter]);
+
+  const handleUpdatePriority = (dreamId: string, newPriority: DreamPriority) => {
+    setDreams(prev => updateDreamPriority(prev, dreamId, newPriority));
+  };
+
+  const handleUpdateTargetDate = (dreamId: string, newDate: string) => {
+    setDreams(prev => updateDreamTargetDate(prev, dreamId, newDate));
+  };
 
   const handleApplyAllCriticalDeposits = () => {
     setDreams(prev => prev.map(d => {
@@ -145,6 +167,7 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
       impact: impact || 'Meta financeira planejada',
       targetDate: targetDate || undefined,
       urgencyDaysThreshold: targetDate ? urgencyThreshold : undefined,
+      priority,
       iconName: 'Target',
       gradient: 'from-blue-500 to-indigo-600',
     };
@@ -154,6 +177,7 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
     setTarget('');
     setMonthlyDeposit('');
     setTargetDate('');
+    setPriority('media');
     setUrgencyThreshold(DEFAULT_URGENCY_DAYS_THRESHOLD);
     setImpact('');
     setIsNewDreamModalOpen(false);
@@ -193,7 +217,7 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
 
         <button
           onClick={() => setIsNewDreamModalOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs shadow-md transition cursor-pointer"
+          className="w-full sm:w-auto justify-center flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs shadow-md transition cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Novo Sonho</span>
@@ -309,201 +333,371 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
         onRecordDeposit={handleDirectDeposit}
       />
 
-      {/* Grid de Sonhos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {dreams.map(dream => {
-          const Icon = getIcon(dream.iconName);
-          const pct = Math.min(100, (dream.current / (dream.target || 1)) * 100);
-          const remainingAmount = Math.max(0, dream.target - dream.current);
-          const monthsRemaining = dream.monthlyDeposit > 0 ? Math.ceil(remainingAmount / dream.monthlyDeposit) : 0;
+      {/* Grid de Sonhos com Filtro e Controles de Prioridade */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div>
+            <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+              <span>Metas & Objetivos Planejados</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                {displayedDreams.length} {displayedDreams.length === 1 ? 'meta' : 'metas'}
+              </span>
+            </h3>
+            <p className="text-xs text-slate-500">
+              Gerencie prazos estimados, prioridades e acompanhe a contagem regressiva em tempo real.
+            </p>
+          </div>
 
-          const urgency = calculateDreamUrgency(dream);
-
-          const {
-            suggestedMonthlyDeposit,
-            remainingMonths: calcRemainingMonths,
-            isPastDeadline
-          } = calculateSuggestedMonthlyDeposit(dream.target, dream.current, dream.targetDate);
-
-          return (
-            <div 
-              key={dream.id}
-              className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden"
+          {/* Filtro por Prioridade */}
+          <div className="flex items-center gap-1 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold overflow-x-auto max-w-full">
+            <button
+              type="button"
+              onClick={() => setPriorityFilter('ALL')}
+              className={`px-3 py-1 rounded-xl transition text-[11px] cursor-pointer whitespace-nowrap ${
+                priorityFilter === 'ALL'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-black'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
             >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`p-3 rounded-2xl bg-gradient-to-tr ${dream.gradient} text-white shadow-sm`}>
-                    <Icon className="w-5 h-5" />
+              Todos ({dreams.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setPriorityFilter('alta')}
+              className={`px-2.5 py-1 rounded-xl transition text-[11px] cursor-pointer flex items-center gap-1 whitespace-nowrap ${
+                priorityFilter === 'alta'
+                  ? 'bg-rose-600 text-white shadow-2xs font-black'
+                  : 'text-slate-500 hover:text-rose-600 dark:hover:text-rose-400'
+              }`}
+            >
+              <Flame className="w-3 h-3 text-rose-500" />
+              <span>Alta</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPriorityFilter('media')}
+              className={`px-2.5 py-1 rounded-xl transition text-[11px] cursor-pointer flex items-center gap-1 whitespace-nowrap ${
+                priorityFilter === 'media'
+                  ? 'bg-amber-500 text-white shadow-2xs font-black'
+                  : 'text-slate-500 hover:text-amber-600 dark:hover:text-amber-400'
+              }`}
+            >
+              <Zap className="w-3 h-3 text-amber-500" />
+              <span>Média</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPriorityFilter('baixa')}
+              className={`px-2.5 py-1 rounded-xl transition text-[11px] cursor-pointer flex items-center gap-1 whitespace-nowrap ${
+                priorityFilter === 'baixa'
+                  ? 'bg-emerald-600 text-white shadow-2xs font-black'
+                  : 'text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'
+              }`}
+            >
+              <Clock className="w-3 h-3 text-emerald-500" />
+              <span>Baixa</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {displayedDreams.map(dream => {
+            const Icon = getIcon(dream.iconName);
+            const pct = Math.min(100, (dream.current / (dream.target || 1)) * 100);
+            const remainingAmount = Math.max(0, dream.target - dream.current);
+            const monthsRemaining = dream.monthlyDeposit > 0 ? Math.ceil(remainingAmount / dream.monthlyDeposit) : 0;
+
+            const urgency = calculateDreamUrgency(dream);
+            const countdown = calculateDreamCountdown(dream.targetDate);
+            const currentPriority: DreamPriority = dream.priority || 'media';
+
+            const {
+              suggestedMonthlyDeposit,
+              remainingMonths: calcRemainingMonths,
+              isPastDeadline
+            } = calculateSuggestedMonthlyDeposit(dream.target, dream.current, dream.targetDate);
+
+            return (
+              <div 
+                key={dream.id}
+                className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden"
+              >
+                <div>
+                  {/* Top Row: Icon + Priority Selector + Badges */}
+                  <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-3 rounded-2xl bg-gradient-to-tr ${dream.gradient} text-white shadow-sm shrink-0`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+
+                      {/* Seletor de Prioridade Interativo no Cartão */}
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-bold text-slate-400">Prioridade</span>
+                        <div className="flex items-center gap-1 p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-[10px] font-bold border border-slate-200/70 dark:border-slate-700/70">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePriority(dream.id, 'alta')}
+                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                              currentPriority === 'alta'
+                                ? 'bg-rose-600 text-white shadow-2xs font-black'
+                                : 'text-slate-500 hover:text-rose-600 dark:hover:text-rose-300'
+                            }`}
+                            title="Definir Prioridade Alta"
+                            data-testid={`btn-priority-alta-${dream.id}`}
+                          >
+                            <Flame className="w-2.5 h-2.5" />
+                            <span>Alta</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePriority(dream.id, 'media')}
+                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                              currentPriority === 'media'
+                                ? 'bg-amber-500 text-white shadow-2xs font-black'
+                                : 'text-slate-500 hover:text-amber-600 dark:hover:text-amber-300'
+                            }`}
+                            title="Definir Prioridade Média"
+                            data-testid={`btn-priority-media-${dream.id}`}
+                          >
+                            <Zap className="w-2.5 h-2.5" />
+                            <span>Média</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePriority(dream.id, 'baixa')}
+                            className={`px-2 py-0.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                              currentPriority === 'baixa'
+                                ? 'bg-emerald-600 text-white shadow-2xs font-black'
+                                : 'text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-300'
+                            }`}
+                            title="Definir Prioridade Baixa"
+                            data-testid={`btn-priority-baixa-${dream.id}`}
+                          >
+                            <Clock className="w-2.5 h-2.5" />
+                            <span>Baixa</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {urgency.isCritical && (
+                        <span 
+                          className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1 shadow-2xs animate-pulse"
+                          title={urgency.description}
+                        >
+                          <AlertOctagon className="w-3 h-3 text-rose-600" />
+                          <span>Meta Crítica</span>
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {dream.category}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                    {dream.title}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
+                    {dream.impact}
+                  </p>
+
+                  {/* Progress Bar & Amounts */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex justify-between items-baseline mb-1 text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block uppercase font-bold">Acumulado</span>
+                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                          {formatBRL(dream.current)}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 block uppercase font-bold">Meta Final</span>
+                        <span className="text-sm font-black text-slate-800 dark:text-slate-200">
+                          {formatBRL(dream.target)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden mt-1">
+                      <div 
+                        className={`h-full bg-gradient-to-r ${dream.gradient} transition-all duration-500 rounded-full`}
+                        style={{ width: `${Math.max(pct, 3)}%` }}
+                      />
+                    </div>
+
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1.5 font-medium">
+                      <span>{pct.toFixed(0)}% concluído</span>
+                      <span>Falta: {formatBRL(remainingAmount)}</span>
+                    </div>
+                  </div>
+
+                  {/* Campo de Prazo (Data Estimada) & Bloco de Contagem Regressiva */}
+                  <div className="mt-3.5 p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                        <span>Prazo (Data Estimada):</span>
+                      </label>
+
+                      {/* Input de Data Estimada com Edição Direta no Cartão */}
+                      <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                        <input
+                          type="date"
+                          value={dream.targetDate || ''}
+                          onChange={e => handleUpdateTargetDate(dream.id, e.target.value)}
+                          className="w-full sm:w-auto px-2.5 py-1 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          title="Alterar ou definir data limite estimada"
+                          data-testid={`input-prazo-${dream.id}`}
+                        />
+                        {dream.targetDate && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateTargetDate(dream.id, '')}
+                            className="p-1 text-slate-400 hover:text-rose-500 rounded-lg transition cursor-pointer shrink-0"
+                            title="Remover prazo estimado"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bloco de Contagem Regressiva Visual */}
+                    <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs transition ${countdown.badgeColorClass}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Hourglass className="w-4 h-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                        <div className="truncate">
+                          <div className="font-black text-[11px] flex items-center gap-1.5 truncate">
+                            <span>Contagem Regressiva:</span>
+                            <strong>{countdown.countdownLabel}</strong>
+                          </div>
+                          <p className="text-[10px] opacity-80 truncate">
+                            {countdown.hasDeadline
+                              ? `Alvo: ${countdown.formattedTargetDate} • ${countdown.countdownSubtext}`
+                              : 'Escolha uma data estimada acima para calcular a contagem'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setSimulatorDream(dream)}
+                          className="px-2 py-1 rounded-lg bg-white/90 dark:bg-slate-900/90 hover:bg-white dark:hover:bg-slate-900 text-[10px] font-bold shadow-2xs border border-current/10 cursor-pointer transition active:scale-95"
+                          title="Simular cenários de prazo e aportes"
+                        >
+                          Simular
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ações de Simulação de Juros e Sugestão de Aporte */}
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[11px] text-slate-400 font-medium">Cálculos Avançados:</span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveCalculatorDream(dream);
+                            const el = document.getElementById('calculadora-juros-compostos');
+                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }}
+                          className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                          title="Simular crescimento patrimonial com juros compostos para este objetivo"
+                          data-testid={`btn-simular-juros-${dream.id}`}
+                        >
+                          <TrendingUp className="w-3 h-3" />
+                          <span>Simular Juros</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSimulatorDream(dream)}
+                          className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                          title="Simular aporte mensal necessário para atingir o objetivo no prazo"
+                        >
+                          <Clock className="w-3 h-3" />
+                          <span>{dream.targetDate ? 'Simular Prazo' : 'Definir Prazo'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Alerta de Urgência e Aporte Recalculado */}
                     {urgency.isCritical && (
-                      <span 
-                        className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1 shadow-2xs animate-pulse"
-                        title={urgency.description}
-                      >
-                        <AlertOctagon className="w-3 h-3 text-rose-600" />
-                        <span>Meta Crítica ({urgency.daysRemaining}d)</span>
+                      <div className="p-2.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between gap-2 text-[11px]">
+                        <div className="text-rose-800 dark:text-rose-200 truncate">
+                          <div className="font-black flex items-center gap-1 text-rose-700 dark:text-rose-300">
+                            <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                            <span>Prazo de Urgência: {urgency.daysRemaining} dias restantes</span>
+                          </div>
+                          <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-0.5 truncate">
+                            Aporte recalculado: <strong className="text-rose-700 dark:text-rose-300">{formatBRL(urgency.requiredMonthlyDeposit)}/mês</strong>
+                            {urgency.deficitPerMonth > 0 && ` (+${formatBRL(urgency.deficitPerMonth)})`}
+                          </p>
+                        </div>
+                        {dream.monthlyDeposit !== urgency.requiredMonthlyDeposit && (
+                          <button
+                            type="button"
+                            onClick={() => handleApplySuggestedDeposit(dream.id, urgency.requiredMonthlyDeposit)}
+                            className="px-2.5 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] shadow-2xs transition cursor-pointer shrink-0"
+                            title="Ajustar aporte mensal para a quantia recalculada"
+                          >
+                            Aplicar Recalculado
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {dream.targetDate && suggestedMonthlyDeposit > 0 && !isPastDeadline && !urgency.isCritical && (
+                      <div className="p-2 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between gap-2 text-[11px]">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                          <span className="text-slate-600 dark:text-slate-300 truncate">
+                            Sugerido p/ prazo: <strong className="text-indigo-700 dark:text-indigo-300">{formatBRL(suggestedMonthlyDeposit)}/mês</strong>
+                          </span>
+                        </div>
+
+                        {dream.monthlyDeposit !== suggestedMonthlyDeposit && (
+                          <button
+                            type="button"
+                            onClick={() => handleApplySuggestedDeposit(dream.id, suggestedMonthlyDeposit)}
+                            className="px-2 py-0.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] transition cursor-pointer shrink-0"
+                            title="Atualizar aporte mensal para atingir a meta no prazo"
+                          >
+                            Ajustar
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer with Monthly projection and Deposit button */}
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <div className="text-[11px] text-slate-500">
+                    <span>Aporte: <strong>{formatBRL(dream.monthlyDeposit)}/mês</strong></span>
+                    {monthsRemaining > 0 && (
+                      <span className="block text-[10px] text-slate-400">
+                        ~ {monthsRemaining} meses estimados
                       </span>
                     )}
-                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                      {dream.category}
-                    </span>
-                  </div>
-                </div>
-
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                  {dream.title}
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
-                  {dream.impact}
-                </p>
-
-                {/* Progress Bar & Amounts */}
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex justify-between items-baseline mb-1 text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block uppercase font-bold">Acumulado</span>
-                      <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                        {formatBRL(dream.current)}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 block uppercase font-bold">Meta Final</span>
-                      <span className="text-sm font-black text-slate-800 dark:text-slate-200">
-                        {formatBRL(dream.target)}
-                      </span>
-                    </div>
                   </div>
 
-                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden mt-1">
-                    <div 
-                      className={`h-full bg-gradient-to-r ${dream.gradient} transition-all duration-500 rounded-full`}
-                      style={{ width: `${Math.max(pct, 3)}%` }}
-                    />
-                  </div>
-
-                  <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1.5 font-medium">
-                    <span>{pct.toFixed(0)}% concluído</span>
-                    <span>Falta: {formatBRL(remainingAmount)}</span>
-                  </div>
-                </div>
-
-                {/* Data Limite & Sugestão de Aporte */}
-                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                      <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                      {dream.targetDate ? (
-                        <span>
-                          Prazo: <strong className="text-slate-800 dark:text-slate-200">{dream.targetDate.split('-').reverse().join('/')}</strong>
-                          {!isPastDeadline && calcRemainingMonths > 0 && (
-                            <span className="text-[10px] text-slate-400 ml-1">({calcRemainingMonths} meses)</span>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 italic">Sem data limite</span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveCalculatorDream(dream);
-                          const el = document.getElementById('calculadora-juros-compostos');
-                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }}
-                        className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                        title="Simular crescimento patrimonial com juros compostos para este objetivo"
-                        data-testid={`btn-simular-juros-${dream.id}`}
-                      >
-                        <TrendingUp className="w-3 h-3" />
-                        <span>Simular Juros</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setSimulatorDream(dream)}
-                        className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                        title="Simular aporte mensal necessário para atingir o objetivo no prazo"
-                      >
-                        <Clock className="w-3 h-3" />
-                        <span>{dream.targetDate ? 'Simular Prazo' : 'Definir Prazo'}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Alerta de Urgência e Aporte Recalculado */}
-                  {urgency.isCritical && (
-                    <div className="p-2.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between gap-2 text-[11px]">
-                      <div className="text-rose-800 dark:text-rose-200 truncate">
-                        <div className="font-black flex items-center gap-1 text-rose-700 dark:text-rose-300">
-                          <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
-                          <span>Prazo de Urgência: {urgency.daysRemaining} dias restantes</span>
-                        </div>
-                        <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-0.5 truncate">
-                          Aporte recalculado: <strong className="text-rose-700 dark:text-rose-300">{formatBRL(urgency.requiredMonthlyDeposit)}/mês</strong>
-                          {urgency.deficitPerMonth > 0 && ` (+${formatBRL(urgency.deficitPerMonth)})`}
-                        </p>
-                      </div>
-                      {dream.monthlyDeposit !== urgency.requiredMonthlyDeposit && (
-                        <button
-                          type="button"
-                          onClick={() => handleApplySuggestedDeposit(dream.id, urgency.requiredMonthlyDeposit)}
-                          className="px-2.5 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] shadow-2xs transition cursor-pointer shrink-0"
-                          title="Ajustar aporte mensal para a quantia recalculada"
-                        >
-                          Aplicar Recalculado
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {dream.targetDate && suggestedMonthlyDeposit > 0 && !isPastDeadline && !urgency.isCritical && (
-                    <div className="p-2 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between gap-2 text-[11px]">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                        <span className="text-slate-600 dark:text-slate-300 truncate">
-                          Sugerido p/ prazo: <strong className="text-indigo-700 dark:text-indigo-300">{formatBRL(suggestedMonthlyDeposit)}/mês</strong>
-                        </span>
-                      </div>
-
-                      {dream.monthlyDeposit !== suggestedMonthlyDeposit && (
-                        <button
-                          type="button"
-                          onClick={() => handleApplySuggestedDeposit(dream.id, suggestedMonthlyDeposit)}
-                          className="px-2 py-0.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] transition cursor-pointer shrink-0"
-                          title="Atualizar aporte mensal para atingir a meta no prazo"
-                        >
-                          Ajustar
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  <button
+                    onClick={() => setSelectedDreamForDeposit(dream)}
+                    className="px-3.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 font-bold text-xs transition active:scale-95 border border-blue-200 dark:border-blue-900 cursor-pointer"
+                  >
+                    + Fazer Aporte
+                  </button>
                 </div>
               </div>
-
-              {/* Footer with Monthly projection and Deposit button */}
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <div className="text-[11px] text-slate-500">
-                  <span>Aporte: <strong>{formatBRL(dream.monthlyDeposit)}/mês</strong></span>
-                  {monthsRemaining > 0 && (
-                    <span className="block text-[10px] text-slate-400">
-                      ~ {monthsRemaining} meses estimados
-                    </span>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => setSelectedDreamForDeposit(dream)}
-                  className="px-3.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 font-bold text-xs transition active:scale-95 border border-blue-200 dark:border-blue-900 cursor-pointer"
-                >
-                  + Fazer Aporte
-                </button>
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {/* Modal Fazer Aporte */}
@@ -571,6 +765,49 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                 />
               </div>
 
+              {/* Seletor de Prioridade no Modal */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1">Prioridade do Sonho</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPriority('alta')}
+                    className={`py-2 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                      priority === 'alta'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-2xs font-black'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Flame className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Alta</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPriority('media')}
+                    className={`py-2 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                      priority === 'media'
+                        ? 'bg-amber-500 text-white border-amber-500 shadow-2xs font-black'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Média</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPriority('baixa')}
+                    className={`py-2 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                      priority === 'baixa'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-black'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Baixa</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-500 block mb-1">Valor Alvo (R$)</label>
@@ -584,7 +821,7 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">Data Limite (Prazo Final)</label>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">Prazo (Data Estimada)</label>
                   <input
                     type="date"
                     value={targetDate}
@@ -593,6 +830,20 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Pré-visualização da Contagem Regressiva no Modal */}
+              {targetDate && (() => {
+                const previewCountdown = calculateDreamCountdown(targetDate);
+                return (
+                  <div className={`p-2.5 rounded-2xl border flex items-center gap-2 text-xs ${previewCountdown.badgeColorClass}`}>
+                    <Hourglass className="w-4 h-4 shrink-0 text-indigo-500" />
+                    <div className="truncate">
+                      <strong className="block font-bold truncate">Contagem Regressiva: {previewCountdown.countdownLabel}</strong>
+                      <span className="text-[10px] opacity-80 block truncate">Alvo: {previewCountdown.formattedTargetDate} • {previewCountdown.countdownSubtext}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Prazo de Urgência Selector */}
               {targetDate && (

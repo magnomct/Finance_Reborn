@@ -150,10 +150,10 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
       </div>
 
       {/* Quick Filter Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs w-full max-w-full touch-pan-x">
         <button 
           onClick={() => setSelectedJarFilter('ALL')}
-          className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition ${
+          className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition shrink-0 ${
             selectedJarFilter === 'ALL' 
               ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900 shadow-sm' 
               : 'bg-white dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700'
@@ -164,7 +164,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
         <button 
           onClick={() => setSelectedJarFilter('NEC_55')}
-          className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition ${
+          className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition shrink-0 ${
             selectedJarFilter === 'NEC_55' 
               ? 'bg-blue-600 text-white shadow-sm' 
               : 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900'
@@ -175,7 +175,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
         <button 
           onClick={() => setSelectedJarFilter('DIV_10')}
-          className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition ${
+          className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition shrink-0 ${
             selectedJarFilter === 'DIV_10' 
               ? 'bg-purple-600 text-white shadow-sm' 
               : 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-900'
@@ -186,7 +186,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
         <button 
           onClick={() => setSelectedJarFilter('PLP_10')}
-          className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition ${
+          className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition shrink-0 ${
             selectedJarFilter === 'PLP_10' 
               ? 'bg-indigo-600 text-white shadow-sm' 
               : 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900'
@@ -197,7 +197,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
         <button 
           onClick={() => setSelectedJarFilter('PJ_EXCLUIDO')}
-          className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition ${
+          className={`px-3 py-1 rounded-xl font-medium whitespace-nowrap transition shrink-0 ${
             selectedJarFilter === 'PJ_EXCLUIDO' 
               ? 'bg-amber-600 text-white shadow-sm' 
               : 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900'
@@ -233,18 +233,18 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={getTransactionItemTransition(idx)}
-                  className={`p-3.5 flex items-center justify-between gap-3 ${theme.hoverRow} transition group`}
+                  className={`p-3 sm:p-3.5 flex items-center justify-between gap-2.5 sm:gap-3 ${theme.hoverRow} transition group w-full`}
                 >
               {/* Day badge & info */}
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col items-center justify-center w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                <div className="flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold shrink-0">
                   <span className="text-[9px] text-slate-400">DIA</span>
-                  <span className="text-sm font-black">{day}</span>
+                  <span className="text-xs sm:text-sm font-black">{day}</span>
                 </div>
 
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate max-w-full">
                       {tx.description}
                     </h4>
                     

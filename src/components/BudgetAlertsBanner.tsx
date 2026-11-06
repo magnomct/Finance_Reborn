@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { JarBudgetAlert } from '../types';
 import { formatBRL } from '../utils/finance';
+import { useMobileLayout } from '../context/MobileContext';
 
 interface BudgetAlertsBannerProps {
   alerts: JarBudgetAlert[];
@@ -17,6 +18,7 @@ export const BudgetAlertsBanner: React.FC<BudgetAlertsBannerProps> = ({
   onOpenLimitsModal,
   onNavigateToPotes
 }) => {
+  const { isMobile } = useMobileLayout();
   const [isMinimized, setIsMinimized] = useState(false);
 
   // Filter alerts that reached 80% or exceeded 100%
@@ -135,30 +137,30 @@ export const BudgetAlertsBanner: React.FC<BudgetAlertsBannerProps> = ({
         </button>
       </div>
 
-      {/* Grid of Alert Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+      {/* Grid of Alert Cards - 1 col on mobile / mobile frame */}
+      <div className={`grid gap-3 mb-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
         {activeAlerts.map(alert => {
           const isExceededItem = alert.status === 'EXCEEDED';
           return (
             <div
               key={alert.jarId}
-              className={`p-3.5 rounded-2xl border bg-white/90 dark:bg-slate-900/90 space-y-2.5 transition ${
+              className={`p-3.5 rounded-2xl border bg-white/90 dark:bg-slate-900/90 space-y-2.5 transition min-w-0 ${
                 isExceededItem 
                   ? 'border-rose-300 dark:border-rose-800/80 shadow-xs' 
                   : 'border-amber-300 dark:border-amber-800/80'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   <span 
-                    className="w-2.5 h-2.5 rounded-full" 
+                    className="w-2.5 h-2.5 rounded-full shrink-0" 
                     style={{ backgroundColor: alert.colorHex }} 
                   />
-                  <span className="font-bold text-xs text-slate-900 dark:text-white">
+                  <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
                     {alert.jarName}
                   </span>
                 </div>
-                <span className={`text-[11px] font-black px-1.5 py-0.5 rounded-md ${
+                <span className={`text-[11px] font-black px-1.5 py-0.5 rounded-md shrink-0 ${
                   isExceededItem 
                     ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' 
                     : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
@@ -184,16 +186,18 @@ export const BudgetAlertsBanner: React.FC<BudgetAlertsBannerProps> = ({
                 </div>
               </div>
 
-              {/* Numbers */}
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-500 dark:text-slate-400">
-                  Gasto: <strong className="text-slate-800 dark:text-slate-200">{formatBRL(alert.spent)}</strong> / {formatBRL(alert.limit)}
-                </span>
-                <span className={isExceededItem ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-slate-600 dark:text-slate-300'}>
+              {/* Numbers - cleanly stacked to avoid collisions */}
+              <div className="flex items-baseline justify-between text-[11px] gap-2 pt-0.5 flex-wrap min-w-0">
+                <div className="text-slate-500 dark:text-slate-400 min-w-0 truncate">
+                  <span>Gasto: </span>
+                  <strong className="text-slate-800 dark:text-slate-200">{formatBRL(alert.spent)}</strong>
+                  <span className="text-slate-400 text-[10px]"> / {formatBRL(alert.limit)}</span>
+                </div>
+                <div className={`font-bold shrink-0 text-right ${isExceededItem ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-300'}`}>
                   {isExceededItem 
                     ? `+${formatBRL(Math.abs(alert.remaining))} acima` 
                     : `Restam ${formatBRL(alert.remaining)}`}
-                </span>
+                </div>
               </div>
             </div>
           );
@@ -201,15 +205,15 @@ export const BudgetAlertsBanner: React.FC<BudgetAlertsBannerProps> = ({
       </div>
 
       {/* Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-xs">
-        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-xs">
+        <span className="text-[11px] text-slate-500 dark:text-slate-400 text-center sm:text-left">
           💡 Os alertas consideram despesas lançadas deduzidas de reembolsos.
         </span>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             onClick={onOpenLimitsModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold transition cursor-pointer text-xs shadow-2xs"
+            className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold transition cursor-pointer text-xs shadow-2xs"
           >
             <Sliders className="w-3.5 h-3.5 text-amber-500" />
             <span>Ajustar Limites</span>
@@ -217,7 +221,7 @@ export const BudgetAlertsBanner: React.FC<BudgetAlertsBannerProps> = ({
 
           <button
             onClick={onNavigateToPotes}
-            className={`flex items-center gap-1 px-3.5 py-1.5 rounded-xl font-black transition cursor-pointer text-xs shadow-2xs ${
+            className={`flex-1 sm:flex-initial justify-center flex items-center gap-1 px-3.5 py-1.5 rounded-xl font-black transition cursor-pointer text-xs shadow-2xs ${
               hasExceeded
                 ? 'bg-rose-600 hover:bg-rose-700 text-white'
                 : 'bg-amber-500 hover:bg-amber-600 text-slate-950'

@@ -10,6 +10,11 @@ import {
 
 dotenv.config();
 
+// HMR is disabled in AI Studio preview environment to prevent WebSocket connection errors
+if (process.env.DISABLE_HMR === undefined) {
+  process.env.DISABLE_HMR = 'true';
+}
+
 const app = express();
 const port = 3000;
 

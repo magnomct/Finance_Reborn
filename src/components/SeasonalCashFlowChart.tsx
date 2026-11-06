@@ -5,6 +5,7 @@ import {
   RefreshCw, DollarSign, ArrowUpRight, ArrowDownRight, Layers
 } from 'lucide-react';
 import { formatBRL } from '../utils/finance';
+import { useMobileLayout } from '../context/MobileContext';
 import { 
   analyzeSeasonalCashFlow, 
   simulateSeasonalExpense, 
@@ -30,6 +31,7 @@ export const SeasonalCashFlowChart: React.FC<SeasonalCashFlowChartProps> = ({
   categoryBreakdownPerMonth,
   onSelectMonth
 }) => {
+  const { isMobile } = useMobileLayout();
   const [filterView, setFilterView] = useState<FilterView>('all');
   const [selectedMonthIdx, setSelectedMonthIdx] = useState<number | null>(null);
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
@@ -100,27 +102,27 @@ export const SeasonalCashFlowChart: React.FC<SeasonalCashFlowChartProps> = ({
 
   return (
     <div 
-      className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-sm space-y-6 transition-all"
+      className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-6 shadow-sm space-y-6 transition-all"
       data-testid="component-seasonal-cashflow"
     >
       {/* Header & Controls */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800">
+      <div className={`flex justify-between gap-3 sm:gap-4 border-b border-slate-100 dark:border-slate-800 pb-5 w-full ${isMobile ? 'flex-col items-start' : 'flex-col lg:flex-row lg:items-start'}`}>
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800 shrink-0">
               <TrendingUp className="w-4 h-4" />
             </span>
             <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
               Inteligência de Caixa 12 Meses
             </span>
             {metrics.atypicalMonthsCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1 animate-pulse">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1 animate-pulse shrink-0">
                 <AlertTriangle className="w-3 h-3" />
                 {metrics.atypicalMonthsCount} {metrics.atypicalMonthsCount === 1 ? 'Mês Atípico' : 'Meses Atípicos'}
               </span>
             )}
           </div>
-          <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+          <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
             Fluxo de Caixa Sazonal
           </h3>
           <p className="text-xs text-slate-500 max-w-2xl">
@@ -129,12 +131,12 @@ export const SeasonalCashFlowChart: React.FC<SeasonalCashFlowChartProps> = ({
         </div>
 
         {/* View Mode Filters & Simulator Button */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl text-xs font-bold">
+        <div className={`flex items-stretch gap-2 w-full ${isMobile ? 'flex-col' : 'flex-col sm:flex-row sm:items-center lg:w-auto'} shrink-0`}>
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl text-xs font-bold w-full sm:w-auto overflow-x-auto no-scrollbar">
             <button
               type="button"
               onClick={() => setFilterView('all')}
-              className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+              className={`flex-1 sm:flex-none text-center px-2.5 sm:px-3 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
                 filterView === 'all'
                   ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -146,34 +148,34 @@ export const SeasonalCashFlowChart: React.FC<SeasonalCashFlowChartProps> = ({
             <button
               type="button"
               onClick={() => setFilterView('atypical')}
-              className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer ${
+              className={`flex-1 sm:flex-none text-center px-2.5 sm:px-3 py-1.5 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap ${
                 filterView === 'atypical'
                   ? 'bg-amber-500 text-white shadow-xs'
                   : 'text-slate-500 hover:text-amber-600 dark:hover:text-amber-400'
               }`}
               data-testid="filter-atypical-months"
             >
-              <AlertTriangle className="w-3 h-3" />
+              <AlertTriangle className="w-3 h-3 shrink-0" />
               <span>Picos Atípicos</span>
             </button>
             <button
               type="button"
               onClick={() => setFilterView('quarters')}
-              className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+              className={`flex-1 sm:flex-none text-center px-2.5 sm:px-3 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
                 filterView === 'quarters'
                   ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
               data-testid="filter-quarter-view"
             >
-              Trimestres (Q1-Q4)
+              Trimestres
             </button>
           </div>
 
           <button
             type="button"
             onClick={() => setIsSimulatorOpen(!isSimulatorOpen)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold border transition cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold border transition cursor-pointer shrink-0 w-full sm:w-auto ${
               isSimulatorOpen || activeScenarioId
                 ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
                 : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750'

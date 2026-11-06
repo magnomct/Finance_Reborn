@@ -249,6 +249,7 @@ export const ALL_YUPPEE_STORAGE_KEYS = [
   'yupee_rules_v2',
   'yupee_dispatched_notification_tags',
   'yupee_budget_jar_limits',
+  'yupee_budget_jar_savings_targets',
   'yupee_emergency_reserve_balance',
   'yupee_emergency_reserve_target_months',
   'yupee_annual_category_budgets_v1',

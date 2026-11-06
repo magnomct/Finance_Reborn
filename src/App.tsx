@@ -44,7 +44,13 @@ import { BudgetAlertsBanner } from './components/BudgetAlertsBanner';
 import { BudgetLimitsModal } from './components/BudgetLimitsModal';
 import { ResetEnvironmentModal } from './components/ResetEnvironmentModal';
 import { AndroidTestingModal } from './components/AndroidTestingModal';
-import { loadJarLimits, saveJarLimits, calculateJarBudgetAlerts } from './utils/budgetAlerts';
+import { 
+  loadJarLimits, 
+  saveJarLimits, 
+  loadJarSavingsTargets, 
+  saveJarSavingsTargets, 
+  calculateJarBudgetAlerts 
+} from './utils/budgetAlerts';
 import { EnvironmentSetupOutput, purgeAllApplicationStorage, persistFreshEnvironment } from './utils/environmentSetup';
 import { Sliders, QrCode } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -52,6 +58,7 @@ import { ScreenTransition } from './components/ScreenTransition';
 import { TAB_INDICATOR_TRANSITION } from './utils/motionTransitions';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { MobileProvider } from './context/MobileContext';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import {
   loadOfflineQueue,
@@ -127,10 +134,16 @@ export default function App() {
   const [isAndroidModalOpen, setIsAndroidModalOpen] = useState(false);
   const [resetNotification, setResetNotification] = useState<string | null>(null);
   const [jarLimits, setJarLimits] = useState<Record<JarType, number>>(() => loadJarLimits());
+  const [jarSavingsTargets, setJarSavingsTargets] = useState<Record<JarType, number>>(() => loadJarSavingsTargets());
 
   const handleSaveJarLimits = (newLimits: Record<JarType, number>) => {
     setJarLimits(newLimits);
     saveJarLimits(newLimits);
+  };
+
+  const handleSaveJarSavingsTargets = (newTargets: Record<JarType, number>) => {
+    setJarSavingsTargets(newTargets);
+    saveJarSavingsTargets(newTargets);
   };
 
   // PWA Offline Queue & Connectivity State
@@ -469,7 +482,8 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen ${theme.bg} font-sans transition-colors duration-200 pb-20 overflow-x-hidden w-full max-w-full`}>
+    <MobileProvider isMobileFrame={isMobileFrame} setIsMobileFrame={setIsMobileFrame}>
+      <div className={`app-viewport-height ${theme.bg} font-sans transition-colors duration-200 pb-safe-nav overflow-x-hidden w-full max-w-full flex flex-col`}>
       
       {/* Top Device & Mode Bar */}
       <div className="max-w-5xl mx-auto px-3 sm:px-4 pt-2.5 sm:pt-3 flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 text-xs">
@@ -559,7 +573,7 @@ export default function App() {
       {/* Main Container */}
       <main className={`mx-auto transition-all duration-300 w-full max-w-full overflow-x-hidden ${
         isMobileFrame 
-          ? 'max-w-md my-4 rounded-[40px] shadow-2xl border-8 border-slate-800 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-950 relative min-h-[840px]' 
+          ? 'mobile-frame-active max-w-md my-4 rounded-[40px] shadow-2xl border-8 border-slate-800 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-950 relative min-h-[840px] space-y-4 p-3' 
           : 'max-w-5xl px-3 sm:px-4 py-3 sm:py-4 space-y-4 sm:space-y-5'
       }`}>
 
@@ -576,60 +590,63 @@ export default function App() {
             
             {/* Logo Yupee */}
             <div className="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onClick={() => setActiveScreen('hub')}>
-              <div className="flex items-center gap-0.5 sm:gap-1 tracking-tight select-none">
+              <div className="flex items-center gap-0.5 sm:gap-1 tracking-tight select-none shrink-0">
                 <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-rose-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">y</span>
                 <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-amber-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">u</span>
                 <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-emerald-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">p</span>
                 <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-sky-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">e</span>
                 <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-indigo-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">e</span>
               </div>
-              <div className="hidden sm:block">
-                <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 block -mb-1">REBORN</span>
-                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Controle Inteligente</span>
-              </div>
+              {!isMobileFrame && (
+                <div className="hidden lg:block">
+                  <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 block -mb-1">REBORN</span>
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Controle Inteligente</span>
+                </div>
+              )}
             </div>
 
             {/* Scope Selector no Desktop (PF, PJ, Consolidado) */}
-            <div className="hidden md:flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold shrink-0">
-              <button
-                onClick={() => handleScopeChange('PF')}
-                className={`px-3 py-1 rounded-lg transition cursor-pointer ${viewScope === 'PF' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                PF
-              </button>
-              <button
-                onClick={() => handleScopeChange('PJ')}
-                className={`px-3 py-1 rounded-lg transition cursor-pointer ${viewScope === 'PJ' ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                PJ
-              </button>
-              <button
-                onClick={() => handleScopeChange('CONSOLIDADO')}
-                className={`px-3 py-1 rounded-lg transition cursor-pointer ${viewScope === 'CONSOLIDADO' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                Consolidado
-              </button>
-            </div>
+            {!isMobileFrame && (
+              <div className="hidden md:flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold shrink-0">
+                <button
+                  onClick={() => handleScopeChange('PF')}
+                  className={`px-3 py-1 rounded-lg transition cursor-pointer ${viewScope === 'PF' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  PF
+                </button>
+                <button
+                  onClick={() => handleScopeChange('PJ')}
+                  className={`px-3 py-1 rounded-lg transition cursor-pointer ${viewScope === 'PJ' ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  PJ
+                </button>
+                <button
+                  onClick={() => handleScopeChange('CONSOLIDADO')}
+                  className={`px-3 py-1 rounded-lg transition cursor-pointer ${viewScope === 'CONSOLIDADO' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  Consolidado
+                </button>
+              </div>
+            )}
 
             {/* Ações do Cabeçalho */}
-            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
               {/* Botão Baixar Relatório Mensal Consolidado em PDF */}
               <button
                 type="button"
                 onClick={() => setIsGlobalPdfModalOpen(true)}
-                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl border border-teal-500/30 bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/80 text-xs font-bold transition cursor-pointer shadow-2xs shrink-0"
+                className="flex items-center gap-1 px-2 py-1.5 rounded-xl border border-teal-500/30 bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/80 text-xs font-bold transition cursor-pointer shadow-2xs shrink-0"
                 title="Gerar e baixar resumo mensal consolidado das finanças em PDF"
                 data-testid="btn-header-pdf"
               >
                 <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <span className="hidden sm:inline">Relatório</span>
-                <span>PDF</span>
+                <span className="hidden sm:inline">PDF</span>
               </button>
 
               {/* Botão Alertas de Orçamento */}
               <button
                 onClick={() => setIsLimitsModalOpen(true)}
-                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs shrink-0 ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs shrink-0 ${
                   activeAlertsCount > 0
                     ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100'
                     : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
@@ -637,7 +654,6 @@ export default function App() {
                 title="Definir teto máximo para cada pote e receber alerta aos 80%"
               >
                 <Sliders className="w-3.5 h-3.5 text-amber-500" />
-                <span className="hidden sm:inline">Alertas</span>
                 {activeAlertsCount > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500 text-slate-950">
                     {activeAlertsCount}
@@ -650,7 +666,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setIsRemindersOpen(prev => !prev)}
-                  className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs ${
+                  className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs ${
                     activeReminders.length > 0
                       ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100'
                       : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
@@ -659,7 +675,7 @@ export default function App() {
                   data-testid="btn-reminders-bell"
                 >
                   <Bell className={`w-3.5 h-3.5 ${activeReminders.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`} />
-                  <span className="hidden sm:inline">Lembretes</span>
+                  <span className="hidden md:inline">Lembretes</span>
                   {activeReminders.length > 0 && (
                     <span 
                       className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white animate-pulse"
@@ -672,10 +688,16 @@ export default function App() {
 
                 {/* Popover de Lembretes Ativos */}
                 {isRemindersOpen && (
-                  <div 
-                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-4 z-50 space-y-3 animate-in fade-in zoom-in-95 max-w-[calc(100vw-24px)]"
-                    data-testid="popover-reminders"
-                  >
+                  <>
+                    {/* Backdrop no mobile para fechar ao tocar fora e evitar vazamento */}
+                    <div 
+                      className="fixed inset-0 z-40 bg-black/20 sm:hidden" 
+                      onClick={() => setIsRemindersOpen(false)} 
+                    />
+                    <div 
+                      className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-16 sm:top-auto sm:mt-2 w-auto sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-4 z-50 space-y-3 animate-in fade-in zoom-in-95 max-h-[80vh] overflow-y-auto"
+                      data-testid="popover-reminders"
+                    >
                     <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold">
@@ -814,8 +836,9 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                )}
-              </div>
+                </>
+              )}
+            </div>
 
               {/* Botão Instalar PWA */}
               <div className="shrink-0">
@@ -837,7 +860,7 @@ export default function App() {
           </div>
 
           {/* Linha Secundária Mobile: Seletor de Escopo (PF, PJ, Consolidado) para telas pequenas */}
-          <div className="flex md:hidden items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-2">
+          <div className={`${isMobileFrame ? 'flex' : 'flex md:hidden'} items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-2`}>
             <div className="flex items-center gap-1 w-full bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl text-xs font-semibold">
               <button
                 onClick={() => handleScopeChange('PF')}
@@ -864,67 +887,73 @@ export default function App() {
         {/* ============================================================== */}
         {/* BARRA DE NAVEGAÇÃO DE TELAS                                     */}
         {/* ============================================================== */}
-        <nav className="flex items-center gap-1 px-4 py-2 overflow-x-auto no-scrollbar border-b border-slate-200/60 dark:border-slate-800/80 text-xs font-semibold">
-          {[
-            { id: 'dashboard', label: 'Dashboard & Resumo', icon: FileSpreadsheet },
-            { id: 'agenda', label: 'Agenda Diária', icon: Calendar },
-            { id: 'graficos', label: 'Gráficos Intuitivos', icon: BarChart3 },
-            { id: 'potes', label: '6 Potes', icon: Home },
-            { id: 'sonhos', label: 'Sonhos & Metas', icon: Cloud },
-            { id: 'automacoes', label: 'Controle Automático', icon: Zap },
-            { id: 'pj', label: 'Operação PJ', icon: Building2 },
-            { id: 'extratos', label: 'Extratos (.OFX / .CSV)', icon: LayoutGrid },
-            { id: 'hub', label: 'Minhas Finanças (Hub)', icon: Sparkles },
-          ].map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeScreen === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveScreen(tab.id as ActiveScreen)}
-                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition whitespace-nowrap cursor-pointer ${
-                  isActive 
-                    ? 'text-blue-600 dark:text-blue-400 font-bold' 
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-                }`}
-                data-testid={`nav-tab-${tab.id}`}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="activeNavigationTab"
-                    transition={TAB_INDICATOR_TRANSITION}
-                    className="absolute inset-0 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 rounded-xl shadow-xs -z-0"
-                  />
-                )}
-                <span className="relative z-10 flex items-center gap-1.5">
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-500' : 'text-slate-400'}`} />
-                  <span>{tab.label}</span>
-                  {tab.id === 'potes' && activeAlertsCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500 text-slate-950">
-                      {activeAlertsCount}
-                    </span>
+        <div className="relative w-full max-w-full border-b border-slate-200/60 dark:border-slate-800/80 overflow-hidden">
+          <nav className="flex items-center gap-1 px-3 sm:px-4 pr-8 py-2 overflow-x-auto no-scrollbar text-xs font-semibold w-full max-w-full touch-pan-x scroll-smooth">
+            {[
+              { id: 'dashboard', label: 'Dashboard & Resumo', icon: FileSpreadsheet },
+              { id: 'agenda', label: 'Agenda Diária', icon: Calendar },
+              { id: 'graficos', label: 'Gráficos Intuitivos', icon: BarChart3 },
+              { id: 'potes', label: '6 Potes', icon: Home },
+              { id: 'sonhos', label: 'Sonhos & Metas', icon: Cloud },
+              { id: 'automacoes', label: 'Controle Automático', icon: Zap },
+              { id: 'pj', label: 'Operação PJ', icon: Building2 },
+              { id: 'extratos', label: 'Extratos (.OFX / .CSV)', icon: LayoutGrid },
+              { id: 'hub', label: 'Minhas Finanças (Hub)', icon: Sparkles },
+            ].map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeScreen === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveScreen(tab.id as ActiveScreen)}
+                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition whitespace-nowrap cursor-pointer shrink-0 ${
+                    isActive 
+                      ? 'text-blue-600 dark:text-blue-400 font-bold' 
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                  }`}
+                  data-testid={`nav-tab-${tab.id}`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeNavigationTab"
+                      transition={TAB_INDICATOR_TRANSITION}
+                      className="absolute inset-0 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 rounded-xl shadow-xs -z-0"
+                    />
                   )}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-500' : 'text-slate-400'}`} />
+                    <span>{tab.label}</span>
+                    {tab.id === 'potes' && activeAlertsCount > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500 text-slate-950">
+                        {activeAlertsCount}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+          {/* Subtle Right Edge Fade Indicator to signal horizontal scrolling on mobile */}
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white dark:from-slate-900 to-transparent flex items-center justify-end pr-1 text-slate-300 dark:text-slate-600 sm:hidden">
+            <ChevronRight className="w-3.5 h-3.5" />
+          </div>
+        </div>
 
         {/* Notificação Estratégica Yupee */}
-        <div className="px-4 pt-1">
-          <div className="bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-transparent p-3.5 rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2.5">
-              <span className="p-1.5 rounded-lg bg-emerald-500 text-white font-bold text-[10px]">OK</span>
-              <div>
-                <span className="font-bold text-slate-900 dark:text-white">Orçamento no Azul (+R$ 2,31)!</span>
-                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+        <div className="px-3 sm:px-4 pt-1">
+          <div className="bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-transparent p-3 sm:p-3.5 rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="p-1.5 rounded-lg bg-emerald-500 text-white font-bold text-[10px] shrink-0">OK</span>
+              <div className="min-w-0">
+                <span className="font-bold text-slate-900 dark:text-white truncate block">Orçamento no Azul (+R$ 2,31)!</span>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px] line-clamp-2 sm:line-clamp-none">
                   Condução ajustada para R$ 120 e Nathan reembolsando R$ 858 do financiamento habitacional.
                 </p>
               </div>
             </div>
-            <div className="text-right shrink-0">
+            <div className="text-left sm:text-right shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-emerald-200/50 dark:border-emerald-900/40 flex sm:block items-center justify-between">
               <span className="text-[10px] text-slate-400 uppercase font-semibold">Saldo Consolidado</span>
-              <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+              <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 sm:mt-0.5">
                 +{formatBRL(financialMetrics.netBalanceConsolidated)}
               </p>
             </div>
@@ -1046,6 +1075,7 @@ export default function App() {
                 setActiveScreen('agenda');
               }}
               jarLimits={jarLimits}
+              jarSavingsTargets={jarSavingsTargets}
               onOpenLimitsModal={() => setIsLimitsModalOpen(true)}
             />
           </div>
@@ -1317,6 +1347,8 @@ export default function App() {
         onClose={() => setIsLimitsModalOpen(false)}
         limits={jarLimits}
         onSaveLimits={handleSaveJarLimits}
+        savingsTargets={jarSavingsTargets}
+        onSaveSavingsTargets={handleSaveJarSavingsTargets}
         transactions={transactions}
         effectiveIncomeBase={financialMetrics.effectiveIncomeBase}
       />
@@ -1371,6 +1403,7 @@ export default function App() {
         </div>
       )}
 
-    </div>
+      </div>
+    </MobileProvider>
   );
 }

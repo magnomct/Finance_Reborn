@@ -86,10 +86,10 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
       
       {/* Top Selector: Tabs de Gráficos */}
       <div className="bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-full pb-0.5 w-full md:w-auto touch-pan-x">
           <button
             onClick={() => setChartMode('donut')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
               chartMode === 'donut'
                 ? 'bg-blue-500 text-white shadow-sm'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
@@ -101,7 +101,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
 
           <button
             onClick={() => setChartMode('ritmo')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
               chartMode === 'ritmo'
                 ? 'bg-blue-500 text-white shadow-sm'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
@@ -113,7 +113,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
 
           <button
             onClick={() => setChartMode('evolucao')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
               chartMode === 'evolucao'
                 ? 'bg-blue-500 text-white shadow-sm'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'

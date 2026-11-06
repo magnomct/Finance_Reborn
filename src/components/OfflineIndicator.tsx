@@ -30,7 +30,7 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
 
   if (justSynced) {
     return (
-      <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-2xl bg-emerald-600 text-white px-3.5 py-2 text-xs font-semibold shadow-lg animate-in fade-in slide-in-from-bottom-2">
+      <div className="fixed bottom-safe left-4 z-50 flex items-center gap-2 rounded-2xl bg-emerald-600 text-white px-3.5 py-2 text-xs font-semibold shadow-lg animate-in fade-in slide-in-from-bottom-2">
         <CheckCircle2 className="w-4 h-4 text-emerald-200" />
         <span>Sincronização concluída com sucesso!</span>
       </div>
@@ -40,7 +40,7 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
   if (!isOnline) {
     return (
       <div
-        className="fixed bottom-4 left-4 z-50 flex items-center gap-2.5 rounded-2xl bg-amber-600 text-white px-4 py-2.5 text-xs font-medium shadow-xl border border-amber-400/30 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2"
+        className="fixed bottom-safe left-4 z-50 flex items-center gap-2.5 rounded-2xl bg-amber-600 text-white px-4 py-2.5 text-xs font-medium shadow-xl border border-amber-400/30 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2"
         role="status"
         aria-live="polite"
       >
@@ -64,7 +64,7 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
   // When online but has pending offline queue items
   return (
     <div
-      className="fixed bottom-4 left-4 z-50 flex items-center gap-2.5 rounded-2xl bg-indigo-700 text-white px-4 py-2.5 text-xs font-medium shadow-xl border border-indigo-500/40 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2"
+      className="fixed bottom-safe left-4 z-50 flex items-center gap-2.5 rounded-2xl bg-indigo-700 text-white px-4 py-2.5 text-xs font-medium shadow-xl border border-indigo-500/40 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2"
       role="status"
       aria-live="polite"
     >

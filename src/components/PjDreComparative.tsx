@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { formatBRL, formatNumber } from '../utils/finance';
+import { useMobileLayout } from '../context/MobileContext';
 import { 
   calculatePjDreComparison, 
   getAvailablePjMonths, 
@@ -22,6 +23,7 @@ export const PjDreComparative: React.FC<PjDreComparativeProps> = ({
   transactions,
   initialMonth = '2026-10'
 }) => {
+  const { isMobile } = useMobileLayout();
   const availableMonths = useMemo(() => getAvailablePjMonths(transactions, true), [transactions]);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     return availableMonths.includes(initialMonth) ? initialMonth : (availableMonths[0] || '2026-10');
@@ -89,7 +91,7 @@ export const PjDreComparative: React.FC<PjDreComparativeProps> = ({
       
       {/* Top Header & Filters */}
       <div className="p-6 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className={`flex justify-between gap-4 ${isMobile ? 'flex-col items-start' : 'flex-col lg:flex-row lg:items-center'}`}>
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <span className="p-1.5 rounded-xl bg-amber-500 text-white shadow-sm">
@@ -180,7 +182,7 @@ export const PjDreComparative: React.FC<PjDreComparativeProps> = ({
         )}
 
         {/* 4 Mini KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+        <div className={`grid gap-3 mt-5 ${isMobile ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 md:grid-cols-4'}`}>
           {/* 1. Receita Bruta */}
           <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
             <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">

@@ -5,6 +5,7 @@ import {
   Calendar, PiggyBank, ArrowUpRight, DollarSign, X
 } from 'lucide-react';
 import { formatBRL } from '../utils/finance';
+import { useMobileLayout } from '../context/MobileContext';
 import { 
   calculateRecent3MonthsExpenses, 
   calculateEmergencyReserveGoal,
@@ -28,6 +29,7 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
   dreams = [],
   onUpdateDreamBalance
 }) => {
+  const { isMobile } = useMobileLayout();
   // Find emergency reserve dream if exists
   const reserveDream = useMemo(() => {
     return dreams.find(d => 
@@ -138,7 +140,7 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
       data-testid="component-emergency-reserve"
     >
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+      <div className={`flex justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 ${isMobile ? 'flex-col items-stretch' : 'flex-col sm:flex-row sm:items-center'}`}>
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-teal-400 text-white flex items-center justify-center shadow-md shrink-0">
             {reserveGoal.completionPercentage >= 100 ? (
@@ -164,33 +166,35 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
         </div>
 
         {/* Target Months Selector (3, 6, 12 meses) */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-semibold self-start sm:self-center">
-          <span className="text-[10px] text-slate-400 px-2 uppercase font-bold hidden sm:inline">Meta:</span>
-          {[3, 6, 12].map(m => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => handleSelectMonths(m)}
-              className={`px-3 py-1 rounded-xl transition cursor-pointer text-xs ${
-                targetMonths === m
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 font-bold shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-              data-testid={`btn-select-target-${m}-months`}
-            >
-              {m} meses {m === 6 ? '⭐' : ''}
-            </button>
-          ))}
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-semibold w-full sm:w-auto justify-between sm:justify-start shrink-0">
+          <span className="text-[10px] text-slate-400 px-2 uppercase font-bold shrink-0">Meta:</span>
+          <div className="flex items-center gap-1 flex-1 sm:flex-initial justify-end">
+            {[3, 6, 12].map(m => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => handleSelectMonths(m)}
+                className={`flex-1 sm:flex-initial text-center px-2.5 sm:px-3 py-1.5 rounded-xl transition cursor-pointer text-xs shrink-0 ${
+                  targetMonths === m
+                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 font-bold shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                data-testid={`btn-select-target-${m}-months`}
+              >
+                {m} meses {m === 6 ? '⭐' : ''}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* 3 Main Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+      {/* 3 Main Metric Cards - Stack in 1 column on mobile to prevent overlapping numbers */}
+      <div className={`grid gap-3 sm:gap-3.5 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'}`}>
         
         {/* 1. Valor Atual da Reserva */}
-        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-1 relative group">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-1 relative group min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">
               Valor Atual Guardado
             </span>
             <button
@@ -199,7 +203,7 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
                 setEditInput(currentReserve.toString());
                 setIsEditing(true);
               }}
-              className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 p-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition cursor-pointer"
+              className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 p-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition cursor-pointer shrink-0"
               title="Editar valor atual da reserva"
               data-testid="btn-edit-reserve-balance"
             >
@@ -209,20 +213,20 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
 
           <div className="flex items-baseline gap-2">
             <span 
-              className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white"
+              className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white truncate"
               data-testid="reserve-current-value"
             >
               {formatBRL(reserveGoal.currentReserve)}
             </span>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-            <span>{reserveGoal.monthsCovered.toFixed(1)} meses cobertos</span>
-            <div className="flex gap-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-slate-500 pt-1 gap-1">
+            <span className="truncate">{reserveGoal.monthsCovered.toFixed(1)} meses cobertos</span>
+            <div className="flex gap-1 shrink-0">
               <button
                 type="button"
                 onClick={() => handleQuickAdd(200)}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold transition"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold transition cursor-pointer"
                 title="Simular aporte rápido de R$ 200"
               >
                 +200
@@ -230,7 +234,7 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
               <button
                 type="button"
                 onClick={() => handleQuickAdd(500)}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold transition"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold transition cursor-pointer"
                 title="Simular aporte rápido de R$ 500"
               >
                 +500
@@ -240,15 +244,15 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
         </div>
 
         {/* 2. Gasto Médio dos Últimos 3 Meses */}
-        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-1 min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">
               Gastos Médios (3 Meses)
             </span>
             <button
               type="button"
               onClick={() => setShowMonthsBreakdown(!showMonthsBreakdown)}
-              className="text-xs text-blue-600 dark:text-blue-400 font-bold cursor-pointer hover:underline"
+              className="text-xs text-blue-600 dark:text-blue-400 font-bold cursor-pointer hover:underline shrink-0"
               title="Ver detalhes dos 3 meses"
             >
               {showMonthsBreakdown ? 'Ocultar' : 'Detalhar'}
@@ -257,53 +261,52 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
 
           <div className="flex items-baseline gap-1">
             <span 
-              className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white"
+              className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white truncate"
               data-testid="reserve-average-expense"
             >
               {formatBRL(reserveGoal.averageMonthlyExpense)}
             </span>
-            <span className="text-xs text-slate-400">/mês</span>
+            <span className="text-xs text-slate-400 shrink-0">/mês</span>
           </div>
 
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-1 truncate">
             Média de {recent3Months.months.map(m => m.monthName).join(', ')}
           </p>
         </div>
 
         {/* 3. Valor Ideal da Reserva */}
-        <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">
-              Valor Ideal da Reserva ({targetMonths}m)
+        <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 space-y-1 min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 truncate">
+              Valor Ideal ({targetMonths}m)
             </span>
-            <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-blue-200/60 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+            <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-blue-200/60 dark:bg-blue-900 text-blue-800 dark:text-blue-200 shrink-0">
               Meta
             </span>
           </div>
 
           <div className="flex items-baseline gap-1">
             <span 
-              className="text-xl sm:text-2xl font-black text-blue-700 dark:text-blue-300"
+              className="text-lg sm:text-xl lg:text-2xl font-black text-blue-700 dark:text-blue-300 truncate"
               data-testid="reserve-ideal-value"
             >
               {formatBRL(reserveGoal.idealReserve)}
             </span>
           </div>
 
-          <div className="text-[11px] text-blue-600 dark:text-blue-400 pt-1 flex items-center justify-between">
-            <span>{targetMonths}x custo de vida</span>
+          <div className="text-[11px] text-blue-600 dark:text-blue-400 pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-0.5">
+            <span className="truncate">{targetMonths}x custo de vida</span>
             {reserveGoal.shortfall > 0 ? (
-              <span className="font-semibold text-rose-600 dark:text-rose-400">
+              <span className="font-semibold text-rose-600 dark:text-rose-400 truncate">
                 Faltam {formatBRL(reserveGoal.shortfall)}
               </span>
             ) : (
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">
+              <span className="font-bold text-emerald-600 dark:text-emerald-400 truncate">
                 Meta Conquistada!
               </span>
             )}
           </div>
         </div>
-
       </div>
 
       {/* Detalhamento dos 3 Meses Analisados (Expandível) */}

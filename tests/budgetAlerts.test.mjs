@@ -4,7 +4,10 @@ import {
   calculateJarExpense,
   calculateJarBudgetAlerts,
   suggestLimitsFromIncome,
-  DEFAULT_JAR_LIMITS
+  suggestSavingsTargetsFromIncome,
+  calculateJarSavingsProgress,
+  DEFAULT_JAR_LIMITS,
+  DEFAULT_JAR_SAVINGS_TARGETS
 } from '../src/utils/budgetAlerts.ts';
 
 test('calculateJarExpense: accurately sums expenses and deducts refunds', () => {
@@ -81,3 +84,50 @@ test('suggestLimitsFromIncome: generates correct 6 pot percentage splits', () =>
   assert.equal(suggested.EDU_10, 400);  // 10%
   assert.equal(suggested.FER_5, 200);   // 5%
 });
+
+test('suggestSavingsTargetsFromIncome: generates proportional savings goals', () => {
+  const income = 4000;
+  const suggested = suggestSavingsTargetsFromIncome(income);
+
+  assert.equal(suggested.NEC_55, 200); // 5%
+  assert.equal(suggested.DIV_10, 120); // 3%
+  assert.equal(suggested.PLP_10, 400); // 10%
+  assert.equal(suggested.LIF_10, 200); // 5%
+  assert.equal(suggested.EDU_10, 200); // 5%
+  assert.equal(suggested.FER_5, 120);  // 3%
+});
+
+test('calculateJarSavingsProgress: accurately computes progress and remaining amount to target', () => {
+  // Case 1: Partial progress towards target
+  // Limit = 500, Spent = 300 -> Current savings = 200. Target = 400 -> Faltam 200 (50%)
+  const prog1 = calculateJarSavingsProgress('DIV_10', 300, 500, 400);
+  assert.equal(prog1.currentSavings, 200);
+  assert.equal(prog1.remainingToTarget, 200);
+  assert.equal(prog1.progressPercent, 50);
+  assert.equal(prog1.isTargetReached, false);
+
+  // Case 2: Target reached / exceeded
+  // Limit = 400, Spent = 40 -> Current savings = 360. Target = 300 -> Faltam 0 (100%), reached!
+  const prog2 = calculateJarSavingsProgress('PLP_10', 40, 400, 300);
+  assert.equal(prog2.currentSavings, 360);
+  assert.equal(prog2.remainingToTarget, 0);
+  assert.equal(prog2.progressPercent, 100);
+  assert.equal(prog2.isTargetReached, true);
+
+  // Case 3: Overspent (gasto excedeu o limite)
+  // Limit = 2000, Spent = 2200 -> Current savings = 0. Target = 200 -> Faltam 200 (0%)
+  const prog3 = calculateJarSavingsProgress('NEC_55', 2200, 2000, 200);
+  assert.equal(prog3.currentSavings, 0);
+  assert.equal(prog3.remainingToTarget, 200);
+  assert.equal(prog3.progressPercent, 0);
+  assert.equal(prog3.isTargetReached, false);
+
+  // Case 4: No custom limit, falls back to jarBudget
+  // Limit = 0, jarBudget = 365, Spent = 165 -> Current savings = 200. Target = 200 -> reached!
+  const prog4 = calculateJarSavingsProgress('LIF_10', 165, 0, 200, 365);
+  assert.equal(prog4.currentSavings, 200);
+  assert.equal(prog4.remainingToTarget, 0);
+  assert.equal(prog4.progressPercent, 100);
+  assert.equal(prog4.isTargetReached, true);
+});
+

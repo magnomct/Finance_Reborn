@@ -2,21 +2,107 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Yupee Reborn - Finanças Pessoais & 6 Potes</title>
     <meta name="description" content="App de finanças pessoais Reborn do lendário Yupee com gráficos intuitivos, gestão dos 6 Potes, agenda financeira diária e controle automático de gastos mensais." />
     <meta property="og:title" content="Yupee Reborn - Finanças Pessoais & 6 Potes" />
     <meta property="og:description" content="App de finanças pessoais Reborn do lendário Yupee com gráficos intuitivos, gestão dos 6 Potes, agenda financeira diária e controle automático de gastos mensais." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="theme-color" content="#4f46e5" />
+    <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#090d16" media="(prefers-color-scheme: dark)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Yupee" />
+    <meta name="format-detection" content="telephone=no" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <script>
+      (function() {
+        // 1. Stub Vite HMR WebSocket connection to prevent failing connection attempts in Cloud Run proxy
+        var OrigWS = window.WebSocket;
+        if (typeof OrigWS !== 'undefined') {
+          var SafeWS = function(url, protocols) {
+            var isHmr = protocols === 'vite-hmr' || (typeof url === 'string' && (url.indexOf('token=') !== -1 || url.indexOf('vite') !== -1));
+            if (isHmr) {
+              var listeners = {};
+              return {
+                readyState: 1, // OPEN
+                OPEN: 1,
+                CLOSED: 3,
+                CONNECTING: 0,
+                CLOSING: 2,
+                url: url,
+                protocol: protocols,
+                addEventListener: function(event, fn) {
+                  if (!listeners[event]) listeners[event] = [];
+                  listeners[event].push(fn);
+                  if (event === 'open') {
+                    setTimeout(function() { try { fn({ type: 'open' }); } catch (e) {} }, 0);
+                  }
+                },
+                removeEventListener: function(event, fn) {
+                  if (listeners[event]) {
+                    listeners[event] = listeners[event].filter(function(l) { return l !== fn; });
+                  }
+                },
+                send: function() {},
+                close: function() {
+                  this.readyState = 3;
+                }
+              };
+            }
+            return new OrigWS(url, protocols);
+          };
+          SafeWS.prototype = OrigWS.prototype;
+          SafeWS.OPEN = OrigWS.OPEN || 1;
+          SafeWS.CLOSED = OrigWS.CLOSED || 3;
+          SafeWS.CONNECTING = OrigWS.CONNECTING || 0;
+          SafeWS.CLOSING = OrigWS.CLOSING || 2;
+          window.WebSocket = SafeWS;
+        }
+
+        // 2. Intercept console.error to filter any remaining Vite WebSocket notices
+        var origConsoleError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var isWsError = args.some(function(arg) {
+            if (!arg) return false;
+            var str = typeof arg === 'string' ? arg : (arg.message || arg.stack || String(arg));
+            return (
+              str.indexOf('WebSocket closed without opened') !== -1 ||
+              str.indexOf('failed to connect to websocket') !== -1 ||
+              (str.indexOf('[vite]') !== -1 && (str.indexOf('WebSocket') !== -1 || str.indexOf('websocket') !== -1 || str.indexOf('ws') !== -1))
+            );
+          });
+          if (isWsError) {
+            return;
+          }
+          return origConsoleError.apply(console, args);
+        };
+
+        // 3. Catch window unhandled errors and rejections
+        window.addEventListener('error', function(event) {
+          if (event && (
+            (event.message && (event.message.indexOf('WebSocket') !== -1 || event.message.indexOf('websocket') !== -1)) ||
+            (event.error && String(event.error).indexOf('WebSocket') !== -1)
+          )) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (event && event.reason && String(event.reason).indexOf('WebSocket') !== -1) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

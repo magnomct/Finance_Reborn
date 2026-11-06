@@ -21,7 +21,8 @@ export const ScreenTransition: React.FC<ScreenTransitionProps> = ({
         animate="animate"
         exit="exit"
         variants={SCREEN_TRANSITION_VARIANTS}
-        className={className}
+        className={`${className} w-full max-w-full overflow-x-hidden`}
+        style={{ maxWidth: '100%', overflowX: 'clip' }}
         data-testid={`screen-transition-${screenKey}`}
       >
         {children}

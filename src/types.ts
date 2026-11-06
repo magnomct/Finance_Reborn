@@ -34,6 +34,8 @@ export interface Transaction {
   reminderDaysBefore?: number; // Dias de antecedência para lembrete visual de vencimento
 }
 
+export type DreamPriority = 'alta' | 'media' | 'baixa';
+
 export interface DreamGoal {
   id: string;
   title: string;
@@ -44,6 +46,7 @@ export interface DreamGoal {
   impact: string;
   targetDate?: string;
   urgencyDaysThreshold?: number; // Prazo de urgência em dias de antecedência para aviso de meta crítica (ex: 30, 60, 90)
+  priority?: DreamPriority; // Prioridade do sonho: Alta, Média ou Baixa
   iconName: string;
   gradient: string;
 }
@@ -122,4 +125,14 @@ export interface JarBudgetAlert {
   threshold80: number; // 80% of limit
   status: BudgetAlertStatus; // 'OK' | 'WARNING' | 'EXCEEDED'
 }
+
+export interface JarSavingsProgress {
+  jarId: JarType;
+  savingsTarget: number;
+  currentSavings: number;
+  remainingToTarget: number;
+  progressPercent: number;
+  isTargetReached: boolean;
+}
+
 

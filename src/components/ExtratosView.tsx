@@ -9,6 +9,7 @@ import { formatBRL } from '../utils/finance';
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { BankImportModal } from './BankImportModal';
 import { ExportPdfModal } from './ExportPdfModal';
+import { downloadTransactionsCSV } from '../utils/csvExport';
 
 interface ExtratosViewProps {
   transactions: Transaction[];
@@ -38,6 +39,7 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
   const [datePreset, setDatePreset] = useState<DatePreset>('ALL');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [exportNotification, setExportNotification] = useState<string | null>(null);
 
   // Handle Preset changes
   const handleSelectPreset = (preset: DatePreset) => {
@@ -119,27 +121,18 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
     .filter(t => t.type === 'despesa')
     .reduce((acc, t) => acc + Math.abs(t.amount), 0);
 
-  const exportCSV = () => {
-    const headers = ['Data', 'Descricao', 'Tipo', 'Valor', 'Pote', 'Conta', 'CentroDeCusto', 'Status'];
-    const rows = filtered.map(t => [
-      t.date,
-      `"${t.description.replace(/"/g, '""')}"`,
-      t.type,
-      t.amount.toFixed(2),
-      t.jar,
-      t.account,
-      t.costCenter,
-      t.status
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `extrato_yupee_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportCSV = () => {
+    if (filtered.length === 0) return;
+    const dateTag = new Date().toISOString().slice(0, 10);
+    const filterTag = datePreset !== 'ALL' ? `${datePreset.toLowerCase()}_` : '';
+    const filename = `extrato_yupee_${filterTag}${dateTag}.csv`;
+    const success = downloadTransactionsCSV(filtered, filename);
+    if (success) {
+      setExportNotification(`Planilha CSV exportada com sucesso! (${filtered.length} lançamentos filtrados)`);
+      setTimeout(() => {
+        setExportNotification(null);
+      }, 4000);
+    }
   };
 
   return (
@@ -197,7 +190,7 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
 
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             {/* Search Input */}
-            <div className="relative flex-1 sm:w-64 min-w-[200px]">
+            <div className="relative flex-1 sm:w-64 min-w-0">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
@@ -220,15 +213,39 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
 
             {/* Exportar CSV */}
             <button
-              onClick={exportCSV}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition shrink-0 cursor-pointer"
-              title="Baixar planilha em formato CSV"
+              type="button"
+              onClick={handleExportCSV}
+              disabled={filtered.length === 0}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition shrink-0 shadow-sm hover:shadow cursor-pointer active:scale-95"
+              title={`Baixar ${filtered.length} lançamentos filtrados em formato CSV (compatível com Excel, Numbers e Google Sheets)`}
+              data-testid="btn-export-csv"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>CSV</span>
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Exportar CSV</span>
+              <span className="hidden sm:inline opacity-80 text-[10px] font-semibold">
+                ({filtered.length})
+              </span>
             </button>
           </div>
         </div>
+
+        {/* Feedback visual de exportação CSV com sucesso */}
+        {exportNotification && (
+          <div className="flex items-center justify-between gap-2 p-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-medium">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>{exportNotification}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExportNotification(null)}
+              className="p-1 text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-100 cursor-pointer"
+              title="Fechar aviso"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Date Filter Bar with Presets & Date Pickers */}
         <div className="p-3 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">

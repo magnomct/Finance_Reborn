@@ -1,1 +1,155 @@
 @import "tailwindcss";
+
+/* ==========================================================================
+   Mobile Full Viewport & Safe-Area Configuration for iOS / Android
+   Fixes native browser navigation bar overlapping the bottom of the app.
+   ========================================================================== */
+
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+html {
+  /* Fallback for older browsers and iOS Safari webkit fill available */
+  height: 100%;
+  height: -webkit-fill-available;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100%;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  min-height: 100dvh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  /* Prevent rubber-band pulling over horizontal boundary */
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  min-height: 100%;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Dynamic & safe full-height utilities */
+.app-viewport-height {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  min-height: 100dvh;
+}
+
+.h-screen-safe {
+  height: 100vh;
+  height: -webkit-fill-available;
+  height: 100dvh;
+}
+
+/* Safe area inset paddings to prevent bottom navigation occlusion */
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+.pb-safe-nav {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+}
+
+.bottom-safe {
+  bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem));
+}
+
+/* ==========================================================================
+   No Scrollbar Utility (Cross-Browser)
+   Hides horizontal/vertical scrollbars on modern WebKit, Firefox, and Edge.
+   ========================================================================== */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox */
+}
+
+/* ==========================================================================
+   Smartphone Preview Frame Overrides
+   When previewing in mobile frame on desktop monitors, forces single-column
+   layouts and hides desktop-only elements so that multi-column grids and 
+   headers don't overflow the 440px phone boundary.
+   ========================================================================== */
+.mobile-frame-active {
+  max-width: 440px !important;
+  width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.mobile-frame-active,
+.mobile-frame-active * {
+  box-sizing: border-box;
+}
+
+/* Force single column for any multi-column grid when mobile frame is active, unless explicitly exempted */
+.mobile-frame-active .grid:not(.keep-grid) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.mobile-frame-active .keep-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+/* Force desktop flex-row layouts to stack vertically in the narrow frame */
+.mobile-frame-active .lg\:flex-row:not(.keep-flex-row),
+.mobile-frame-active .md\:flex-row:not(.keep-flex-row),
+.mobile-frame-active .sm\:flex-row:not(.keep-flex-row) {
+  flex-direction: column !important;
+}
+
+.mobile-frame-active .lg\:items-center:not(.keep-flex-row),
+.mobile-frame-active .md\:items-center:not(.keep-flex-row),
+.mobile-frame-active .sm\:items-center:not(.keep-flex-row) {
+  align-items: stretch !important;
+}
+
+/* Hide desktop-only elements inside mobile preview frame */
+.mobile-frame-active .hidden.sm\:inline,
+.mobile-frame-active .hidden.md\:inline,
+.mobile-frame-active .hidden.lg\:inline {
+  display: none !important;
+}
+
+.mobile-frame-active .hidden.sm\:block,
+.mobile-frame-active .hidden.md\:block,
+.mobile-frame-active .hidden.lg\:block {
+  display: none !important;
+}
+
+.mobile-frame-active .hidden.md\:flex,
+.mobile-frame-active .hidden.lg\:flex {
+  display: none !important;
+}
+
+.mobile-frame-active .flex.md\:hidden,
+.mobile-frame-active .flex.lg\:hidden {
+  display: flex !important;
+}
+

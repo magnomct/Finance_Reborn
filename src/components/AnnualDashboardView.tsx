@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { MONTH_NAMES, INITIAL_ANNUAL_DATA } from '../data/annualDashboardData';
 import { formatBRL } from '../utils/finance';
+import { useMobileLayout } from '../context/MobileContext';
 import { AnnualBudgetGoalsView } from './AnnualBudgetGoalsView';
 import { DashboardMonthlyPdfModal } from './DashboardMonthlyPdfModal';
 import { EmergencyReserveCard } from './EmergencyReserveCard';
@@ -33,6 +34,7 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
   selectedMonthIndex = 2,
   onUpdateDreamBalance
 }) => {
+  const { isMobile } = useMobileLayout();
   const [viewMode, setViewMode] = useState<'resumo' | 'fluxo' | 'detalhada' | 'graficos' | 'metas'>('resumo');
   const [annualData, setAnnualData] = useState(INITIAL_ANNUAL_DATA);
   const [selectedColMonth, setSelectedColMonth] = useState<number | null>(null);
@@ -202,21 +204,23 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
     rows.push(['TOTAL DESPESAS', ...computed.totalDespesas.map(v => v.toFixed(2)), computed.totalDespesasAno.toFixed(2)]);
     rows.push(['SALDO PREVISTO', ...computed.saldoPrevisto.map(v => v.toFixed(2)), computed.totalSaldoPrevistoAno.toFixed(2)]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + rows.map(e => e.join(';')).join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(e => e.join(';'))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', `dashboard_anual_yupee_${new Date().getFullYear()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
       
       {/* Top Banner & Mode Selector */}
-      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-3.5 max-w-full overflow-hidden">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="p-1 rounded-lg bg-teal-500 text-white">
@@ -226,7 +230,7 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
               Dashboard Financeiro Integrado
             </span>
           </div>
-          <h2 className="text-xl font-black text-slate-900 dark:text-white">
+          <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
             Planejamento & Resumo Anual (12 Meses)
           </h2>
           <p className="text-xs text-slate-500">
@@ -234,9 +238,9 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2.5 w-full md:w-auto">
+        <div className={`flex items-stretch justify-between gap-3 w-full max-w-full min-w-0 ${isMobile ? 'flex-col' : 'flex-col sm:flex-row sm:items-center'}`}>
           {/* Tabs Selector com scroll horizontal no mobile sem vazar */}
-          <div className="w-full sm:w-auto overflow-x-auto no-scrollbar max-w-full">
+          <div className="w-full sm:w-auto overflow-x-auto no-scrollbar max-w-full min-w-0 touch-pan-x pb-0.5">
             <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold min-w-max">
               <button
                 onClick={() => setViewMode('resumo')}
@@ -301,67 +305,67 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className={`flex items-center gap-2 ${isMobile ? 'w-full grid grid-cols-2' : 'w-full sm:w-auto justify-end'} shrink-0`}>
             <button
               onClick={exportAnnualCSV}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition cursor-pointer"
+              className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition cursor-pointer"
               title="Exportar planilha anual para CSV"
             >
               <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Exportar CSV</span>
+              <span>Exportar CSV</span>
             </button>
 
             <button
               onClick={() => setIsReportPdfModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-sm cursor-pointer active:scale-95 shrink-0"
+              className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-sm cursor-pointer active:scale-95 shrink-0"
               title="Gerar e baixar relatório financeiro consolidado do mês em formato PDF com potes e metas"
               data-testid="btn-download-dashboard-pdf"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>Relatório Mensal (PDF)</span>
+              <span>Relatório Mensal</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* KPI Cards Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Renda Total Anual</span>
-          <span className="text-lg font-black text-slate-900 dark:text-white">
+      <div className={`grid gap-3 sm:gap-3.5 ${isMobile ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'}`}>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm min-w-0">
+          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1 truncate">Renda Total Anual</span>
+          <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate block">
             {formatBRL(computed.totalRendasAno)}
           </span>
-          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block mt-0.5">
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block mt-0.5 truncate">
             12 meses projetados
           </span>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Investimentos Reais</span>
-          <span className="text-lg font-black text-teal-600 dark:text-teal-400">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm min-w-0">
+          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1 truncate">Investimentos Reais</span>
+          <span className="text-base sm:text-lg font-black text-teal-600 dark:text-teal-400 truncate block">
             {formatBRL(computed.totalInvestRealAno)}
           </span>
-          <span className="text-[10px] text-slate-500 block mt-0.5">
+          <span className="text-[10px] text-slate-500 block mt-0.5 truncate">
             Aplicações efetivadas
           </span>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Total Despesas Ano</span>
-          <span className="text-lg font-black text-rose-600 dark:text-rose-400">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm min-w-0">
+          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1 truncate">Total Despesas Ano</span>
+          <span className="text-base sm:text-lg font-black text-rose-600 dark:text-rose-400 truncate block">
             {formatBRL(computed.totalDespesasAno)}
           </span>
-          <span className="text-[10px] text-slate-500 block mt-0.5">
+          <span className="text-[10px] text-slate-500 block mt-0.5 truncate">
             {((computed.totalDespesasAno / (computed.totalRendasAno || 1)) * 100).toFixed(1)}% das receitas
           </span>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm border-l-4 border-l-emerald-500">
-          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Saldo Previsto Consolidado</span>
-          <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm border-l-4 border-l-emerald-500 min-w-0">
+          <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1 truncate">Saldo Previsto Consolidado</span>
+          <span className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 truncate block">
             +{formatBRL(computed.totalSaldoResumoAno)}
           </span>
-          <span className="text-[10px] text-emerald-600 font-bold block mt-0.5">
+          <span className="text-[10px] text-emerald-600 font-bold block mt-0.5 truncate">
             Superávit garantido 🎉
           </span>
         </div>
