@@ -62,6 +62,14 @@ export function getPriorityConfig(priority?: DreamPriority): PriorityConfig {
 }
 
 /**
+ * Formats a YYYY-MM-DD date string into Brazilian DD/MM/YYYY format.
+ */
+export function formatTargetDate(targetDateStr?: string): string {
+  if (!targetDateStr) return 'Sem prazo';
+  return targetDateStr.split('-').reverse().join('/');
+}
+
+/**
  * UTC-safe calculation of calendar day difference between target date and reference date.
  */
 export function getCalendarDaysRemaining(targetDateStr: string, referenceDateInput?: string | Date): number {

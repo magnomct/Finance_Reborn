@@ -14,6 +14,7 @@ import { CompoundInterestCalculator } from './CompoundInterestCalculator';
 import { 
   calculateSuggestedMonthlyDeposit, 
   calculateEstimatedTimeToGoal, 
+  calculateContributionSuggestion,
   sortDreams 
 } from '../utils/dreamCalculations';
 import { 
@@ -453,6 +454,13 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
               isPastDeadline
             } = calculateSuggestedMonthlyDeposit(dream.target, dream.current, dream.targetDate);
 
+            const contributionSuggestion = calculateContributionSuggestion(
+              dream.target,
+              dream.current,
+              dream.monthlyDeposit,
+              dream.targetDate
+            );
+
             return (
               <div 
                 key={dream.id}
@@ -718,6 +726,100 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                     </div>
                   </div>
 
+                  {/* ============================================================== */}
+                  {/* CAMPO DE SUGESTÃO DE APORTE BASEADO NO PRAZO RESTANTE            */}
+                  {/* ============================================================== */}
+                  <div 
+                    className="mt-3.5 p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-300/70 dark:border-emerald-800/80 space-y-2.5 text-xs relative overflow-hidden"
+                    data-testid={`campo-sugestao-aporte-${dream.id}`}
+                  >
+                    {/* Header: Label 'Sugestão de Aporte' + Ícone + Valor Sugerido */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-xl bg-emerald-500 text-white shadow-2xs shrink-0">
+                          <Sparkles className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <span className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-[11px] block">
+                            Sugestão de Aporte
+                          </span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Baseada no prazo restante da meta
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Valor do Aporte Sugerido em Destaque */}
+                      <div className="text-right">
+                        <div 
+                          className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 leading-tight"
+                          data-testid={`valor-sugestao-aporte-${dream.id}`}
+                        >
+                          {contributionSuggestion.hasTargetDate && !contributionSuggestion.isCompleted
+                            ? `${formatBRL(contributionSuggestion.suggestedMonthlyDeposit)}/mês`
+                            : contributionSuggestion.isCompleted
+                            ? 'Meta Concluída 🎉'
+                            : 'Defina o Prazo'}
+                        </div>
+                        {contributionSuggestion.hasTargetDate && !contributionSuggestion.isCompleted && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">
+                            valor mensal sugerido
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Linha com Detalhamento do Prazo Restante e Saldo Necessário */}
+                    <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-900/70 border border-emerald-200/60 dark:border-emerald-900/50 flex items-center justify-between gap-2 text-[11px] flex-wrap">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {contributionSuggestion.hasTargetDate ? (
+                            <>
+                              Prazo restante: <strong className="text-slate-900 dark:text-white font-bold">{contributionSuggestion.remainingMonths} {contributionSuggestion.remainingMonths === 1 ? 'mês' : 'meses'}</strong> ({contributionSuggestion.remainingDays} dias)
+                            </>
+                          ) : (
+                            <span className="text-slate-500">Defina uma data alvo no campo acima para gerar a sugestão automática de aporte.</span>
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="text-slate-500 dark:text-slate-400 text-[10px]">
+                        Falta acumular: <strong className="text-slate-800 dark:text-slate-200 font-bold">{formatBRL(contributionSuggestion.remainingAmount)}</strong>
+                      </div>
+                    </div>
+
+                    {/* Recomendação de Ação & Botão de 1 Clique para Adotar */}
+                    <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap">
+                      <p className="text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-1 min-w-0 flex-1">
+                        <span>💡 {contributionSuggestion.recommendationMessage}</span>
+                      </p>
+
+                      {contributionSuggestion.hasTargetDate && !contributionSuggestion.isCompleted && contributionSuggestion.suggestedMonthlyDeposit > 0 && (
+                        dream.monthlyDeposit === contributionSuggestion.suggestedMonthlyDeposit ? (
+                          <span 
+                            className="px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 text-[10px] font-bold flex items-center gap-1 shrink-0"
+                            data-testid={`badge-aporte-alinhado-${dream.id}`}
+                          >
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            Aporte Alinhado ao Prazo
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleApplySuggestedDeposit(dream.id, contributionSuggestion.suggestedMonthlyDeposit)}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[11px] shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                            title="Adotar sugestão de aporte como economia mensal para atingir a meta no prazo"
+                            data-testid={`btn-adotar-sugestao-${dream.id}`}
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Adotar Sugestão ({formatBRL(contributionSuggestion.suggestedMonthlyDeposit)}/mês)</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+
                   {/* Previsão de Conclusão baseada na Economia Mensal */}
                   {(() => {
                     const estimatedTime = calculateEstimatedTimeToGoal(
@@ -881,6 +983,18 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                         data-testid={`input-monthly-deposit-${dream.id}`}
                       />
                       <span className="text-[10px] text-slate-400">/mês</span>
+                      {contributionSuggestion.hasTargetDate && !contributionSuggestion.isCompleted && contributionSuggestion.suggestedMonthlyDeposit > 0 && dream.monthlyDeposit !== contributionSuggestion.suggestedMonthlyDeposit && (
+                        <button
+                          type="button"
+                          onClick={() => handleApplySuggestedDeposit(dream.id, contributionSuggestion.suggestedMonthlyDeposit)}
+                          className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer ml-1 inline-flex items-center gap-0.5"
+                          title="Definir economia mensal igual à sugestão de aporte"
+                          data-testid={`btn-quick-sugestao-${dream.id}`}
+                        >
+                          <Sparkles className="w-2.5 h-2.5" />
+                          <span>(Sugerido: {formatBRL(contributionSuggestion.suggestedMonthlyDeposit)})</span>
+                        </button>
+                      )}
                     </div>
                     {monthsRemaining > 0 && (
                       <span className="block text-[10px] text-slate-400 mt-0.5">

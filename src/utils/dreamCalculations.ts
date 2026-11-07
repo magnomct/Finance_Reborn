@@ -1,5 +1,6 @@
 import { DreamGoal, DreamSortOption, DreamPriority } from '../types';
-import { getCalendarDaysRemaining } from './dreamCountdown';
+import { getCalendarDaysRemaining, formatTargetDate } from './dreamCountdown';
+import { formatBRL } from './finance';
 
 export interface DreamDonutSlice {
   id: string;
@@ -121,6 +122,121 @@ export function calculateSuggestedMonthlyDeposit(
     suggestedMonthlyDeposit,
     isCompleted: false,
     isPastDeadline: false,
+  };
+}
+
+export interface ContributionSuggestionResult {
+  remainingAmount: number;
+  remainingMonths: number;
+  remainingDays: number;
+  suggestedMonthlyDeposit: number;
+  isCompleted: boolean;
+  hasTargetDate: boolean;
+  isPastDeadline: boolean;
+  formattedTargetDate: string;
+  differenceVsCurrentDeposit: number;
+  status: 'completed' | 'no_deadline' | 'past_deadline' | 'on_track' | 'needs_increase' | 'can_decrease';
+  recommendationMessage: string;
+}
+
+/**
+ * Calculates a monthly contribution suggestion ('Sugestão de Aporte')
+ * based on the remaining deadline (prazo restante) to achieve the target amount.
+ */
+export function calculateContributionSuggestion(
+  target: number,
+  current: number,
+  currentMonthlyDeposit: number = 0,
+  targetDateStr?: string,
+  referenceDateInput?: Date | string
+): ContributionSuggestionResult {
+  const remainingAmount = Math.max(0, target - current);
+  const isCompleted = remainingAmount === 0;
+
+  if (isCompleted) {
+    return {
+      remainingAmount: 0,
+      remainingMonths: 0,
+      remainingDays: 0,
+      suggestedMonthlyDeposit: 0,
+      isCompleted: true,
+      hasTargetDate: !!targetDateStr,
+      isPastDeadline: false,
+      formattedTargetDate: targetDateStr ? formatTargetDate(targetDateStr) : '',
+      differenceVsCurrentDeposit: 0,
+      status: 'completed',
+      recommendationMessage: 'Meta atingida! O valor total já foi 100% acumulado.'
+    };
+  }
+
+  if (!targetDateStr) {
+    return {
+      remainingAmount,
+      remainingMonths: 0,
+      remainingDays: 0,
+      suggestedMonthlyDeposit: 0,
+      isCompleted: false,
+      hasTargetDate: false,
+      isPastDeadline: false,
+      formattedTargetDate: '',
+      differenceVsCurrentDeposit: 0,
+      status: 'no_deadline',
+      recommendationMessage: 'Defina uma data alvo para calcular a sugestão de aporte mensal ideal.'
+    };
+  }
+
+  const remainingMonths = calculateRemainingMonths(targetDateStr, referenceDateInput);
+  const remainingDays = getCalendarDaysRemaining(targetDateStr, referenceDateInput);
+  const formattedTargetDate = formatTargetDate(targetDateStr);
+
+  if (remainingMonths <= 0 || remainingDays <= 0) {
+    const diff = remainingAmount - currentMonthlyDeposit;
+    return {
+      remainingAmount,
+      remainingMonths: 0,
+      remainingDays: Math.max(0, remainingDays),
+      suggestedMonthlyDeposit: remainingAmount,
+      isCompleted: false,
+      hasTargetDate: true,
+      isPastDeadline: true,
+      formattedTargetDate,
+      differenceVsCurrentDeposit: diff,
+      status: 'past_deadline',
+      recommendationMessage: `Prazo alvo expirou em ${formattedTargetDate}. Necessário aporte de ${formatBRL(remainingAmount)} para liquidar a meta.`
+    };
+  }
+
+  // Recommended monthly contribution rounded to 2 decimals
+  const suggestedMonthlyDeposit = Math.round((remainingAmount / remainingMonths) * 100) / 100;
+  const differenceVsCurrentDeposit = Math.round((suggestedMonthlyDeposit - currentMonthlyDeposit) * 100) / 100;
+
+  let status: 'on_track' | 'needs_increase' | 'can_decrease';
+  let recommendationMessage: string;
+
+  if (Math.abs(differenceVsCurrentDeposit) < 1) {
+    status = 'on_track';
+    recommendationMessage = `Seu aporte atual de ${formatBRL(currentMonthlyDeposit)}/mês está perfeitamente alinhado com o prazo de ${remainingMonths} ${remainingMonths === 1 ? 'mês' : 'meses'}.`;
+  } else if (differenceVsCurrentDeposit > 0) {
+    status = 'needs_increase';
+    recommendationMessage = `Aporte atual está ${formatBRL(differenceVsCurrentDeposit)}/mês abaixo do ideal para cumprir a meta até ${formattedTargetDate}.`;
+  } else {
+    status = 'can_decrease';
+    const excess = Math.abs(differenceVsCurrentDeposit);
+    recommendationMessage = `Aporte atual está ${formatBRL(excess)}/mês acima do necessário (${formatBRL(suggestedMonthlyDeposit)}/mês).`;
+  }
+
+  return {
+    remainingAmount,
+    remainingMonths,
+    remainingDays,
+    suggestedMonthlyDeposit,
+    isCompleted: false,
+    hasTargetDate: true,
+    isPastDeadline: false,
+    formattedTargetDate,
+    differenceVsCurrentDeposit,
+    status,
+    recommendationMessage
   };
 }
 
