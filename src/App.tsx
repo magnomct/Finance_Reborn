@@ -1076,6 +1076,7 @@ export default function App() {
               jarLimits={jarLimits}
               jarSavingsTargets={jarSavingsTargets}
               onOpenLimitsModal={() => setIsLimitsModalOpen(true)}
+              onSaveLimits={handleSaveJarLimits}
             />
           </div>
         )}

@@ -11,8 +11,11 @@ import { PotesDonutChart } from './PotesDonutChart';
 import { AnimatedCurrencyCounter } from './AnimatedCurrencyCounter';
 import { 
   DEFAULT_JAR_SAVINGS_TARGETS, 
-  calculateJarSavingsProgress 
+  DEFAULT_JAR_LIMITS,
+  calculateJarSavingsProgress,
+  saveJarLimits 
 } from '../utils/budgetAlerts';
+import { JarOptimizationModal } from './JarOptimizationModal';
 
 interface PotesViewProps {
   transactions: Transaction[];
@@ -22,6 +25,7 @@ interface PotesViewProps {
   jarLimits?: Record<JarType, number>;
   jarSavingsTargets?: Record<JarType, number>;
   onOpenLimitsModal?: () => void;
+  onSaveLimits?: (newLimits: Record<JarType, number>) => void;
 }
 
 export const PotesView: React.FC<PotesViewProps> = ({
@@ -31,9 +35,11 @@ export const PotesView: React.FC<PotesViewProps> = ({
   onFilterJarInAgenda,
   jarLimits,
   jarSavingsTargets,
-  onOpenLimitsModal
+  onOpenLimitsModal,
+  onSaveLimits
 }) => {
   const [selectedJarKey, setSelectedJarKey] = useState<JarType | null>('NEC_55');
+  const [isOptimizationModalOpen, setIsOptimizationModalOpen] = useState(false);
 
 
   const metrics = calculateFinancialMetrics(transactions, usePjProfitInPf);
@@ -84,6 +90,17 @@ export const PotesView: React.FC<PotesViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {/* Botão Assistente de Otimização IA */}
+          <button
+            onClick={() => setIsOptimizationModalOpen(true)}
+            className="flex-1 sm:flex-initial justify-center px-3.5 py-2 rounded-2xl text-xs font-black bg-gradient-to-r from-indigo-600 via-indigo-700 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 text-white shadow-md shadow-indigo-500/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95"
+            title="Otimizar limites dos potes com Inteligência Artificial para turbinar sua Reserva de Emergência"
+            data-testid="btn-abrir-otimizacao-ia"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>Otimizar Potes com IA</span>
+          </button>
+
           {onOpenLimitsModal && (
             <button
               onClick={onOpenLimitsModal}
@@ -108,6 +125,43 @@ export const PotesView: React.FC<PotesViewProps> = ({
             <span>{usePjProfitInPf ? 'Lucro PJ Integrado (+R$ 1.592) ✅' : 'Somente Salário CLT (R$ 2.060)'}</span>
           </button>
         </div>
+      </div>
+
+      {/* Banner Interativo do Assistente de Otimização de Potes */}
+      <div 
+        className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-indigo-500/10 via-emerald-500/10 to-teal-500/5 border border-indigo-200 dark:border-indigo-900/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs"
+        data-testid="banner-assistente-otimizacao"
+      >
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="p-3 rounded-2xl bg-indigo-600 text-white shadow-md shadow-indigo-500/20 shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                Assistente de Otimização
+              </span>
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                ⭐ Maximizar Reserva de Emergência
+              </span>
+            </div>
+            <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+              Reequilíbrio de Gastos com Inteligência Artificial
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
+              Nossa IA analisa seu histórico real de transações e sugere ajustes percentuais nos tetos dos potes para acelerar sua Reserva de Emergência (PLP 10%) sem abrir mão do seu estilo de vida.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setIsOptimizationModalOpen(true)}
+          className="w-full md:w-auto px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition flex items-center justify-center gap-2 cursor-pointer shrink-0"
+          data-testid="banner-btn-otimizar"
+        >
+          <Sparkles className="w-4 h-4 text-amber-300" />
+          <span>Otimizar Potes com IA</span>
+        </button>
       </div>
 
       {/* Gráfico de Rosca Interativo de Consumo vs Limite */}
@@ -424,6 +478,22 @@ export const PotesView: React.FC<PotesViewProps> = ({
         </div>
       );
     })()}
+
+      {/* Modal do Assistente de Otimização de Potes com IA */}
+      <JarOptimizationModal
+        isOpen={isOptimizationModalOpen}
+        onClose={() => setIsOptimizationModalOpen(false)}
+        transactions={transactions}
+        incomeBase={metrics.effectiveIncomeBase}
+        currentLimits={jarLimits || DEFAULT_JAR_LIMITS}
+        onSaveLimits={(newLimits) => {
+          if (onSaveLimits) {
+            onSaveLimits(newLimits);
+          } else {
+            saveJarLimits(newLimits);
+          }
+        }}
+      />
 
     </div>
   );

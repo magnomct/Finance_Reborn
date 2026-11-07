@@ -7,6 +7,10 @@ import {
   generateSearchQueriesForProfile, 
   parseGeminiReadingResponse 
 } from './src/utils/financeReading';
+import {
+  calculateDeterministicJarOptimization,
+  CORE_JAR_KEYS
+} from './src/utils/jarOptimization';
 
 dotenv.config();
 
@@ -232,6 +236,195 @@ Responda APENAS o JSON puro.`;
       fonte: 'Acervo Yupee Educativo (Fallback)',
       erroDetalhe: err?.message
     });
+  }
+});
+
+// Endpoint para Otimização de Potes com IA (Gemini) visando maximizar a Reserva de Emergência
+app.post('/api/otimizar-potes', async (req, res) => {
+  const { 
+    incomeBase = 3652.31, 
+    currentLimits = {}, 
+    historicalSpending = {}, 
+    emergencyReserve = {} 
+  } = req.body || {};
+
+  const safeIncome = Number(incomeBase) > 0 ? Number(incomeBase) : 3652.31;
+  const reserveShortfall = Number(emergencyReserve.shortfall) || 12000;
+  const avgExpense = Number(emergencyReserve.averageMonthlyExpense) || 2000;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    const heuristic = calculateDeterministicJarOptimization({
+      incomeBase: safeIncome,
+      currentLimits,
+      historicalStats: historicalSpending,
+      reserveShortfall,
+      averageMonthlyExpense: avgExpense,
+    });
+    return res.json(heuristic);
+  }
+
+  try {
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
+    const prompt = `Você é o consultor de finanças especialista do Yupee Reborn, mestre na Metodologia dos 6 Potes (T. Harv Eker) e em aceleração de Reserva de Emergência.
+Analise os dados reais do usuário abaixo:
+- Renda Base Mensal: R$ ${safeIncome.toFixed(2)}
+- Limites Atuais por Pote (R$): ${JSON.stringify(currentLimits)}
+- Comportamento de Gastos Históricos por Pote: ${JSON.stringify(historicalSpending)}
+- Situação da Reserva de Emergência: Saldo atual R$ ${(emergencyReserve.currentReserve || 0).toFixed(2)}, Meta Ideal R$ ${(emergencyReserve.idealReserve || 0).toFixed(2)}, Falta para Meta: R$ ${reserveShortfall.toFixed(2)}, Despesa Média: R$ ${avgExpense.toFixed(2)}/mês.
+
+MISSÃO CRÍTICA:
+Sugerir ajustes percentuais nos limites dos 6 potes com foco em MAXIMIZAR A RESERVA DE EMERGÊNCIA (Pote PLP_10 - Poupança a Longo Prazo / Reserva & Sonhos).
+Os 6 potes são:
+1. NEC_55: Necessidades Básicas (padrão 55%)
+2. DIV_10: Diversão & Lazer (padrão 10%)
+3. PLP_10: Poupança a Longo Prazo / Reserva de Emergência (padrão 10% - ELEVE ESTE POTE, tipicamente para 16% a 24%)
+4. LIF_10: Liberdade Financeira / Investimentos (padrão 10%)
+5. EDU_10: Instrução & Educação (padrão 10%)
+6. FER_5: Férias & Doações (padrão 5%)
+
+REGRAS MATEMÁTICAS RÍGIDAS:
+1. A SOMA DOS 6 PERCENTUAIS (NEC_55 + DIV_10 + PLP_10 + LIF_10 + EDU_10 + FER_5) DEVE SER EXATAMENTE 100.
+2. Cada percentual deve ser um número inteiro positivo (ex: 48, 8, 20, 10, 8, 6).
+3. Redirecione excedentes de potes que historicamente gastam pouco ou de lazer/necessidades flexíveis para o Pote PLP_10.
+
+A resposta DEVE ser um JSON estrito com o seguinte esquema:
+{
+  "percentages": {
+    "NEC_55": 50,
+    "DIV_10": 8,
+    "PLP_10": 20,
+    "LIF_10": 10,
+    "EDU_10": 8,
+    "FER_5": 4
+  },
+  "rationales": {
+    "NEC_55": "Justificativa clara em 1-2 frases acolhedoras em português",
+    "DIV_10": "Justificativa clara em 1-2 frases",
+    "PLP_10": "Justificativa do aumento da reserva em 1-2 frases destacando o benefício",
+    "LIF_10": "Justificativa clara em 1-2 frases",
+    "EDU_10": "Justificativa clara em 1-2 frases",
+    "FER_5": "Justificativa clara em 1-2 frases"
+  },
+  "strategyHeadline": "Frase de impacto curta (ex: 'Potencialize sua Reserva com +R$ 365/mês')",
+  "strategySummary": "Visão geral estratégica da readequação dos potes em 2 a 3 frases",
+  "keyInsights": [
+    "Insight 1 destacando o ganho de aporte na reserva",
+    "Insight 2 sobre o tempo economizado para blindagem financeira",
+    "Insight 3 sobre os ajustes suaves sem perda de conforto",
+    "Insight 4 confirmando a distribuição equilibrada em 100%"
+  ]
+}
+
+Responda SOMENTE o JSON puro, sem markdown tags adicionais.`;
+
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        }
+      });
+    } catch (e: any) {
+      console.warn('Tentando gemini-flash-latest para otimização de potes após erro:', e?.message);
+      response = await ai.models.generateContent({
+        model: 'gemini-flash-latest',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        }
+      });
+    }
+
+    const text = response.text || '{}';
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      parsed = JSON.parse(clean);
+    }
+
+    // Validate and build structured response
+    const rawPct = parsed.percentages || {};
+    let sumPct = 0;
+    const finalPct: Record<string, number> = {};
+
+    CORE_JAR_KEYS.forEach(k => {
+      finalPct[k] = typeof rawPct[k] === 'number' && rawPct[k] > 0 ? Math.round(rawPct[k]) : 10;
+      sumPct += finalPct[k];
+    });
+
+    // Normalize if sum is not 100
+    if (sumPct !== 100 && finalPct['PLP_10'] !== undefined) {
+      finalPct['PLP_10'] += (100 - sumPct);
+    }
+
+    // Build optimization result using parsed rationales
+    const heuristic = calculateDeterministicJarOptimization({
+      incomeBase: safeIncome,
+      currentLimits,
+      historicalStats: historicalSpending,
+      reserveShortfall,
+      averageMonthlyExpense: avgExpense,
+    });
+
+    CORE_JAR_KEYS.forEach(k => {
+      const sugPct = finalPct[k] || heuristic.optimizedJars[k].suggestedPercent;
+      const sugLim = Math.round(safeIncome * (sugPct / 100));
+      const curLim = heuristic.optimizedJars[k].currentLimit;
+      const deltaLim = sugLim - curLim;
+      const deltaPct = sugPct - heuristic.optimizedJars[k].currentPercent;
+
+      heuristic.optimizedJars[k].suggestedPercent = sugPct;
+      heuristic.optimizedJars[k].suggestedLimit = sugLim;
+      heuristic.optimizedJars[k].deltaPercent = deltaPct;
+      heuristic.optimizedJars[k].deltaLimit = deltaLim;
+
+      if (parsed.rationales && parsed.rationales[k]) {
+        heuristic.optimizedJars[k].rationale = parsed.rationales[k];
+      }
+    });
+
+    const sugReserve = heuristic.optimizedJars['PLP_10'].suggestedLimit;
+    const curReserve = heuristic.optimizedJars['PLP_10'].currentLimit;
+    heuristic.monthlyReserveBoost = Math.max(0, sugReserve - curReserve);
+
+    const curMonthly = curReserve > 0 ? curReserve : safeIncome * 0.1;
+    const newMonthly = sugReserve > 0 ? sugReserve : safeIncome * 0.2;
+    const curMonths = reserveShortfall / curMonthly;
+    const newMonths = reserveShortfall / newMonthly;
+    heuristic.monthsAccelerated = Math.max(1, Math.round(curMonths - newMonths));
+
+    if (parsed.strategyHeadline) heuristic.strategyHeadline = parsed.strategyHeadline;
+    if (parsed.strategySummary) heuristic.strategySummary = parsed.strategySummary;
+    if (Array.isArray(parsed.keyInsights) && parsed.keyInsights.length > 0) {
+      heuristic.keyInsights = parsed.keyInsights;
+    }
+    heuristic.source = 'gemini';
+
+    return res.json(heuristic);
+  } catch (error: any) {
+    console.warn('Erro ao chamar Gemini para otimização de potes, acionando motor determinístico:', error?.message);
+    const heuristic = calculateDeterministicJarOptimization({
+      incomeBase: safeIncome,
+      currentLimits,
+      historicalStats: historicalSpending,
+      reserveShortfall,
+      averageMonthlyExpense: avgExpense,
+    });
+    return res.json(heuristic);
   }
 });
 

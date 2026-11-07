@@ -15,6 +15,10 @@ import {
   calculateJarExpense,
   calculateJarSavingsProgress
 } from '../utils/budgetAlerts';
+import {
+  calculateJarHistoricalStats,
+  calculateDeterministicJarOptimization
+} from '../utils/jarOptimization';
 
 interface BudgetLimitsModalProps {
   isOpen: boolean;
@@ -43,6 +47,7 @@ export const BudgetLimitsModal: React.FC<BudgetLimitsModalProps> = ({
     ...(savingsTargets || {})
   }));
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isOptimizingAi, setIsOptimizingAi] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -57,6 +62,54 @@ export const BudgetLimitsModal: React.FC<BudgetLimitsModalProps> = ({
   if (!isOpen) return null;
 
   const jarKeys: JarType[] = ['NEC_55', 'DIV_10', 'PLP_10', 'LIF_10', 'EDU_10', 'FER_5'];
+
+  const handleOptimizeWithAi = async () => {
+    setIsOptimizingAi(true);
+    try {
+      const historicalStats = calculateJarHistoricalStats(transactions, effectiveIncomeBase);
+      const res = await fetch('/api/otimizar-potes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          incomeBase: effectiveIncomeBase,
+          currentLimits: tempLimits,
+          historicalSpending: historicalStats,
+          emergencyReserve: {
+            currentReserve: tempLimits.PLP_10 || 360,
+            shortfall: 10000,
+            averageMonthlyExpense: 2000,
+          }
+        })
+      });
+      if (!res.ok) throw new Error('API error');
+      const data = await res.json();
+      const newLimits: Record<JarType, number> = { ...tempLimits };
+      jarKeys.forEach(k => {
+        if (data.optimizedJars?.[k]?.suggestedLimit) {
+          newLimits[k] = data.optimizedJars[k].suggestedLimit;
+        }
+      });
+      setTempLimits(newLimits);
+    } catch {
+      const historicalStats = calculateJarHistoricalStats(transactions, effectiveIncomeBase);
+      const local = calculateDeterministicJarOptimization({
+        incomeBase: effectiveIncomeBase,
+        currentLimits: tempLimits,
+        historicalStats,
+        reserveShortfall: 10000,
+        averageMonthlyExpense: 2000,
+      });
+      const newLimits: Record<JarType, number> = { ...tempLimits };
+      jarKeys.forEach(k => {
+        if (local.optimizedJars[k]?.suggestedLimit) {
+          newLimits[k] = local.optimizedJars[k].suggestedLimit;
+        }
+      });
+      setTempLimits(newLimits);
+    } finally {
+      setIsOptimizingAi(false);
+    }
+  };
 
 
   const getJarIcon = (name: string) => {
@@ -167,6 +220,17 @@ export const BudgetLimitsModal: React.FC<BudgetLimitsModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handleOptimizeWithAi}
+              disabled={isOptimizingAi}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 text-white font-bold transition cursor-pointer text-[11px] shadow-xs active:scale-95 disabled:opacity-50"
+              title="Otimizar tetos dos potes com Inteligência Artificial para maximizar a Reserva de Emergência"
+              data-testid="btn-otimizar-ia-modal"
+            >
+              <Sparkles className={`w-3 h-3 text-amber-300 ${isOptimizingAi ? 'animate-spin' : ''}`} />
+              <span>{isOptimizingAi ? 'Otimizando com IA...' : 'Otimizar com IA (Reserva)'}</span>
+            </button>
+
             <button
               onClick={handleApplySuggested}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 text-teal-700 dark:text-teal-300 font-bold border border-teal-200 dark:border-teal-800 transition cursor-pointer text-[11px]"
