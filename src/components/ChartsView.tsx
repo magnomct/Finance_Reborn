@@ -1,11 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { 
   BarChart3, PieChart, TrendingUp, TrendingDown, AlertCircle, 
-  CheckCircle2, DollarSign, Calendar, Flame, ShieldCheck, Zap
+  CheckCircle2, DollarSign, Calendar, Flame, ShieldCheck, Zap,
+  Layers, ArrowRight
 } from 'lucide-react';
 import { Transaction, JarType } from '../types';
 import { calculateFinancialMetrics, simulateDailyCashflow, formatBRL } from '../utils/finance';
 import { JAR_DEFINITIONS } from '../data/initialData';
+import { CategoryPieChart } from './CategoryPieChart';
+import { MonthlyBalanceLineChart } from './MonthlyBalanceLineChart';
 
 interface ChartsViewProps {
   transactions: Transaction[];
@@ -19,7 +22,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
   selectedMonth
 }) => {
   const [selectedJarSlice, setSelectedJarSlice] = useState<JarType | null>(null);
-  const [chartMode, setChartMode] = useState<'donut' | 'ritmo' | 'evolucao'>('donut');
+  const [chartMode, setChartMode] = useState<'donut' | 'categorias' | 'linha' | 'ritmo' | 'evolucao'>('donut');
 
   const metrics = useMemo(() => {
     return calculateFinancialMetrics(transactions, usePjProfitInPf);
@@ -97,6 +100,32 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
           >
             <PieChart className="w-4 h-4" />
             <span>Distribuição dos 6 Potes</span>
+          </button>
+
+          <button
+            onClick={() => setChartMode('categorias')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
+              chartMode === 'categorias'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+            }`}
+            data-testid="tab-chart-categorias"
+          >
+            <Layers className="w-4 h-4" />
+            <span>Despesas por Categoria (Pizza)</span>
+          </button>
+
+          <button
+            onClick={() => setChartMode('linha')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
+              chartMode === 'linha'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+            }`}
+            data-testid="tab-chart-linha-evolucao"
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span>Evolução 6 Meses (Linha)</span>
           </button>
 
           <button
@@ -200,14 +229,27 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
                 Passe o mouse ou toque nas fatias para inspecionar os valores e limites de cada pote.
               </p>
             </div>
-            {selectedJarSlice && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setSelectedJarSlice(null)}
-                className="text-xs text-blue-500 hover:underline font-bold"
+                onClick={() => setChartMode('categorias')}
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 px-2.5 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-900 flex items-center gap-1.5 transition cursor-pointer"
+                title="Visualizar gráfico de pizza de despesas agrupadas por categoria"
+                data-testid="btn-ver-pizza-categorias"
               >
-                Limpar seleção
+                <Layers className="w-3.5 h-3.5" />
+                <span>Ver por Categoria</span>
+                <ArrowRight className="w-3 h-3" />
               </button>
-            )}
+
+              {selectedJarSlice && (
+                <button
+                  onClick={() => setSelectedJarSlice(null)}
+                  className="text-xs text-blue-500 hover:underline font-bold"
+                >
+                  Limpar seleção
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -329,7 +371,25 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
       )}
 
       {/* ========================================================= */}
-      {/* MODO 2: RITMO DIÁRIO DE GASTOS (BURN-RATE / GASTO ACUMULADO) */}
+      {/* NOVO MODO: GRÁFICO DE PIZZA INTERATIVO POR CATEGORIA      */}
+      {/* ========================================================= */}
+      {chartMode === 'categorias' && (
+        <CategoryPieChart transactions={transactions} />
+      )}
+
+      {/* ========================================================= */}
+      {/* NOVO MODO: EVOLUÇÃO DO SALDO MENSAL (6 MESES - LINHA)     */}
+      {/* ========================================================= */}
+      {chartMode === 'linha' && (
+        <MonthlyBalanceLineChart 
+          transactions={transactions} 
+          usePjProfitInPf={usePjProfitInPf}
+          selectedMonth={selectedMonth}
+        />
+      )}
+
+      {/* ========================================================= */}
+      {/* MODO 3: RITMO DIÁRIO DE GASTOS (BURN-RATE / GASTO ACUMULADO) */}
       {/* ========================================================= */}
       {chartMode === 'ritmo' && (
         <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
@@ -460,10 +520,17 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
       )}
 
       {/* ========================================================= */}
-      {/* MODO 3: COMPARATIVO MENSAL (RECEITAS vs DESPESAS vs SALDO)  */}
+      {/* MODO 4: COMPARATIVO MENSAL (RECEITAS vs DESPESAS vs SALDO)  */}
       {/* ========================================================= */}
       {chartMode === 'evolucao' && (
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="space-y-6">
+          <MonthlyBalanceLineChart 
+            transactions={transactions} 
+            usePjProfitInPf={usePjProfitInPf}
+            selectedMonth={selectedMonth}
+          />
+
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
               <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
@@ -555,6 +622,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
               );
             })}
           </div>
+        </div>
         </div>
       )}
 
