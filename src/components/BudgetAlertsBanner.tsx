@@ -186,17 +186,21 @@ export const BudgetAlertsBanner: React.FC<BudgetAlertsBannerProps> = ({
                 </div>
               </div>
 
-              {/* Numbers - cleanly stacked to avoid collisions */}
-              <div className="flex items-baseline justify-between text-[11px] gap-2 pt-0.5 flex-wrap min-w-0">
-                <div className="text-slate-500 dark:text-slate-400 min-w-0 truncate">
-                  <span>Gasto: </span>
-                  <strong className="text-slate-800 dark:text-slate-200">{formatBRL(alert.spent)}</strong>
-                  <span className="text-slate-400 text-[10px]"> / {formatBRL(alert.limit)}</span>
+              {/* Numbers - cleanly structured in rows to avoid collisions */}
+              <div className="pt-0.5 space-y-1 text-[11px] min-w-0">
+                <div className="flex items-center justify-between gap-1 text-slate-500 dark:text-slate-400 min-w-0">
+                  <span className="truncate">Gasto / Teto:</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200 truncate shrink-0">
+                    {formatBRL(alert.spent)} <span className="text-slate-400 font-normal text-[10px]">/ {formatBRL(alert.limit)}</span>
+                  </span>
                 </div>
-                <div className={`font-bold shrink-0 text-right ${isExceededItem ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-300'}`}>
-                  {isExceededItem 
-                    ? `+${formatBRL(Math.abs(alert.remaining))} acima` 
-                    : `Restam ${formatBRL(alert.remaining)}`}
+                <div className={`flex items-center justify-between gap-1 font-bold min-w-0 ${isExceededItem ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                  <span className="truncate">{isExceededItem ? 'Excedente:' : 'Disponível:'}</span>
+                  <span className="truncate shrink-0">
+                    {isExceededItem 
+                      ? `+${formatBRL(Math.abs(alert.remaining))} acima` 
+                      : `Restam ${formatBRL(alert.remaining)}`}
+                  </span>
                 </div>
               </div>
             </div>

@@ -97,7 +97,7 @@ body {
    headers don't overflow the 440px phone boundary.
    ========================================================================== */
 .mobile-frame-active {
-  max-width: 440px !important;
+  max-width: min(440px, 100vw) !important;
   width: 100% !important;
   overflow-x: hidden !important;
   box-sizing: border-box !important;
@@ -106,10 +106,16 @@ body {
 .mobile-frame-active,
 .mobile-frame-active * {
   box-sizing: border-box;
+  max-width: 100%;
 }
 
-/* Force single column for any multi-column grid when mobile frame is active, unless explicitly exempted */
-.mobile-frame-active .grid:not(.keep-grid) {
+/* Force single column for multi-column grids inside mobile preview */
+.mobile-frame-active .grid:not(.keep-grid):not(.keep-grid-2),
+.mobile-frame-active [class*="grid-cols-3"]:not(.keep-grid):not(.keep-grid-2),
+.mobile-frame-active [class*="grid-cols-4"]:not(.keep-grid):not(.keep-grid-2),
+.mobile-frame-active [class*="md:grid-cols-"]:not(.keep-grid):not(.keep-grid-2),
+.mobile-frame-active [class*="lg:grid-cols-"]:not(.keep-grid):not(.keep-grid-2),
+.mobile-frame-active [class*="xl:grid-cols-"]:not(.keep-grid):not(.keep-grid-2) {
   grid-template-columns: minmax(0, 1fr) !important;
 }
 
@@ -120,14 +126,22 @@ body {
 /* Force desktop flex-row layouts to stack vertically in the narrow frame */
 .mobile-frame-active .lg\:flex-row:not(.keep-flex-row),
 .mobile-frame-active .md\:flex-row:not(.keep-flex-row),
-.mobile-frame-active .sm\:flex-row:not(.keep-flex-row) {
+.mobile-frame-active .sm\:flex-row:not(.keep-flex-row),
+.mobile-frame-active .stack-on-mobile {
   flex-direction: column !important;
+  align-items: stretch !important;
 }
 
 .mobile-frame-active .lg\:items-center:not(.keep-flex-row),
 .mobile-frame-active .md\:items-center:not(.keep-flex-row),
 .mobile-frame-active .sm\:items-center:not(.keep-flex-row) {
   align-items: stretch !important;
+}
+
+/* Ensure child elements inside flex headers wrap cleanly and don't push outside */
+.mobile-frame-active .mobile-full-width {
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 /* Hide desktop-only elements inside mobile preview frame */
@@ -151,5 +165,13 @@ body {
 .mobile-frame-active .flex.md\:hidden,
 .mobile-frame-active .flex.lg\:hidden {
   display: flex !important;
+}
+
+/* Responsive utility for real small screens */
+@media (max-width: 640px) {
+  .stack-on-mobile {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
 }
 

@@ -598,7 +598,7 @@ export default function App() {
                 <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-indigo-500 text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs">e</span>
               </div>
               {!isMobileFrame && (
-                <div className="hidden lg:block">
+                <div className="hidden xl:block">
                   <span className="text-[10px] font-bold tracking-widest uppercase text-slate-400 block -mb-1">REBORN</span>
                   <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Controle Inteligente</span>
                 </div>
@@ -607,7 +607,7 @@ export default function App() {
 
             {/* Scope Selector no Desktop (PF, PJ, Consolidado) */}
             {!isMobileFrame && (
-              <div className="hidden md:flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold shrink-0">
+              <div className="hidden lg:flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold shrink-0">
                 <button
                   onClick={() => handleScopeChange('PF')}
                   className={`px-3 py-1 rounded-lg transition cursor-pointer ${viewScope === 'PF' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
@@ -860,7 +860,7 @@ export default function App() {
           </div>
 
           {/* Linha Secundária Mobile: Seletor de Escopo (PF, PJ, Consolidado) para telas pequenas */}
-          <div className={`${isMobileFrame ? 'flex' : 'flex md:hidden'} items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-2`}>
+          <div className={`${isMobileFrame ? 'flex' : 'flex lg:hidden'} items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-2`}>
             <div className="flex items-center gap-1 w-full bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl text-xs font-semibold">
               <button
                 onClick={() => handleScopeChange('PF')}
@@ -1139,6 +1139,7 @@ export default function App() {
               onEditTransaction={handleOpenEditTransaction}
               onImportTransactions={handleImportTransactions}
               autoRules={autoRules}
+              scope={viewScope}
             />
           </div>
         )}

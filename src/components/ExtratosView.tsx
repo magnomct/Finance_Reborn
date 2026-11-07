@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, Download, Trash2, CheckCircle2, Clock, 
   ArrowUpDown, Filter, DollarSign, Upload, FileSpreadsheet, 
@@ -18,6 +18,7 @@ interface ExtratosViewProps {
   onEditTransaction?: (tx: Transaction) => void;
   onImportTransactions?: (newTransactions: Transaction[]) => void;
   autoRules?: AutoCategoryRule[];
+  scope?: 'PF' | 'PJ' | 'CONSOLIDADO';
 }
 
 type DatePreset = 'ALL' | 'THIS_MONTH' | 'LAST_30_DAYS' | 'YEAR_CURRENT' | 'CUSTOM';
@@ -28,11 +29,17 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
   onToggleStatus,
   onEditTransaction,
   onImportTransactions,
-  autoRules = []
+  autoRules = [],
+  scope
 }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [scopeFilter, setScopeFilter] = useState<'ALL' | 'PF' | 'PJ'>(() => {
+    if (scope === 'PF') return 'PF';
+    if (scope === 'PJ') return 'PJ';
+    return 'ALL';
+  });
   const [jarFilter, setJarFilter] = useState<string>('ALL');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [accountFilter, setAccountFilter] = useState<string>('ALL');
@@ -40,6 +47,13 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [exportNotification, setExportNotification] = useState<string | null>(null);
+
+  // Sync when parent scope changes
+  useEffect(() => {
+    if (scope === 'PF') setScopeFilter('PF');
+    else if (scope === 'PJ') setScopeFilter('PJ');
+    else if (scope === 'CONSOLIDADO') setScopeFilter('ALL');
+  }, [scope]);
 
   // Handle Preset changes
   const handleSelectPreset = (preset: DatePreset) => {
@@ -92,6 +106,15 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
 
   const filtered = useMemo(() => {
     return transactions.filter(t => {
+      // Scope filtering (PF vs PJ vs Consolidado)
+      if (scopeFilter === 'PF') {
+        const isPJ = t.costCenter === 'PJ' || t.account === 'Inter PJ' || t.jar === 'PJ_EXCLUIDO';
+        if (isPJ) return false;
+      } else if (scopeFilter === 'PJ') {
+        const isPJ = t.costCenter === 'PJ' || t.account === 'Inter PJ' || t.jar === 'PJ_EXCLUIDO';
+        if (!isPJ) return false;
+      }
+
       if (jarFilter !== 'ALL' && t.jar !== jarFilter) return false;
       if (typeFilter !== 'ALL' && t.type !== typeFilter) return false;
       if (accountFilter !== 'ALL' && t.account !== accountFilter) return false;
@@ -100,18 +123,20 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
       if (startDate && t.date < startDate) return false;
       if (endDate && t.date > endDate) return false;
 
+      // Search query filtering
       if (search.trim()) {
         const q = search.toLowerCase();
         return (
           t.description.toLowerCase().includes(q) ||
           t.account.toLowerCase().includes(q) ||
           t.costCenter.toLowerCase().includes(q) ||
-          (t.category && t.category.toLowerCase().includes(q))
+          (t.category && t.category.toLowerCase().includes(q)) ||
+          (t.notes && t.notes.toLowerCase().includes(q))
         );
       }
       return true;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [transactions, search, jarFilter, typeFilter, accountFilter, startDate, endDate]);
+  }, [transactions, search, scopeFilter, jarFilter, typeFilter, accountFilter, startDate, endDate]);
 
   const totalFilteredReceipts = filtered
     .filter(t => t.type === 'receita' || t.type === 'reembolso')
@@ -124,11 +149,12 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
   const handleExportCSV = () => {
     if (filtered.length === 0) return;
     const dateTag = new Date().toISOString().slice(0, 10);
+    const scopeTag = scopeFilter !== 'ALL' ? `${scopeFilter.toLowerCase()}_` : '';
     const filterTag = datePreset !== 'ALL' ? `${datePreset.toLowerCase()}_` : '';
-    const filename = `extrato_yupee_${filterTag}${dateTag}.csv`;
+    const filename = `extrato_yupee_${scopeTag}${filterTag}${dateTag}.csv`;
     const success = downloadTransactionsCSV(filtered, filename);
     if (success) {
-      setExportNotification(`Planilha CSV exportada com sucesso! (${filtered.length} lançamentos filtrados)`);
+      setExportNotification(`Extrato CSV exportado com sucesso! (${filtered.length} lançamentos filtrados)`);
       setTimeout(() => {
         setExportNotification(null);
       }, 4000);
@@ -211,17 +237,17 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
               <span>Exportar PDF Contábil</span>
             </button>
 
-            {/* Exportar CSV */}
+            {/* Exportar Extrato (CSV com filtros ativos de busca e escopo) */}
             <button
               type="button"
               onClick={handleExportCSV}
               disabled={filtered.length === 0}
               className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition shrink-0 shadow-sm hover:shadow cursor-pointer active:scale-95"
               title={`Baixar ${filtered.length} lançamentos filtrados em formato CSV (compatível com Excel, Numbers e Google Sheets)`}
-              data-testid="btn-export-csv"
+              data-testid="btn-export-extrato"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Exportar CSV</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>Exportar Extrato</span>
               <span className="hidden sm:inline opacity-80 text-[10px] font-semibold">
                 ({filtered.length})
               </span>
@@ -330,8 +356,19 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
           </div>
         </div>
 
-        {/* Dimension Selectors (Pote, Tipo, Conta) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs">
+        {/* Dimension Selectors (Escopo, Pote, Tipo, Conta) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1 text-xs">
+          <select
+            value={scopeFilter}
+            onChange={e => setScopeFilter(e.target.value as 'ALL' | 'PF' | 'PJ')}
+            className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 font-medium"
+            data-testid="select-scope-filter"
+          >
+            <option value="ALL">Todos os Escopos (Consolidado)</option>
+            <option value="PF">Pessoa Física (PF)</option>
+            <option value="PJ">Pessoa Jurídica (PJ)</option>
+          </select>
+
           <select
             value={jarFilter}
             onChange={e => setJarFilter(e.target.value)}

@@ -57,7 +57,7 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
       data-testid="savings-trends-barchart"
     >
       {/* Header with Title and Trend Badge */}
-      <div className={`flex justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 w-full ${isMobile ? 'flex-col items-start' : 'flex-col lg:flex-row items-start lg:items-center'}`}>
+      <div className={`flex justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 w-full stack-on-mobile ${isMobile ? 'flex-col items-start' : 'flex-col lg:flex-row items-start lg:items-center'}`}>
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="p-1 rounded-lg bg-emerald-500 text-white shadow-2xs shrink-0">
@@ -89,7 +89,7 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
         </div>
 
         {/* View Mode Toggle Buttons */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold w-full sm:w-auto self-stretch sm:self-auto justify-center overflow-x-auto no-scrollbar shrink-0">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold w-full sm:w-auto self-stretch sm:self-auto justify-center overflow-x-auto no-scrollbar shrink-0 max-w-full">
           <button
             type="button"
             onClick={() => setViewMode('grouped')}

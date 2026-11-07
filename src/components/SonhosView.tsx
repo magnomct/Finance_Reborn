@@ -503,33 +503,83 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                     {dream.impact}
                   </p>
 
-                  {/* Progress Bar & Amounts */}
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex justify-between items-baseline mb-1 text-xs">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block uppercase font-bold">Acumulado</span>
-                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                  {/* Gráfico de Barra de Progresso Individual da Meta */}
+                  <div 
+                    className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2.5"
+                    data-testid={`dream-progress-chart-${dream.id}`}
+                  >
+                    {/* Header do Progresso: Percentual Concluído + Destaque de Quanto Falta */}
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${pct >= 100 ? 'bg-emerald-500 animate-ping' : 'bg-indigo-500'}`} />
+                        <span className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                          Progresso: <span className="text-indigo-600 dark:text-indigo-400 font-black">{pct.toFixed(1)}%</span>
+                        </span>
+                      </div>
+                      <span 
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+                          pct >= 100
+                            ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                            : 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60'
+                        }`}
+                        data-testid={`dream-remaining-badge-${dream.id}`}
+                      >
+                        {pct >= 100 ? 'Meta Concluída! 🎉' : `Faltam ${formatBRL(remainingAmount)}`}
+                      </span>
+                    </div>
+
+                    {/* Gráfico de Barra Visual com Marcadores de Meta (25%, 50%, 75%) */}
+                    <div className="relative pt-1">
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden relative shadow-inner">
+                        {/* Marcadores de Etapa no Trilho */}
+                        <div className="absolute top-0 bottom-0 left-[25%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="25% da meta" />
+                        <div className="absolute top-0 bottom-0 left-[50%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="50% da meta" />
+                        <div className="absolute top-0 bottom-0 left-[75%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="75% da meta" />
+
+                        {/* Barra Gradiente de Preenchimento do Saldo Atual */}
+                        <div 
+                          className={`h-full bg-gradient-to-r ${dream.gradient} transition-all duration-700 rounded-full shadow-sm relative`}
+                          style={{ width: `${Math.min(100, Math.max(pct, 2))}%` }}
+                          data-testid={`dream-progress-bar-${dream.id}`}
+                        />
+                      </div>
+
+                      {/* Ticks e Legendas dos Marcos da Barra de Progresso */}
+                      <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 mt-1 px-0.5 select-none">
+                        <span>0%</span>
+                        <span className={pct >= 25 ? 'text-indigo-600 dark:text-indigo-400' : ''}>25%</span>
+                        <span className={pct >= 50 ? 'text-indigo-600 dark:text-indigo-400' : ''}>50%</span>
+                        <span className={pct >= 75 ? 'text-indigo-600 dark:text-indigo-400' : ''}>75%</span>
+                        <span className={pct >= 100 ? 'text-emerald-600 dark:text-emerald-400 font-black' : ''}>100%</span>
+                      </div>
+                    </div>
+
+                    {/* Box de Saldo Acumulado vs Alvo com Detalhe do Quanto Falta */}
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800/80 space-y-1 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">Acumulado Guardado</span>
+                        <span className="font-black text-emerald-600 dark:text-emerald-400" data-testid={`dream-current-balance-${dream.id}`}>
                           {formatBRL(dream.current)}
                         </span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-400 block uppercase font-bold">Meta Final</span>
-                        <span className="text-sm font-black text-slate-800 dark:text-slate-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">Valor Alvo</span>
+                        <span className="font-bold text-slate-700 dark:text-slate-300">
                           {formatBRL(dream.target)}
                         </span>
                       </div>
-                    </div>
-
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden mt-1">
-                      <div 
-                        className={`h-full bg-gradient-to-r ${dream.gradient} transition-all duration-500 rounded-full`}
-                        style={{ width: `${Math.max(pct, 3)}%` }}
-                      />
-                    </div>
-
-                    <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1.5 font-medium">
-                      <span>{pct.toFixed(0)}% concluído</span>
-                      <span>Falta: {formatBRL(remainingAmount)}</span>
+                      <div className="pt-1 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[11px] font-bold">
+                        <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <Target className="w-3 h-3 text-indigo-500" />
+                          <span>Distância da Meta:</span>
+                        </span>
+                        <span 
+                          className={pct >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}
+                          data-testid={`dream-remaining-amount-${dream.id}`}
+                        >
+                          {pct >= 100 ? 'Meta atingida!' : `Faltam ${formatBRL(remainingAmount)}`}
+                        </span>
+                      </div>
                     </div>
                   </div>
 

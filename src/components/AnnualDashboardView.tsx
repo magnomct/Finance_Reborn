@@ -238,9 +238,9 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
           </p>
         </div>
 
-        <div className={`flex items-stretch justify-between gap-3 w-full max-w-full min-w-0 ${isMobile ? 'flex-col' : 'flex-col sm:flex-row sm:items-center'}`}>
+        <div className="flex flex-col gap-3 w-full max-w-full min-w-0">
           {/* Tabs Selector com scroll horizontal no mobile sem vazar */}
-          <div className="w-full sm:w-auto overflow-x-auto no-scrollbar max-w-full min-w-0 touch-pan-x pb-0.5">
+          <div className="w-full overflow-x-auto no-scrollbar max-w-full min-w-0 touch-pan-x pb-0.5">
             <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold min-w-max">
               <button
                 onClick={() => setViewMode('resumo')}
@@ -305,7 +305,7 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
             </div>
           </div>
 
-          <div className={`flex items-center gap-2 ${isMobile ? 'w-full grid grid-cols-2' : 'w-full sm:w-auto justify-end'} shrink-0`}>
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full justify-start sm:justify-end shrink-0">
             <button
               onClick={exportAnnualCSV}
               className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition cursor-pointer"
@@ -328,8 +328,8 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* KPI Cards Row */}
-      <div className={`grid gap-3 sm:gap-3.5 ${isMobile ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'}`}>
+      {/* KPI Cards Row - 2 columns on mobile (2x2) and 4 on desktop */}
+      <div className={`grid gap-2.5 sm:gap-3.5 ${isMobile ? 'grid-cols-2 keep-grid-2' : 'grid-cols-2 lg:grid-cols-4'}`}>
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm min-w-0">
           <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1 truncate">Renda Total Anual</span>
           <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate block">

@@ -188,11 +188,11 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
         </div>
       </div>
 
-      {/* 3 Main Metric Cards - Stack in 1 column on mobile to prevent overlapping numbers */}
-      <div className={`grid gap-3 sm:gap-3.5 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'}`}>
+      {/* 3 Main Metric Cards - 1 column on mobile/tablets to prevent overlapping numbers */}
+      <div className={`grid gap-3 sm:gap-3.5 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'}`}>
         
         {/* 1. Valor Atual da Reserva */}
-        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-1 relative group min-w-0 overflow-hidden">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-1 relative group min-w-0 overflow-hidden">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">
               Valor Atual Guardado
@@ -211,9 +211,9 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
             </button>
           </div>
 
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline gap-2 min-w-0">
             <span 
-              className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white truncate"
+              className="text-lg sm:text-xl font-black text-slate-900 dark:text-white truncate block max-w-full"
               data-testid="reserve-current-value"
             >
               {formatBRL(reserveGoal.currentReserve)}
@@ -259,9 +259,9 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
             </button>
           </div>
 
-          <div className="flex items-baseline gap-1">
+          <div className="flex items-baseline gap-1 min-w-0">
             <span 
-              className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white truncate"
+              className="text-lg sm:text-xl font-black text-slate-900 dark:text-white truncate block"
               data-testid="reserve-average-expense"
             >
               {formatBRL(reserveGoal.averageMonthlyExpense)}
@@ -275,7 +275,7 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
         </div>
 
         {/* 3. Valor Ideal da Reserva */}
-        <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 space-y-1 min-w-0 overflow-hidden">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 space-y-1 min-w-0 overflow-hidden">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 truncate">
               Valor Ideal ({targetMonths}m)
@@ -285,19 +285,19 @@ export const EmergencyReserveCard: React.FC<EmergencyReserveCardProps> = ({
             </span>
           </div>
 
-          <div className="flex items-baseline gap-1">
+          <div className="flex items-baseline gap-1 min-w-0">
             <span 
-              className="text-lg sm:text-xl lg:text-2xl font-black text-blue-700 dark:text-blue-300 truncate"
+              className="text-lg sm:text-xl font-black text-blue-700 dark:text-blue-300 truncate block"
               data-testid="reserve-ideal-value"
             >
               {formatBRL(reserveGoal.idealReserve)}
             </span>
           </div>
 
-          <div className="text-[11px] text-blue-600 dark:text-blue-400 pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-0.5">
+          <div className="text-[11px] text-blue-600 dark:text-blue-400 pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 min-w-0">
             <span className="truncate">{targetMonths}x custo de vida</span>
             {reserveGoal.shortfall > 0 ? (
-              <span className="font-semibold text-rose-600 dark:text-rose-400 truncate">
+              <span className="font-bold text-rose-600 dark:text-rose-400 truncate">
                 Faltam {formatBRL(reserveGoal.shortfall)}
               </span>
             ) : (

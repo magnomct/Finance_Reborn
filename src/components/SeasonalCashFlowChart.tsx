@@ -106,7 +106,7 @@ export const SeasonalCashFlowChart: React.FC<SeasonalCashFlowChartProps> = ({
       data-testid="component-seasonal-cashflow"
     >
       {/* Header & Controls */}
-      <div className={`flex justify-between gap-3 sm:gap-4 border-b border-slate-100 dark:border-slate-800 pb-5 w-full ${isMobile ? 'flex-col items-start' : 'flex-col lg:flex-row lg:items-start'}`}>
+      <div className={`flex justify-between gap-3 sm:gap-4 border-b border-slate-100 dark:border-slate-800 pb-5 w-full stack-on-mobile ${isMobile ? 'flex-col items-start' : 'flex-col lg:flex-row lg:items-start'}`}>
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800 shrink-0">
@@ -131,7 +131,7 @@ export const SeasonalCashFlowChart: React.FC<SeasonalCashFlowChartProps> = ({
         </div>
 
         {/* View Mode Filters & Simulator Button */}
-        <div className={`flex items-stretch gap-2 w-full ${isMobile ? 'flex-col' : 'flex-col sm:flex-row sm:items-center lg:w-auto'} shrink-0`}>
+        <div className={`flex items-stretch gap-2 w-full stack-on-mobile ${isMobile ? 'flex-col' : 'flex-col sm:flex-row sm:items-center lg:w-auto'} shrink-0`}>
           <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl text-xs font-bold w-full sm:w-auto overflow-x-auto no-scrollbar">
             <button
               type="button"

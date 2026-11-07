@@ -208,6 +208,9 @@ function parseGeminiReadingResponse(rawText, groundingChunks = [], profile) {
 
 // server.ts
 import_dotenv.default.config();
+if (process.env.DISABLE_HMR === void 0) {
+  process.env.DISABLE_HMR = "true";
+}
 var app = (0, import_express.default)();
 var port = 3e3;
 app.use(import_express.default.json());
