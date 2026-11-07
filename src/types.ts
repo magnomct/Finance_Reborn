@@ -35,6 +35,7 @@ export interface Transaction {
 }
 
 export type DreamPriority = 'alta' | 'media' | 'baixa';
+export type DreamSortOption = 'urgency' | 'priority' | 'targetDate' | 'estimatedTime' | 'progress' | 'default';
 
 export interface DreamGoal {
   id: string;

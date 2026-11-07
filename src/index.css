@@ -75,11 +75,22 @@ body {
   bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem));
 }
 
+@utility no-scrollbar {
+  &::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 /* ==========================================================================
    No Scrollbar Utility (Cross-Browser)
    Hides horizontal/vertical scrollbars on modern WebKit, Firefox, and Edge.
    ========================================================================== */
-.no-scrollbar::-webkit-scrollbar {
+.no-scrollbar::-webkit-scrollbar,
+::-webkit-scrollbar.no-scrollbar {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
@@ -127,6 +138,7 @@ body {
 .mobile-frame-active .lg\:flex-row:not(.keep-flex-row),
 .mobile-frame-active .md\:flex-row:not(.keep-flex-row),
 .mobile-frame-active .sm\:flex-row:not(.keep-flex-row),
+.mobile-frame-active .xl\:flex-row:not(.keep-flex-row),
 .mobile-frame-active .stack-on-mobile {
   flex-direction: column !important;
   align-items: stretch !important;
@@ -134,7 +146,8 @@ body {
 
 .mobile-frame-active .lg\:items-center:not(.keep-flex-row),
 .mobile-frame-active .md\:items-center:not(.keep-flex-row),
-.mobile-frame-active .sm\:items-center:not(.keep-flex-row) {
+.mobile-frame-active .sm\:items-center:not(.keep-flex-row),
+.mobile-frame-active .xl\:items-center:not(.keep-flex-row) {
   align-items: stretch !important;
 }
 
@@ -147,23 +160,30 @@ body {
 /* Hide desktop-only elements inside mobile preview frame */
 .mobile-frame-active .hidden.sm\:inline,
 .mobile-frame-active .hidden.md\:inline,
-.mobile-frame-active .hidden.lg\:inline {
+.mobile-frame-active .hidden.lg\:inline,
+.mobile-frame-active .hidden.xl\:inline,
+.mobile-frame-active .hidden.2xl\:inline {
   display: none !important;
 }
 
 .mobile-frame-active .hidden.sm\:block,
 .mobile-frame-active .hidden.md\:block,
-.mobile-frame-active .hidden.lg\:block {
+.mobile-frame-active .hidden.lg\:block,
+.mobile-frame-active .hidden.xl\:block,
+.mobile-frame-active .hidden.2xl\:block {
   display: none !important;
 }
 
 .mobile-frame-active .hidden.md\:flex,
-.mobile-frame-active .hidden.lg\:flex {
+.mobile-frame-active .hidden.lg\:flex,
+.mobile-frame-active .hidden.xl\:flex,
+.mobile-frame-active .hidden.2xl\:flex {
   display: none !important;
 }
 
 .mobile-frame-active .flex.md\:hidden,
-.mobile-frame-active .flex.lg\:hidden {
+.mobile-frame-active .flex.lg\:hidden,
+.mobile-frame-active .flex.xl\:hidden {
   display: flex !important;
 }
 

@@ -5,13 +5,17 @@ import {
   Sparkles, DollarSign, Clock, AlertTriangle, AlertOctagon, Flame,
   Hourglass, X, Filter
 } from 'lucide-react';
-import { DreamGoal, DreamPriority, Transaction } from '../types';
+import { DreamGoal, DreamPriority, Transaction, DreamSortOption } from '../types';
 import { formatBRL } from '../utils/finance';
 import { DreamDepositChecklist } from './DreamDepositChecklist';
 import { DreamsDonutChart } from './DreamsDonutChart';
 import { DeadlineSimulatorModal } from './DeadlineSimulatorModal';
 import { CompoundInterestCalculator } from './CompoundInterestCalculator';
-import { calculateSuggestedMonthlyDeposit } from '../utils/dreamCalculations';
+import { 
+  calculateSuggestedMonthlyDeposit, 
+  calculateEstimatedTimeToGoal, 
+  sortDreams 
+} from '../utils/dreamCalculations';
 import { 
   calculateDreamUrgency, 
   getCriticalDreams, 
@@ -52,13 +56,16 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   const [impact, setImpact] = useState('');
   const [urgencyThreshold, setUrgencyThreshold] = useState<number>(DEFAULT_URGENCY_DAYS_THRESHOLD);
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | DreamPriority>('ALL');
+  const [sortOption, setSortOption] = useState<DreamSortOption>('urgency');
 
   const criticalGoals = useMemo(() => getCriticalDreams(dreams), [dreams]);
 
   const displayedDreams = useMemo(() => {
-    if (priorityFilter === 'ALL') return dreams;
-    return dreams.filter(d => (d.priority || 'media') === priorityFilter);
-  }, [dreams, priorityFilter]);
+    const filtered = priorityFilter === 'ALL'
+      ? dreams
+      : dreams.filter(d => (d.priority || 'media') === priorityFilter);
+    return sortDreams(filtered, sortOption);
+  }, [dreams, priorityFilter, sortOption]);
 
   const handleUpdatePriority = (dreamId: string, newPriority: DreamPriority) => {
     setDreams(prev => updateDreamPriority(prev, dreamId, newPriority));
@@ -66,6 +73,10 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
 
   const handleUpdateTargetDate = (dreamId: string, newDate: string) => {
     setDreams(prev => updateDreamTargetDate(prev, dreamId, newDate));
+  };
+
+  const handleUpdateMonthlyDeposit = (dreamId: string, newDeposit: number) => {
+    setDreams(prev => prev.map(d => d.id === dreamId ? { ...d, monthlyDeposit: Math.max(0, newDeposit) } : d));
   };
 
   const handleApplyAllCriticalDeposits = () => {
@@ -348,55 +359,80 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
             </p>
           </div>
 
-          {/* Filtro por Prioridade */}
-          <div className="flex items-center gap-1 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold overflow-x-auto max-w-full">
-            <button
-              type="button"
-              onClick={() => setPriorityFilter('ALL')}
-              className={`px-3 py-1 rounded-xl transition text-[11px] cursor-pointer whitespace-nowrap ${
-                priorityFilter === 'ALL'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-black'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Todos ({dreams.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setPriorityFilter('alta')}
-              className={`px-2.5 py-1 rounded-xl transition text-[11px] cursor-pointer flex items-center gap-1 whitespace-nowrap ${
-                priorityFilter === 'alta'
-                  ? 'bg-rose-600 text-white shadow-2xs font-black'
-                  : 'text-slate-500 hover:text-rose-600 dark:hover:text-rose-400'
-              }`}
-            >
-              <Flame className="w-3 h-3 text-rose-500" />
-              <span>Alta</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setPriorityFilter('media')}
-              className={`px-2.5 py-1 rounded-xl transition text-[11px] cursor-pointer flex items-center gap-1 whitespace-nowrap ${
-                priorityFilter === 'media'
-                  ? 'bg-amber-500 text-white shadow-2xs font-black'
-                  : 'text-slate-500 hover:text-amber-600 dark:hover:text-amber-400'
-              }`}
-            >
-              <Zap className="w-3 h-3 text-amber-500" />
-              <span>Média</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setPriorityFilter('baixa')}
-              className={`px-2.5 py-1 rounded-xl transition text-[11px] cursor-pointer flex items-center gap-1 whitespace-nowrap ${
-                priorityFilter === 'baixa'
-                  ? 'bg-emerald-600 text-white shadow-2xs font-black'
-                  : 'text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'
-              }`}
-            >
-              <Clock className="w-3 h-3 text-emerald-500" />
-              <span>Baixa</span>
-            </button>
+          {/* Ordenação por Urgência & Filtro por Prioridade */}
+          <div className="flex flex-wrap items-center gap-2 max-w-full">
+            {/* Seletor de Ordenação */}
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold shrink-0">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 pl-2">Ordenar:</span>
+              <select
+                value={sortOption}
+                onChange={e => setSortOption(e.target.value as DreamSortOption)}
+                className="bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl px-2 py-1 border-none shadow-2xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                data-testid="select-dream-sort"
+              >
+                <option value="urgency">🔥 Maior Urgência</option>
+                <option value="priority">⚡ Prioridade (Alta → Baixa)</option>
+                <option value="targetDate">📅 Data Alvo (Mais Próxima)</option>
+                <option value="estimatedTime">⏱️ Menor Tempo Restante</option>
+                <option value="progress">📈 Maior Progresso</option>
+                <option value="default">📋 Ordem Padrão</option>
+              </select>
+            </div>
+
+            {/* Filtro por Prioridade */}
+            <div className="flex items-center gap-1 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-bold overflow-x-auto no-scrollbar max-w-full shrink-0">
+              <button
+                type="button"
+                onClick={() => setPriorityFilter('ALL')}
+                className={`px-2.5 py-1 rounded-xl transition text-[11px] cursor-pointer whitespace-nowrap ${
+                  priorityFilter === 'ALL'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-black'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                data-testid="filter-priority-all"
+              >
+                Todos ({dreams.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setPriorityFilter('alta')}
+                className={`px-2.5 py-1 rounded-xl transition text-[11px] cursor-pointer flex items-center gap-1 whitespace-nowrap ${
+                  priorityFilter === 'alta'
+                    ? 'bg-rose-600 text-white shadow-2xs font-black'
+                    : 'text-slate-500 hover:text-rose-600 dark:hover:text-rose-400'
+                }`}
+                data-testid="filter-priority-alta"
+              >
+                <Flame className="w-3 h-3 text-rose-500" />
+                <span>Alta</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPriorityFilter('media')}
+                className={`px-2.5 py-1 rounded-xl transition text-[11px] cursor-pointer flex items-center gap-1 whitespace-nowrap ${
+                  priorityFilter === 'media'
+                    ? 'bg-amber-500 text-white shadow-2xs font-black'
+                    : 'text-slate-500 hover:text-amber-600 dark:hover:text-amber-400'
+                }`}
+                data-testid="filter-priority-media"
+              >
+                <Zap className="w-3 h-3 text-amber-500" />
+                <span>Média</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPriorityFilter('baixa')}
+                className={`px-2.5 py-1 rounded-xl transition text-[11px] cursor-pointer flex items-center gap-1 whitespace-nowrap ${
+                  priorityFilter === 'baixa'
+                    ? 'bg-emerald-600 text-white shadow-2xs font-black'
+                    : 'text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'
+                }`}
+                data-testid="filter-priority-baixa"
+              >
+                <Clock className="w-3 h-3 text-emerald-500" />
+                <span>Baixa</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -588,7 +624,7 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                       <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                        <span>Prazo (Data Estimada):</span>
+                        <span>Prazo (Data Alvo Estimada):</span>
                       </label>
 
                       {/* Input de Data Estimada com Edição Direta no Cartão */}
@@ -612,6 +648,44 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                           </button>
                         )}
                       </div>
+                    </div>
+
+                    {/* Botões de Atalhos de Prazo (+6m, +1 ano, +2 anos) */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                      <span className="text-[10px] text-slate-400 font-bold">Atalhos:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setMonth(d.getMonth() + 6);
+                          handleUpdateTargetDate(dream.id, d.toISOString().slice(0, 10));
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 text-slate-600 dark:text-slate-300 hover:text-indigo-600 font-bold transition cursor-pointer"
+                      >
+                        +6 meses
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setFullYear(d.getFullYear() + 1);
+                          handleUpdateTargetDate(dream.id, d.toISOString().slice(0, 10));
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 text-slate-600 dark:text-slate-300 hover:text-indigo-600 font-bold transition cursor-pointer"
+                      >
+                        +1 ano
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setFullYear(d.getFullYear() + 2);
+                          handleUpdateTargetDate(dream.id, d.toISOString().slice(0, 10));
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 text-slate-600 dark:text-slate-300 hover:text-indigo-600 font-bold transition cursor-pointer"
+                      >
+                        +2 anos
+                      </button>
                     </div>
 
                     {/* Bloco de Contagem Regressiva Visual */}
@@ -643,6 +717,71 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {/* Previsão de Conclusão baseada na Economia Mensal */}
+                  {(() => {
+                    const estimatedTime = calculateEstimatedTimeToGoal(
+                      dream.target,
+                      dream.current,
+                      dream.monthlyDeposit,
+                      dream.targetDate
+                    );
+
+                    return (
+                      <div 
+                        className="mt-3 p-3 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/60 space-y-2 text-xs"
+                        data-testid={`dream-time-estimate-${dream.id}`}
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <span className="font-bold text-slate-800 dark:text-slate-200">
+                              Tempo Restante Estimado:
+                            </span>
+                          </div>
+                          <span 
+                            className={`text-[11px] font-black px-2 py-0.5 rounded-full ${
+                              estimatedTime.isCompleted
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : estimatedTime.statusVsTargetDate === 'ahead'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : estimatedTime.statusVsTargetDate === 'on_track'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                : estimatedTime.statusVsTargetDate === 'delayed'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            }`}
+                            data-testid={`badge-estimated-time-${dream.id}`}
+                          >
+                            {estimatedTime.formattedEstimatedTime}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-indigo-100/80 dark:border-indigo-900/40">
+                          <span className="text-slate-500 dark:text-slate-400">Previsão de Conclusão:</span>
+                          <span className="font-black text-indigo-700 dark:text-indigo-300" data-testid={`completion-date-${dream.id}`}>
+                            {estimatedTime.formattedCompletionMonthYear}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 text-[10px] pt-1">
+                          <span className="text-slate-600 dark:text-slate-300 truncate" title={estimatedTime.statusMessage}>
+                            {estimatedTime.statusMessage}
+                          </span>
+                          {estimatedTime.statusVsTargetDate === 'delayed' && estimatedTime.requiredMonthlyForTargetDate > 0 && dream.monthlyDeposit !== estimatedTime.requiredMonthlyForTargetDate && (
+                            <button
+                              type="button"
+                              onClick={() => handleApplySuggestedDeposit(dream.id, estimatedTime.requiredMonthlyForTargetDate)}
+                              className="px-2 py-0.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition shrink-0 cursor-pointer shadow-2xs"
+                              title="Ajustar economia mensal para cumprir o prazo"
+                            >
+                              Ajustar R$ {estimatedTime.requiredMonthlyForTargetDate.toFixed(0)}/mês
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Ações de Simulação de Juros e Sugestão de Aporte */}
                   <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
@@ -727,11 +866,24 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                 </div>
 
                 {/* Footer with Monthly projection and Deposit button */}
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
                   <div className="text-[11px] text-slate-500">
-                    <span>Aporte: <strong>{formatBRL(dream.monthlyDeposit)}/mês</strong></span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold">Economia Mensal:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="10"
+                        value={dream.monthlyDeposit || ''}
+                        onChange={e => handleUpdateMonthlyDeposit(dream.id, parseFloat(e.target.value) || 0)}
+                        className="w-20 px-1.5 py-0.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        title="Economia mensal destinada a este sonho"
+                        data-testid={`input-monthly-deposit-${dream.id}`}
+                      />
+                      <span className="text-[10px] text-slate-400">/mês</span>
+                    </div>
                     {monthsRemaining > 0 && (
-                      <span className="block text-[10px] text-slate-400">
+                      <span className="block text-[10px] text-slate-400 mt-0.5">
                         ~ {monthsRemaining} meses estimados
                       </span>
                     )}
@@ -739,7 +891,7 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
 
                   <button
                     onClick={() => setSelectedDreamForDeposit(dream)}
-                    className="px-3.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 font-bold text-xs transition active:scale-95 border border-blue-200 dark:border-blue-900 cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 font-bold text-xs transition active:scale-95 border border-blue-200 dark:border-blue-900 cursor-pointer shrink-0"
                   >
                     + Fazer Aporte
                   </button>

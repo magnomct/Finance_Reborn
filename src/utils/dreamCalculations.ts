@@ -1,4 +1,5 @@
-import { DreamGoal } from '../types';
+import { DreamGoal, DreamSortOption, DreamPriority } from '../types';
+import { getCalendarDaysRemaining } from './dreamCountdown';
 
 export interface DreamDonutSlice {
   id: string;
@@ -188,3 +189,245 @@ export function calculateDreamsDonutData(
     overallCompletionPct,
   };
 }
+
+export interface EstimatedTimeToGoalResult {
+  remainingAmount: number;
+  monthlySavings: number;
+  estimatedMonths: number;
+  formattedEstimatedTime: string;
+  estimatedCompletionDateStr: string;
+  formattedCompletionMonthYear: string;
+  isCompleted: boolean;
+  hasTargetDate: boolean;
+  targetMonths: number;
+  statusVsTargetDate: 'ahead' | 'on_track' | 'delayed' | 'no_target_date' | 'completed';
+  statusMessage: string;
+  delayMonths: number;
+  requiredMonthlyForTargetDate: number;
+}
+
+const MONTH_NAMES_PT = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+/**
+ * Calculates the estimated time to reach a dream/goal based on user monthly savings
+ * and compares it against the planned target date (data alvo).
+ */
+export function calculateEstimatedTimeToGoal(
+  target: number,
+  current: number,
+  monthlySavings: number,
+  targetDateStr?: string,
+  referenceDateInput?: Date | string
+): EstimatedTimeToGoalResult {
+  const remainingAmount = Math.max(0, target - current);
+  const isCompleted = remainingAmount === 0;
+
+  const refDate = referenceDateInput 
+    ? (typeof referenceDateInput === 'string' ? new Date(referenceDateInput) : referenceDateInput)
+    : new Date();
+
+  const hasTargetDate = !!targetDateStr;
+  const targetMonths = hasTargetDate ? calculateRemainingMonths(targetDateStr!, referenceDateInput) : 0;
+  const requiredMonthlyForTargetDate = hasTargetDate
+    ? (targetMonths > 0 ? Math.round((remainingAmount / targetMonths) * 100) / 100 : remainingAmount)
+    : 0;
+
+  if (isCompleted) {
+    return {
+      remainingAmount: 0,
+      monthlySavings,
+      estimatedMonths: 0,
+      formattedEstimatedTime: 'Meta concluída!',
+      estimatedCompletionDateStr: refDate.toISOString().slice(0, 10),
+      formattedCompletionMonthYear: 'Concluído',
+      isCompleted: true,
+      hasTargetDate,
+      targetMonths,
+      statusVsTargetDate: 'completed',
+      statusMessage: 'Parabéns! O valor alvo já foi 100% acumulado.',
+      delayMonths: 0,
+      requiredMonthlyForTargetDate: 0
+    };
+  }
+
+  if (monthlySavings <= 0) {
+    return {
+      remainingAmount,
+      monthlySavings: 0,
+      estimatedMonths: 0,
+      formattedEstimatedTime: 'Defina uma economia mensal',
+      estimatedCompletionDateStr: '',
+      formattedCompletionMonthYear: 'Indefinido',
+      isCompleted: false,
+      hasTargetDate,
+      targetMonths,
+      statusVsTargetDate: hasTargetDate ? 'delayed' : 'no_target_date',
+      statusMessage: hasTargetDate
+        ? `Meta sem aportes ativos. Economize R$ ${requiredMonthlyForTargetDate.toFixed(2).replace('.', ',')}/mês para cumprir o prazo.`
+        : 'Defina uma economia mensal para calcular a previsão de conclusão.',
+      delayMonths: hasTargetDate ? targetMonths : 0,
+      requiredMonthlyForTargetDate
+    };
+  }
+
+  const estimatedMonths = Math.ceil(remainingAmount / monthlySavings);
+  
+  // Format human-friendly time duration
+  let formattedEstimatedTime: string;
+  if (estimatedMonths === 1) {
+    formattedEstimatedTime = '1 mês';
+  } else if (estimatedMonths < 12) {
+    formattedEstimatedTime = `${estimatedMonths} meses`;
+  } else {
+    const years = Math.floor(estimatedMonths / 12);
+    const remMonths = estimatedMonths % 12;
+    if (remMonths === 0) {
+      formattedEstimatedTime = `${estimatedMonths} meses (~${years} ${years === 1 ? 'ano' : 'anos'})`;
+    } else {
+      formattedEstimatedTime = `${estimatedMonths} meses (~${years} ${years === 1 ? 'ano' : 'anos'} e ${remMonths} ${remMonths === 1 ? 'mês' : 'meses'})`;
+    }
+  }
+
+  // Estimated completion calendar date
+  const compYear = refDate.getFullYear() + Math.floor((refDate.getMonth() + estimatedMonths) / 12);
+  const compMonthIdx = (refDate.getMonth() + estimatedMonths) % 12;
+  const estimatedCompletionDateStr = `${compYear}-${String(compMonthIdx + 1).padStart(2, '0')}-01`;
+  const formattedCompletionMonthYear = `${MONTH_NAMES_PT[compMonthIdx]} de ${compYear}`;
+
+  let statusVsTargetDate: 'ahead' | 'on_track' | 'delayed' | 'no_target_date' = 'no_target_date';
+  let statusMessage: string;
+  let delayMonths = 0;
+
+  if (hasTargetDate) {
+    if (targetMonths <= 0) {
+      statusVsTargetDate = 'delayed';
+      delayMonths = estimatedMonths;
+      statusMessage = `Prazo alvo já expirou. Na economia de R$ ${monthlySavings.toFixed(2).replace('.', ',')}/mês, a conclusão será em ${formattedCompletionMonthYear}.`;
+    } else if (estimatedMonths <= targetMonths) {
+      if (targetMonths - estimatedMonths >= 2) {
+        statusVsTargetDate = 'ahead';
+        const monthsAhead = targetMonths - estimatedMonths;
+        statusMessage = `Adiantado! Conclusão em ${formattedCompletionMonthYear} (~${monthsAhead} ${monthsAhead === 1 ? 'mês' : 'meses'} antes do prazo).`;
+      } else {
+        statusVsTargetDate = 'on_track';
+        statusMessage = `No prazo! Conclusão prevista para ${formattedCompletionMonthYear}.`;
+      }
+    } else {
+      statusVsTargetDate = 'delayed';
+      delayMonths = estimatedMonths - targetMonths;
+      statusMessage = `Atrasará ~${delayMonths} ${delayMonths === 1 ? 'mês' : 'meses'} da data alvo. Necessário: R$ ${requiredMonthlyForTargetDate.toFixed(2).replace('.', ',')}/mês.`;
+    }
+  } else {
+    statusMessage = `Conclusão estimada em ${formattedCompletionMonthYear} com economia mensal de R$ ${monthlySavings.toFixed(2).replace('.', ',')}.`;
+  }
+
+  return {
+    remainingAmount,
+    monthlySavings,
+    estimatedMonths,
+    formattedEstimatedTime,
+    estimatedCompletionDateStr,
+    formattedCompletionMonthYear,
+    isCompleted: false,
+    hasTargetDate,
+    targetMonths,
+    statusVsTargetDate,
+    statusMessage,
+    delayMonths,
+    requiredMonthlyForTargetDate
+  };
+}
+
+/**
+ * Sorts dream goals by urgency, priority, target date, estimated time or progress.
+ */
+export function sortDreams(
+  dreams: DreamGoal[],
+  sortOption: DreamSortOption = 'urgency',
+  referenceDateInput?: Date | string
+): DreamGoal[] {
+  const list = [...dreams];
+
+  const getPriorityWeight = (p?: DreamPriority): number => {
+    if (p === 'alta') return 3;
+    if (p === 'media') return 2;
+    if (p === 'baixa') return 1;
+    return 2; // Default to 'media'
+  };
+
+  switch (sortOption) {
+    case 'urgency':
+      return list.sort((a, b) => {
+        const aCompleted = a.current >= a.target;
+        const bCompleted = b.current >= b.target;
+        if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+
+        // Calculate days remaining
+        const aDays = a.targetDate ? getCalendarDaysRemaining(a.targetDate, referenceDateInput) : 99999;
+        const bDays = b.targetDate ? getCalendarDaysRemaining(b.targetDate, referenceDateInput) : 99999;
+
+        // Score based on overdue (< 0), urgency threshold (<= 60 days) and priority
+        const calculateScore = (dream: DreamGoal, days: number): number => {
+          const pWeight = getPriorityWeight(dream.priority) * 1000;
+          if (!dream.targetDate) return pWeight;
+          if (days < 0) return 100000 + Math.abs(days) * 10 + pWeight; // Overdue highest urgency
+          if (days <= 60) return 50000 + (60 - days) * 50 + pWeight; // Critical window
+          return Math.max(0, 20000 - days) + pWeight;
+        };
+
+        const scoreA = calculateScore(a, aDays);
+        const scoreB = calculateScore(b, bDays);
+
+        if (scoreA !== scoreB) {
+          return scoreB - scoreA; // Highest score first
+        }
+
+        // Secondary tie-breaker: closer deadline
+        return aDays - bDays;
+      });
+
+    case 'priority':
+      return list.sort((a, b) => {
+        const pDiff = getPriorityWeight(b.priority) - getPriorityWeight(a.priority);
+        if (pDiff !== 0) return pDiff;
+        // Tie-breaker: targetDate
+        const aDate = a.targetDate || '9999-12-31';
+        const bDate = b.targetDate || '9999-12-31';
+        return aDate.localeCompare(bDate);
+      });
+
+    case 'targetDate':
+      return list.sort((a, b) => {
+        if (!a.targetDate && !b.targetDate) return 0;
+        if (!a.targetDate) return 1;
+        if (!b.targetDate) return -1;
+        return a.targetDate.localeCompare(b.targetDate);
+      });
+
+    case 'estimatedTime':
+      return list.sort((a, b) => {
+        const aCompleted = a.current >= a.target;
+        const bCompleted = b.current >= b.target;
+        if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+
+        const aMonths = a.monthlyDeposit > 0 ? (a.target - a.current) / a.monthlyDeposit : 99999;
+        const bMonths = b.monthlyDeposit > 0 ? (b.target - b.current) / b.monthlyDeposit : 99999;
+        return aMonths - bMonths;
+      });
+
+    case 'progress':
+      return list.sort((a, b) => {
+        const pctA = a.target > 0 ? (a.current / a.target) * 100 : 0;
+        const pctB = b.target > 0 ? (b.current / b.target) * 100 : 0;
+        return pctB - pctA;
+      });
+
+    case 'default':
+    default:
+      return list;
+  }
+}
+

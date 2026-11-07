@@ -53,12 +53,12 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
 
   return (
     <div 
-      className="bg-white dark:bg-slate-900 p-3.5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5 animate-in fade-in duration-150"
+      className="bg-white dark:bg-slate-900 p-3.5 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5 animate-in fade-in duration-150 overflow-hidden max-w-full"
       data-testid="savings-trends-barchart"
     >
       {/* Header with Title and Trend Badge */}
-      <div className={`flex justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 w-full stack-on-mobile ${isMobile ? 'flex-col items-start' : 'flex-col lg:flex-row items-start lg:items-center'}`}>
-        <div className="min-w-0">
+      <div className="flex flex-col gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 w-full max-w-full">
+        <div className="min-w-0 w-full">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="p-1 rounded-lg bg-emerald-500 text-white shadow-2xs shrink-0">
               <BarChart3 className="w-3.5 h-3.5" />
@@ -89,11 +89,11 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
         </div>
 
         {/* View Mode Toggle Buttons */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold w-full sm:w-auto self-stretch sm:self-auto justify-center overflow-x-auto no-scrollbar shrink-0 max-w-full">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold w-full sm:w-auto self-start overflow-x-auto no-scrollbar max-w-full shrink-0">
           <button
             type="button"
             onClick={() => setViewMode('grouped')}
-            className={`flex-1 sm:flex-none text-center px-2.5 sm:px-3 py-1.5 rounded-xl transition cursor-pointer text-xs ${
+            className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-xl transition cursor-pointer text-xs whitespace-nowrap ${
               viewMode === 'grouped'
                 ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
                 : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -105,7 +105,7 @@ export const SavingsTrendsBarChart: React.FC<SavingsTrendsBarChartProps> = ({
           <button
             type="button"
             onClick={() => setViewMode('netOnly')}
-            className={`flex-1 sm:flex-none text-center px-2.5 sm:px-3 py-1.5 rounded-xl transition cursor-pointer text-xs ${
+            className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-xl transition cursor-pointer text-xs whitespace-nowrap ${
               viewMode === 'netOnly'
                 ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold'
                 : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
