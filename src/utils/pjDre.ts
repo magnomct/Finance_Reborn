@@ -597,3 +597,130 @@ export function getAvailablePjMonths(transactions: Transaction[], includeHistory
 
   return Array.from(monthsSet).sort().reverse();
 }
+
+export interface PjDreSummaryStep {
+  code: string;
+  label: string;
+  amount: number;
+  type: 'plus' | 'minus' | 'subtotal' | 'result';
+  isEstimated?: boolean;
+  taxRatePct?: number;
+  badge?: string;
+}
+
+export interface PjDreSummaryData {
+  month: string;
+  monthLabel: string;
+  grossRevenue: number;
+  dasTaxes: number;
+  isDasEstimated: boolean;
+  effectiveTaxRatePct: number;
+  netRevenue: number;
+  healthInsurance: number;
+  bankAndSoftwareFees: number;
+  otherExpenses: number;
+  fixedExpenses: number;
+  variableExpenses: number;
+  totalOperatingExpenses: number;
+  netProfit: number;
+  netMarginPct: number;
+  availableForPfTransfer: number;
+  isPositiveProfit: boolean;
+  transactionCount: number;
+  steps: PjDreSummaryStep[];
+}
+
+/**
+ * Calculates a dedicated DRE Summary for the PJ Operation,
+ * automatically computing Gross Revenue, Deductions (DAS real or estimated),
+ * Operating Expenses, and Net Profit available for transfer to PF.
+ */
+export function calculatePjDreSummary(
+  transactions: Transaction[],
+  yearMonth: string,
+  defaultTaxRatePct: number = 6.0
+): PjDreSummaryData {
+  const baseBreakdown = calculateMonthDre(transactions, yearMonth);
+  let dasTaxes = baseBreakdown.dasTaxes;
+  let isDasEstimated = false;
+
+  // If no explicit tax transaction exists for the month, but there is revenue, estimate DAS
+  if (dasTaxes === 0 && baseBreakdown.grossRevenue > 0) {
+    dasTaxes = Math.round(baseBreakdown.grossRevenue * (defaultTaxRatePct / 100) * 100) / 100;
+    isDasEstimated = true;
+  }
+
+  const effectiveTaxRatePct = baseBreakdown.grossRevenue > 0
+    ? (dasTaxes / baseBreakdown.grossRevenue) * 100
+    : defaultTaxRatePct;
+
+  const netRevenue = Math.max(0, baseBreakdown.grossRevenue - dasTaxes);
+  const totalOperatingExpenses = baseBreakdown.fixedExpenses + baseBreakdown.variableExpenses;
+  const netProfit = netRevenue - totalOperatingExpenses;
+  const netMarginPct = baseBreakdown.grossRevenue > 0 ? (netProfit / baseBreakdown.grossRevenue) * 100 : 0;
+  const availableForPfTransfer = Math.max(0, netProfit);
+  const isPositiveProfit = netProfit > 0;
+
+  const steps: PjDreSummaryStep[] = [
+    {
+      code: '1.',
+      label: 'Receita Operacional Bruta (Faturamento de Serviços)',
+      amount: baseBreakdown.grossRevenue,
+      type: 'plus',
+      badge: `${baseBreakdown.transactionCount} lançamento(s)`
+    },
+    {
+      code: '2.',
+      label: isDasEstimated
+        ? `(-) Deduções: Tributos DAS Estimado (${effectiveTaxRatePct.toFixed(1)}%)`
+        : `(-) Deduções: Tributos DAS Simples Nacional (${effectiveTaxRatePct.toFixed(1)}%)`,
+      amount: dasTaxes,
+      type: 'minus',
+      isEstimated: isDasEstimated,
+      taxRatePct: effectiveTaxRatePct,
+      badge: isDasEstimated ? 'Estimado (Anexo III)' : 'Guia Lançada'
+    },
+    {
+      code: '3.',
+      label: '(=) Receita Operacional Líquida',
+      amount: netRevenue,
+      type: 'subtotal'
+    },
+    {
+      code: '4.',
+      label: '(-) Custos & Despesas Operacionais (Saúde, Tarifas e Softwares)',
+      amount: totalOperatingExpenses,
+      type: 'minus',
+      badge: `${((totalOperatingExpenses / (baseBreakdown.grossRevenue || 1)) * 100).toFixed(1)}% da receita`
+    },
+    {
+      code: '5.',
+      label: '(=) Lucro Líquido do Exercício (Disponível p/ Repasse à PF)',
+      amount: netProfit,
+      type: 'result',
+      badge: `Margem Líquida: ${netMarginPct.toFixed(1)}%`
+    }
+  ];
+
+  return {
+    month: yearMonth,
+    monthLabel: baseBreakdown.monthLabel,
+    grossRevenue: baseBreakdown.grossRevenue,
+    dasTaxes,
+    isDasEstimated,
+    effectiveTaxRatePct,
+    netRevenue,
+    healthInsurance: baseBreakdown.healthInsurance,
+    bankAndSoftwareFees: baseBreakdown.bankAndSoftwareFees,
+    otherExpenses: baseBreakdown.otherExpenses,
+    fixedExpenses: baseBreakdown.fixedExpenses,
+    variableExpenses: baseBreakdown.variableExpenses,
+    totalOperatingExpenses,
+    netProfit,
+    netMarginPct,
+    availableForPfTransfer,
+    isPositiveProfit,
+    transactionCount: baseBreakdown.transactionCount,
+    steps
+  };
+}

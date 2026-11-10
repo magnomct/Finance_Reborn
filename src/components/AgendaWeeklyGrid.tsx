@@ -2,12 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { 
   Calendar, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, 
   Trash2, Edit3, Plus, ArrowUpRight, ArrowDownRight, Tag,
-  Clock, DollarSign, ChevronRight, Layers, Bell, FileText
+  Clock, DollarSign, ChevronRight, Layers, Bell, FileText, Repeat
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { formatBRL, formatNumber } from '../utils/finance';
 import { calculateReminderStatus } from '../utils/reminders';
+import { getTransactionRecurrence, getRecurrenceConfig } from '../utils/recurrenceManager';
 import { 
   buildWeeklyCalendar, 
   WeekGroup, 
@@ -21,11 +22,13 @@ interface AgendaWeeklyGridProps {
   transactions: Transaction[];
   selectedMonth: string;
   onToggleStatus: (id: string) => void;
+  onLiquidateClick?: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
   onEditTransaction?: (tx: Transaction) => void;
   onUpdateNotes?: (id: string, notes: string) => void;
   onOpenQuickNotes?: (tx: Transaction) => void;
   onAddNewForDate?: (dateStr: string) => void;
+  onRecurrenceClick?: (tx: Transaction) => void;
   theme: {
     card: string;
     hoverRow: string;
@@ -36,10 +39,12 @@ export const AgendaWeeklyGrid: React.FC<AgendaWeeklyGridProps> = ({
   transactions,
   selectedMonth,
   onToggleStatus,
+  onLiquidateClick,
   onDeleteTransaction,
   onEditTransaction,
   onOpenQuickNotes,
   onAddNewForDate,
+  onRecurrenceClick,
   theme
 }) => {
   const [selectedWeekFilter, setSelectedWeekFilter] = useState<number | 'ALL'>('ALL');
@@ -292,7 +297,13 @@ export const AgendaWeeklyGrid: React.FC<AgendaWeeklyGridProps> = ({
                                       {/* Quick status toggle */}
                                       <button
                                         type="button"
-                                        onClick={() => onToggleStatus(tx.id)}
+                                        onClick={() => {
+                                          if (tx.status === 'agendado' && onLiquidateClick) {
+                                            onLiquidateClick(tx);
+                                          } else {
+                                            onToggleStatus(tx.id);
+                                          }
+                                        }}
                                         className={`shrink-0 p-0.5 rounded cursor-pointer transition ${
                                           tx.status === 'liquidado'
                                             ? 'text-emerald-600 dark:text-emerald-400 hover:text-emerald-700'
@@ -343,6 +354,23 @@ export const AgendaWeeklyGrid: React.FC<AgendaWeeklyGridProps> = ({
                                           {reminder.daysRemaining === 0 ? 'Hoje' : `${reminder.daysRemaining}d`}
                                         </span>
                                       )}
+
+                                      {tx.isRecurring && (() => {
+                                        const rec = getTransactionRecurrence(tx);
+                                        const cfg = getRecurrenceConfig(rec);
+                                        return (
+                                          <button
+                                            type="button"
+                                            onClick={() => onRecurrenceClick && onRecurrenceClick(tx)}
+                                            className={`px-1.5 py-0.2 rounded text-[8px] font-bold border transition cursor-pointer flex items-center gap-0.5 ${cfg.badgeBg} ${cfg.badgeText} ${cfg.badgeBorder}`}
+                                            title={`Recorrência: ${cfg.label} (clique para alterar)`}
+                                            data-testid={`weekly-badge-rec-${tx.id}`}
+                                          >
+                                            <Repeat className="w-2 h-2" />
+                                            <span>{cfg.shortLabel}</span>
+                                          </button>
+                                        );
+                                      })()}
                                     </div>
 
                                     {/* Action buttons (appear on hover) */}
@@ -355,6 +383,17 @@ export const AgendaWeeklyGrid: React.FC<AgendaWeeklyGridProps> = ({
                                       >
                                         <FileText className="w-2.5 h-2.5" /> Obs
                                       </button>
+                                      {onRecurrenceClick && (
+                                        <button
+                                          type="button"
+                                          onClick={() => onRecurrenceClick(tx)}
+                                          className="hover:text-indigo-500 flex items-center gap-0.5 cursor-pointer"
+                                          title="Alterar recorrência (semanal, diária, mensal...)"
+                                          data-testid={`weekly-btn-rec-${tx.id}`}
+                                        >
+                                          <Repeat className="w-2.5 h-2.5" /> Recorrente
+                                        </button>
+                                      )}
                                       {onEditTransaction && (
                                         <button
                                           type="button"

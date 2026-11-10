@@ -10,7 +10,7 @@ import { DashboardMonthlyPdfModal } from './components/DashboardMonthlyPdfModal'
 
 import { 
   Transaction, JarType, CostCenter, AccountType, ActiveScreen, 
-  DreamGoal, RecurringExpense, AutoCategoryRule 
+  DreamGoal, RecurringExpense, AutoCategoryRule, PaymentMethodType 
 } from './types';
 import { 
   INITIAL_TRANSACTIONS, INITIAL_RECURRING, INITIAL_DREAMS, 
@@ -20,6 +20,12 @@ import {
   calculateFinancialMetrics, formatBRL, generateRecurringTransactions 
 } from './utils/finance';
 import { updateTransactionInList, updateTransactionNotes } from './utils/transactionEditor';
+import { applyTransactionLiquidation } from './utils/liquidation';
+import { 
+  RecurrenceOption, 
+  applyRecurrenceToTransactionList, 
+  syncRecurringListWithTransaction 
+} from './utils/recurrenceManager';
 import { getActiveReminders } from './utils/reminders';
 import {
   getBrowserNotificationPermission,
@@ -42,6 +48,7 @@ import { DicaDoDiaCard } from './components/DicaDoDiaCard';
 import { FinanceReadingCard } from './components/FinanceReadingCard';
 import { C6InvoiceCard } from './components/C6InvoiceCard';
 import { DebtPayoffSimulator } from './components/DebtPayoffSimulator';
+import { CashFlowDebtImpactCard } from './components/CashFlowDebtImpactCard';
 import { BudgetAlertsBanner } from './components/BudgetAlertsBanner';
 import { BudgetLimitsModal } from './components/BudgetLimitsModal';
 import { ResetEnvironmentModal } from './components/ResetEnvironmentModal';
@@ -374,8 +381,12 @@ export default function App() {
     setTransactions(prev => updateTransactionNotes(prev, id, notes));
   };
 
-  // Toggle status
-  const handleToggleStatus = (id: string) => {
+  // Toggle status & liquidation
+  const handleToggleStatus = (id: string, paymentMethod?: PaymentMethodType) => {
+    if (paymentMethod) {
+      setTransactions(prev => applyTransactionLiquidation(prev, id, paymentMethod));
+      return;
+    }
     setTransactions(prev => prev.map(t => {
       if (t.id === id) {
         return {
@@ -385,6 +396,26 @@ export default function App() {
       }
       return t;
     }));
+  };
+
+  const handleLiquidateTransaction = (id: string, paymentMethod: PaymentMethodType) => {
+    setTransactions(prev => applyTransactionLiquidation(prev, id, paymentMethod));
+  };
+
+  // Update transaction recurrence (diaria, semanal, quinzenal, mensal, nenhuma)
+  const handleUpdateTransactionRecurrence = (
+    txId: string, 
+    frequency: RecurrenceOption, 
+    syncWithAutomations: boolean = true
+  ) => {
+    const targetTx = transactions.find(t => t.id === txId);
+    if (!targetTx) return;
+
+    setTransactions(prev => applyRecurrenceToTransactionList(prev, txId, frequency));
+
+    if (syncWithAutomations) {
+      setRecurringList(prev => syncRecurringListWithTransaction(prev, targetTx, frequency));
+    }
   };
 
   // Generate recurring expenses for selected month
@@ -1021,6 +1052,7 @@ export default function App() {
               onUpdateDreamBalance={(dreamId, newBal) => {
                 setDreams(prev => prev.map(d => d.id === dreamId ? { ...d, current: newBal } : d));
               }}
+              onNavigateToDreams={() => setActiveScreen('sonhos')}
             />
           </div>
         )}
@@ -1041,9 +1073,11 @@ export default function App() {
               setSelectedJarFilter={setSelectedJarFilter}
               financialMetrics={financialMetrics}
               onToggleStatus={handleToggleStatus}
+              onLiquidateTransaction={handleLiquidateTransaction}
               onDeleteTransaction={handleDeleteTransaction}
               onEditTransaction={handleOpenEditTransaction}
               onUpdateNotes={handleUpdateTransactionNotes}
+              onUpdateRecurrence={handleUpdateTransactionRecurrence}
               theme={theme}
             />
           </div>
@@ -1318,6 +1352,13 @@ export default function App() {
                 </p>
               </div>
             </div>
+
+            {/* Impacto de Parcelamentos & Juros no Fluxo de Caixa (Próximos 3 Meses) */}
+            <CashFlowDebtImpactCard
+              transactions={transactions}
+              themeCardClass={theme.card}
+              onNavigateToScreen={(scr) => setActiveScreen(scr as any)}
+            />
 
             {/* Simulador Financeiro: Impacto da Antecipação de Parcelas (Dívidas / Cartões) */}
             <DebtPayoffSimulator

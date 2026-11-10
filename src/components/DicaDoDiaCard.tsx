@@ -107,8 +107,7 @@ export const DicaDoDiaCard: React.FC<DicaDoDiaCardProps> = ({
       } else {
         throw new Error('Formato inválido retornado');
       }
-    } catch (err: any) {
-      console.warn('Usando dica inteligente de contingência:', err);
+    } catch {
       const fallback = getSmartFallbackTip();
       setTip(fallback);
     } finally {

@@ -336,8 +336,8 @@ export function parseGeminiReadingResponse(
         searchQueryUsed: item.searchQueryUsed
       };
     });
-  } catch (e) {
-    console.warn('Could not parse Gemini JSON response directly, using curated grounded articles:', e);
+  } catch {
     return getCuratedFallbackArticles(profile);
   }
 }
+

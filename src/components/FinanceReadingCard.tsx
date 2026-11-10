@@ -91,8 +91,7 @@ export const FinanceReadingCard: React.FC<FinanceReadingCardProps> = ({
         const fallbacks = getCuratedFallbackArticles(profileSummary);
         setArticles(fallbacks);
       }
-    } catch (err: any) {
-      console.warn('Fallback ativado para artigos de leitura de finanças:', err?.message);
+    } catch {
       setError('Carregando acervo curado com base no seu perfil financeiro.');
       const fallbacks = getCuratedFallbackArticles(profileSummary);
       setArticles(fallbacks);

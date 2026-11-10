@@ -24,32 +24,89 @@ const port = 3000;
 
 app.use(express.json());
 
+// ============================================================================
+// SISTEMA DE CONTINGÊNCIA INTELIGENTE & CIRCUIT BREAKER PARA GEMINI API
+// ============================================================================
+
+// Circuit breaker para evitar chamadas contínuas quando a cota ou créditos pré-pagos estão esgotados
+let geminiCircuitTrippedUntil = 0;
+const CIRCUIT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos de pausa
+
+function isBillingOrQuotaError(err: any): boolean {
+  if (!err) return false;
+  const msg = typeof err === 'string' ? err : (err.message || JSON.stringify(err));
+  return (
+    msg.includes('402') ||
+    msg.includes('prepayment credits are depleted') ||
+    msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('429') ||
+    msg.includes('quota') ||
+    msg.includes('billing')
+  );
+}
+
+function isGeminiAvailable(): boolean {
+  return Boolean(process.env.GEMINI_API_KEY) && Date.now() >= geminiCircuitTrippedUntil;
+}
+
+function tripGeminiCircuit(reason: string) {
+  geminiCircuitTrippedUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
+  console.log(`[Yupee AI Service] Modo contingência inteligente ativo por 5 min (${reason}).`);
+}
+
+function getDeterministicDailyTip(profile: any) {
+  if (profile?.chequeEspecialJuros > 0) {
+    return {
+      titulo: "Estanque a Sangria do Cheque Especial no Dia 25",
+      categoria: "Proteção de Fluxo",
+      impacto: "Economia de R$ 140,00/mês (R$ 1.680/ano)",
+      dica: "Sua conta Inter PF sofreu R$ 140 de juros porque o débito do financiamento habitacional (R$ 1.290) cai antes de certas compensações. Transferir R$ 1.000 de colchão do lucro PJ elimina essa cobrança para sempre.",
+      acaoRecomendada: "Ativar o Escudo Amortecedor na aba Controle Automático.",
+      citacaoEducativa: "Pequenos vazamentos afundam grandes navios. Cuide dos centavos e os reais cuidarão de si mesmos."
+    };
+  } else if (profile?.faturaC6Total > 2000) {
+    return {
+      titulo: "Separe o Lazer das Contas Fixas no Cartão",
+      categoria: "6 Potes de Harv Eker",
+      impacto: "Maior clareza e controle emocional nos gastos",
+      dica: "Sua fatura C6 concentra R$ 2.000 em necessidades básicas e R$ 600 em estilo de vida. Ao estabelecer limites visuais separados para cada um, você aproveita o fim de semana sem culpa e sem comprometer as contas da casa.",
+      acaoRecomendada: "Conferir o teto de 10% no Pote de Lazer.",
+      citacaoEducativa: "Orçamento não serve para limitar sua vida, mas para dar permissão consciente ao seu prazer."
+    };
+  } else {
+    return {
+      titulo: "Automatize seu Superávit no Pote de Reserva",
+      categoria: "Investimentos & Liberdade",
+      impacto: "Meta de Reserva Familiar adiantada em 3 meses",
+      dica: "Seu mês fechou no positivo (+R$ 2,31 livre consolidado). Programe um aporte recorrente para o primeiro dia após o salário cair para não correr o risco de gastar o excedente ao longo do mês.",
+      acaoRecomendada: "Simular aporte mensal na aba Sonhos & Metas.",
+      citacaoEducativa: "Pague a si mesmo primeiro antes de pagar a qualquer outro credor."
+    };
+  }
+}
+
 // API endpoint for Gemini-powered financial education tip
 app.post('/api/dica-do-dia', async (req, res) => {
-  try {
-    const { spendingProfile } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
+  const profile = req.body?.spendingProfile || {};
 
-    if (!apiKey) {
-      return res.status(503).json({
-        error: 'API key não encontrada',
-        message: 'A chave da API Gemini não está configurada no servidor.'
-      });
-    }
+  if (!isGeminiAvailable()) {
+    return res.json({ ...getDeterministicDailyTip(profile), fonte: 'Mentor Yupee' });
+  }
 
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
+  const apiKey = process.env.GEMINI_API_KEY!;
+  const ai = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
       }
-    });
+    }
+  });
 
-    const prompt = `Você é o mentor financeiro e educador do app Yupee Reborn, especialista na metodologia dos 6 Potes (T. Harv Eker) e finanças pessoais conscientes.
+  const prompt = `Você é o mentor financeiro e educador do app Yupee Reborn, especialista na metodologia dos 6 Potes (T. Harv Eker) e finanças pessoais conscientes.
 Analise os dados financeiros reais do perfil do usuário fornecidos abaixo:
 
-${JSON.stringify(spendingProfile, null, 2)}
+${JSON.stringify(profile, null, 2)}
 
 Com base nesses dados (ex: salários CLT, faturamento PJ, financiamento habitacional, fatura do cartão C6, juros de cheque especial evitáveis, aportes em sonhos), forneça UMA Dica do Dia de educação financeira personalizada.
 
@@ -65,6 +122,7 @@ A resposta DEVE ser um objeto JSON estrito com o seguinte esquema:
 
 Responda SOMENTE o JSON puro, sem markdown backticks adicionais.`;
 
+  try {
     let response;
     try {
       response = await ai.models.generateContent({
@@ -75,7 +133,10 @@ Responda SOMENTE o JSON puro, sem markdown backticks adicionais.`;
         }
       });
     } catch (e: any) {
-      console.warn('Tentando modelo alternativo gemini-flash-latest após erro:', e?.message);
+      if (isBillingOrQuotaError(e)) {
+        tripGeminiCircuit('Créditos de pré-pagamento esgotados');
+        return res.json({ ...getDeterministicDailyTip(profile), fonte: 'Mentor Yupee' });
+      }
       response = await ai.models.generateContent({
         model: 'gemini-flash-latest',
         contents: prompt,
@@ -96,42 +157,10 @@ Responda SOMENTE o JSON puro, sem markdown backticks adicionais.`;
 
     return res.json({ ...parsed, fonte: 'Gemini AI' });
   } catch (error: any) {
-    console.warn('Gemini temporariamente indisponível (503/timeout), ativando motor heurístico do Yupee:', error?.message);
-    
-    // Intelligent heuristic fallback based on the user's profile
-    const profile = req.body?.spendingProfile || {};
-    let fallbackTip;
-
-    if (profile.chequeEspecialJuros > 0) {
-      fallbackTip = {
-        titulo: "Estanque a Sangria do Cheque Especial no Dia 25",
-        categoria: "Proteção de Fluxo",
-        impacto: "Economia de R$ 140,00/mês (R$ 1.680/ano)",
-        dica: "Sua conta Inter PF sofreu R$ 140 de juros porque o débito do financiamento habitacional (R$ 1.290) cai antes de certas compensações. Transferir R$ 1.000 de colchão do lucro PJ elimina essa cobrança para sempre.",
-        acaoRecomendada: "Ativar o Escudo Amortecedor na aba Controle Automático.",
-        citacaoEducativa: "Pequenos vazamentos afundam grandes navios. Cuide dos centavos e os reais cuidarão de si mesmos."
-      };
-    } else if (profile.faturaC6Total > 2000) {
-      fallbackTip = {
-        titulo: "Separe o Lazer das Contas Fixas no Cartão",
-        categoria: "6 Potes de Harv Eker",
-        impacto: "Maior clareza e controle emocional nos gastos",
-        dica: "Sua fatura C6 concentra R$ 2.000 em necessidades básicas e R$ 600 em estilo de vida. Ao estabelecer limites visuais separados para cada um, você aproveita o fim de semana sem culpa e sem comprometer as contas da casa.",
-        acaoRecomendada: "Conferir o teto de 10% no Pote de Lazer.",
-        citacaoEducativa: "Orçamento não serve para limitar sua vida, mas para dar permissão consciente ao seu prazer."
-      };
-    } else {
-      fallbackTip = {
-        titulo: "Automatize seu Superávit no Pote de Reserva",
-        categoria: "Investimentos & Liberdade",
-        impacto: "Meta de Reserva Familiar adiantada em 3 meses",
-        dica: "Seu mês fechou no positivo (+R$ 2,31 livre consolidado). Programe um aporte recorrente para o primeiro dia após o salário cair para não correr o risco de gastar o excedente ao longo do mês.",
-        acaoRecomendada: "Simular aporte mensal na aba Sonhos & Metas.",
-        citacaoEducativa: "Pague a si mesmo primeiro antes de pagar a qualquer outro credor."
-      };
+    if (isBillingOrQuotaError(error)) {
+      tripGeminiCircuit('Créditos de pré-pagamento esgotados');
     }
-
-    return res.json({ ...fallbackTip, fonte: 'Mentor Yupee' });
+    return res.json({ ...getDeterministicDailyTip(profile), fonte: 'Mentor Yupee' });
   }
 });
 
@@ -152,17 +181,16 @@ app.post('/api/leitura-financas', async (req, res) => {
     primaryFocus: 'Eliminação de Juros e Proteção de Fluxo de Caixa'
   };
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!isGeminiAvailable()) {
     const fallbackArticles = getCuratedFallbackArticles(safeProfile);
     return res.json({
       artigos: fallbackArticles,
       queriesUsed: generateSearchQueriesForProfile(safeProfile),
-      fonte: 'Acervo Yupee Educativo',
-      observacao: 'Chave Gemini não configurada no servidor, exibindo artigos curados.'
+      fonte: 'Acervo Yupee Educativo'
     });
   }
 
+  const apiKey = process.env.GEMINI_API_KEY!;
   try {
     const ai = new GoogleGenAI({
       apiKey,
@@ -228,13 +256,14 @@ Responda APENAS o JSON puro.`;
       groundingCount: groundingChunks.length
     });
   } catch (err: any) {
-    console.warn('Erro ao chamar Gemini com busca, acionando fallback curado:', err?.message);
+    if (isBillingOrQuotaError(err)) {
+      tripGeminiCircuit('Créditos de pré-pagamento esgotados');
+    }
     const fallbackArticles = getCuratedFallbackArticles(safeProfile);
     return res.json({
       artigos: fallbackArticles,
       queriesUsed: generateSearchQueriesForProfile(safeProfile),
-      fonte: 'Acervo Yupee Educativo (Fallback)',
-      erroDetalhe: err?.message
+      fonte: 'Acervo Yupee Educativo'
     });
   }
 });
@@ -252,19 +281,19 @@ app.post('/api/otimizar-potes', async (req, res) => {
   const reserveShortfall = Number(emergencyReserve.shortfall) || 12000;
   const avgExpense = Number(emergencyReserve.averageMonthlyExpense) || 2000;
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const getDeterministicResult = () => calculateDeterministicJarOptimization({
+    incomeBase: safeIncome,
+    currentLimits,
+    historicalStats: historicalSpending,
+    reserveShortfall,
+    averageMonthlyExpense: avgExpense,
+  });
 
-  if (!apiKey) {
-    const heuristic = calculateDeterministicJarOptimization({
-      incomeBase: safeIncome,
-      currentLimits,
-      historicalStats: historicalSpending,
-      reserveShortfall,
-      averageMonthlyExpense: avgExpense,
-    });
-    return res.json(heuristic);
+  if (!isGeminiAvailable()) {
+    return res.json(getDeterministicResult());
   }
 
+  const apiKey = process.env.GEMINI_API_KEY!;
   try {
     const ai = new GoogleGenAI({
       apiKey,
@@ -337,7 +366,10 @@ Responda SOMENTE o JSON puro, sem markdown tags adicionais.`;
         }
       });
     } catch (e: any) {
-      console.warn('Tentando gemini-flash-latest para otimização de potes após erro:', e?.message);
+      if (isBillingOrQuotaError(e)) {
+        tripGeminiCircuit('Créditos de pré-pagamento esgotados');
+        return res.json(getDeterministicResult());
+      }
       response = await ai.models.generateContent({
         model: 'gemini-flash-latest',
         contents: prompt,
@@ -416,15 +448,10 @@ Responda SOMENTE o JSON puro, sem markdown tags adicionais.`;
 
     return res.json(heuristic);
   } catch (error: any) {
-    console.warn('Erro ao chamar Gemini para otimização de potes, acionando motor determinístico:', error?.message);
-    const heuristic = calculateDeterministicJarOptimization({
-      incomeBase: safeIncome,
-      currentLimits,
-      historicalStats: historicalSpending,
-      reserveShortfall,
-      averageMonthlyExpense: avgExpense,
-    });
-    return res.json(heuristic);
+    if (isBillingOrQuotaError(error)) {
+      tripGeminiCircuit('Créditos de pré-pagamento esgotados');
+    }
+    return res.json(getDeterministicResult());
   }
 });
 

@@ -83,9 +83,7 @@ export const JarOptimizationModal: React.FC<JarOptimizationModalProps> = ({
       CORE_JAR_KEYS.forEach(k => {
         initialPercents[k] = data.optimizedJars[k]?.suggestedPercent ?? STANDARD_JAR_PERCENTAGES[k];
       });
-      setEditablePercents(initialPercents);
-    } catch (err: any) {
-      console.warn('Fallback para motor local de otimização:', err?.message);
+    } catch {
       const historicalStats = calculateJarHistoricalStats(transactions, incomeBase);
       const localResult = calculateDeterministicJarOptimization({
         incomeBase,

@@ -14,6 +14,7 @@ export interface AnnualItem {
 }
 
 export type RecurrenceFrequency = 'diaria' | 'semanal' | 'quinzenal' | 'mensal';
+export type PaymentMethodType = 'Dinheiro' | 'Cartão de Crédito' | 'Conta Corrente';
 
 export interface Transaction {
   id: string;
@@ -27,8 +28,10 @@ export interface Transaction {
   costCenter: CostCenter;
   account: AccountType;
   status: 'liquidado' | 'agendado';
+  paymentMethod?: PaymentMethodType | string;
   isRecurring?: boolean;
   recurringId?: string;
+  recurrenceFrequency?: RecurrenceFrequency;
   category?: string;
   notes?: string; // Observações / notas adicionais (ex: 'Nathan 60%')
   reminderDaysBefore?: number; // Dias de antecedência para lembrete visual de vencimento

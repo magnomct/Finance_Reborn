@@ -13,6 +13,7 @@ import { DashboardMonthlyPdfModal } from './DashboardMonthlyPdfModal';
 import { EmergencyReserveCard } from './EmergencyReserveCard';
 import { SeasonalCashFlowChart } from './SeasonalCashFlowChart';
 import { SavingsTrendsBarChart } from './SavingsTrendsBarChart';
+import { DreamsProgressCard } from './DreamsProgressCard';
 import { Transaction, JarType, DreamGoal } from '../types';
 
 interface AnnualDashboardViewProps {
@@ -23,6 +24,7 @@ interface AnnualDashboardViewProps {
   selectedMonth?: string;
   selectedMonthIndex?: number;
   onUpdateDreamBalance?: (dreamId: string, newBalance: number) => void;
+  onNavigateToDreams?: () => void;
 }
 
 export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({ 
@@ -32,7 +34,8 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
   jarLimits = {} as Record<JarType, number>,
   selectedMonth = 'Outubro / 2026',
   selectedMonthIndex = 2,
-  onUpdateDreamBalance
+  onUpdateDreamBalance,
+  onNavigateToDreams
 }) => {
   const { isMobile } = useMobileLayout();
   const [viewMode, setViewMode] = useState<'resumo' | 'fluxo' | 'detalhada' | 'graficos' | 'metas'>('resumo');
@@ -370,6 +373,12 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Card Resumo de Conclusão Acumulada de Sonhos & Metas Ativos */}
+      <DreamsProgressCard
+        dreams={dreams}
+        onNavigateToDreams={onNavigateToDreams}
+      />
 
       {/* Componente de Reserva de Emergência (Gastos médios dos últimos 3 meses & Barra de Progresso) */}
       <EmergencyReserveCard

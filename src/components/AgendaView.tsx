@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { 
   ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, 
-  Trash2, Edit3, Tag, X, Plus, Bell, List, CalendarDays 
+  Trash2, Edit3, Tag, X, Plus, Bell, List, CalendarDays, Repeat 
 } from 'lucide-react';
-import { Transaction } from '../types';
+import { Transaction, PaymentMethodType } from '../types';
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { formatBRL, calculateFinancialMetrics } from '../utils/finance';
 import { calculateReminderStatus } from '../utils/reminders';
 import { AgendaWeeklyGrid } from './AgendaWeeklyGrid';
+import { QuickLiquidationModal } from './QuickLiquidationModal';
+import { RecurrenceModal } from './RecurrenceModal';
+import { RecurrenceOption, getTransactionRecurrence, getRecurrenceConfig } from '../utils/recurrenceManager';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TRANSACTION_ITEM_VARIANTS, getTransactionItemTransition } from '../utils/motionTransitions';
 
@@ -22,9 +25,11 @@ interface AgendaViewProps {
   setSelectedJarFilter: (jar: string) => void;
   financialMetrics: ReturnType<typeof calculateFinancialMetrics>;
   onToggleStatus: (id: string) => void;
+  onLiquidateTransaction?: (id: string, paymentMethod: PaymentMethodType) => void;
   onDeleteTransaction: (id: string) => void;
   onEditTransaction?: (tx: Transaction) => void;
   onUpdateNotes?: (id: string, notes: string) => void;
+  onUpdateRecurrence?: (txId: string, frequency: RecurrenceOption, syncWithRecurringList: boolean) => void;
   theme: {
     card: string;
     hoverRow: string;
@@ -42,13 +47,17 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   setSelectedJarFilter,
   financialMetrics,
   onToggleStatus,
+  onLiquidateTransaction,
   onDeleteTransaction,
   onEditTransaction,
   onUpdateNotes,
+  onUpdateRecurrence,
   theme,
 }) => {
   const [quickNotesTx, setQuickNotesTx] = useState<Transaction | null>(null);
   const [quickNotesValue, setQuickNotesValue] = useState<string>('');
+  const [liquidatingTx, setLiquidatingTx] = useState<Transaction | null>(null);
+  const [recurrenceTx, setRecurrenceTx] = useState<Transaction | null>(null);
   const [viewMode, setViewMode] = useState<'diario' | 'semanal'>('diario');
 
   const handleOpenQuickNotes = (tx: Transaction) => {
@@ -279,6 +288,27 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                       </button>
                     )}
 
+                    {/* Badge de Recorrência (Diária, Semanal, Quinzenal, Mensal) */}
+                    {tx.isRecurring && (() => {
+                      const rec = getTransactionRecurrence(tx);
+                      const cfg = getRecurrenceConfig(rec);
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRecurrenceTx(tx);
+                          }}
+                          className={`group/rec px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer transition border shadow-2xs ${cfg.badgeBg} ${cfg.badgeText} ${cfg.badgeBorder}`}
+                          title={`Recorrência: ${cfg.label} (clique para alterar)`}
+                          data-testid={`badge-rec-${tx.id}`}
+                        >
+                          <Repeat className="w-3 h-3 group-hover/rec:rotate-180 transition-transform duration-300" />
+                          <span>{cfg.shortLabel}</span>
+                        </button>
+                      );
+                    })()}
+
                     {isOverdraftAlert && !tx.notes?.includes('Evitável') && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-semibold flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" /> Evitável
@@ -346,14 +376,45 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                     {isPositive ? '+' : '-'} {formatBRL(Math.abs(tx.amount))}
                   </span>
                   
-                  <div 
-                    onClick={() => onToggleStatus(tx.id)}
-                    className="flex items-center justify-end gap-1 text-[10px] text-slate-400 mt-0.5 cursor-pointer hover:text-blue-500"
-                    title="Clique para alternar status"
-                  >
-                    <CheckCircle2 className={`w-3 h-3 ${tx.status === 'liquidado' ? 'text-emerald-500' : 'text-slate-300'}`} />
-                    <span>{tx.status === 'liquidado' ? 'Liquidado' : 'Agendado'}</span>
-                  </div>
+                  {tx.status === 'agendado' ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLiquidatingTx(tx);
+                      }}
+                      className="flex items-center justify-end gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 hover:text-emerald-700 dark:hover:text-emerald-300 bg-amber-50 hover:bg-emerald-50 dark:bg-amber-950/70 dark:hover:bg-emerald-950/70 px-2 py-0.5 rounded-full border border-amber-200 hover:border-emerald-300 dark:border-amber-800 dark:hover:border-emerald-700 shadow-2xs transition active:scale-95 cursor-pointer mt-0.5"
+                      title="Clique para liquidar e escolher a forma de pagamento"
+                      data-testid={`btn-liquidate-${tx.id}`}
+                    >
+                      <CheckCircle2 className="w-3 h-3 text-amber-500 hover:text-emerald-500" />
+                      <span>Liquidar</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleStatus(tx.id);
+                        }}
+                        className="flex items-center justify-end gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold hover:text-slate-400 cursor-pointer transition"
+                        title="Liquidado - clique para reabrir como agendado"
+                        data-testid={`btn-status-${tx.id}`}
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                        <span>Liquidado</span>
+                      </button>
+                      {tx.paymentMethod && (
+                        <span 
+                          className="text-[9px] px-1.5 py-0.2 rounded font-semibold bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                          data-testid={`badge-payment-method-${tx.id}`}
+                        >
+                          {tx.paymentMethod}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1">
@@ -365,6 +426,20 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                     data-testid={`btn-obs-action-${tx.id}`}
                   >
                     <Tag className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRecurrenceTx(tx)}
+                    className={`p-1 rounded-lg transition cursor-pointer ${
+                      tx.isRecurring 
+                        ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800' 
+                        : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-slate-800'
+                    }`}
+                    title="Configurar recorrência (semanal, diária, mensal, única...)"
+                    data-testid={`btn-recurrence-${tx.id}`}
+                  >
+                    <Repeat className="w-3.5 h-3.5" />
                   </button>
 
                   {onEditTransaction && (
@@ -398,9 +473,11 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           transactions={filteredTransactions}
           selectedMonth={selectedMonth}
           onToggleStatus={onToggleStatus}
+          onLiquidateClick={(tx) => setLiquidatingTx(tx)}
           onDeleteTransaction={onDeleteTransaction}
           onEditTransaction={onEditTransaction}
           onOpenQuickNotes={handleOpenQuickNotes}
+          onRecurrenceClick={(tx) => setRecurrenceTx(tx)}
           theme={theme}
         />
       )}
@@ -540,6 +617,38 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Seletor Rápido de Liquidação (Dinheiro, Cartão de Crédito, Conta Corrente) */}
+      {liquidatingTx && (
+        <QuickLiquidationModal
+          isOpen={Boolean(liquidatingTx)}
+          transaction={liquidatingTx}
+          onClose={() => setLiquidatingTx(null)}
+          onConfirm={(paymentMethod) => {
+            if (onLiquidateTransaction) {
+              onLiquidateTransaction(liquidatingTx.id, paymentMethod);
+            } else {
+              onToggleStatus(liquidatingTx.id);
+            }
+            setLiquidatingTx(null);
+          }}
+        />
+      )}
+
+      {/* Modal Seletor de Recorrência (Diária, Semanal, Quinzenal, Mensal, Única) */}
+      {recurrenceTx && (
+        <RecurrenceModal
+          isOpen={Boolean(recurrenceTx)}
+          transaction={recurrenceTx}
+          onClose={() => setRecurrenceTx(null)}
+          onConfirm={(option, syncWithAutomations) => {
+            if (onUpdateRecurrence) {
+              onUpdateRecurrence(recurrenceTx.id, option, syncWithAutomations);
+            }
+            setRecurrenceTx(null);
+          }}
+        />
       )}
 
     </div>

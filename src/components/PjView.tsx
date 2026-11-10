@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
-import { 
-  Building2, TrendingUp, TrendingDown, ArrowUpRight, DollarSign, 
-  Receipt, ShieldCheck, HeartPulse, CheckCircle2, AlertCircle, Edit3
-} from 'lucide-react';
+import React from 'react';
+import { Building2, Edit3 } from 'lucide-react';
 import { Transaction } from '../types';
 import { calculateFinancialMetrics, formatBRL } from '../utils/finance';
 import { PjDreComparative } from './PjDreComparative';
+import { PjDreSummaryCard } from './PjDreSummaryCard';
 
 interface PjViewProps {
   transactions: Transaction[];
@@ -14,15 +12,7 @@ interface PjViewProps {
 }
 
 export const PjView: React.FC<PjViewProps> = ({ transactions, onAddTransaction, onEditTransaction }) => {
-  const [profitTransferred, setProfitTransferred] = useState(false);
   const metrics = calculateFinancialMetrics(transactions, true);
-
-  const handleTransferProfitToPf = () => {
-    if (profitTransferred) return;
-    setProfitTransferred(true);
-    // In practice this acknowledges the distribution
-  };
-
   const pjTransactions = transactions.filter(t => t.costCenter === 'PJ');
 
   return (
@@ -52,81 +42,8 @@ export const PjView: React.FC<PjViewProps> = ({ transactions, onAddTransaction, 
         </span>
       </div>
 
-      {/* DRE Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        
-        {/* 1. Receita Bruta */}
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
-              <span className="font-bold uppercase tracking-wider text-[10px]">1. Faturamento de Serviços</span>
-              <Receipt className="w-4 h-4 text-emerald-500" />
-            </div>
-            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              +{formatBRL(metrics.pjServiceIncome)}
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Entrada bruta de notas fiscais emitidas no mês.
-            </p>
-          </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
-            Conta: <strong>Inter PJ</strong>
-          </div>
-        </div>
-
-        {/* 2. Custos Corporativos */}
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
-              <span className="font-bold uppercase tracking-wider text-[10px]">2. Custos & Tributos PJ</span>
-              <HeartPulse className="w-4 h-4 text-rose-500" />
-            </div>
-            <div className="text-2xl font-black text-rose-600 dark:text-rose-400">
-              -{formatBRL(metrics.pjExpenses)}
-            </div>
-            <div className="text-xs text-slate-500 mt-1 space-y-0.5">
-              <div>• Convênio Médico: R$ 1.296,45</div>
-              <div>• DAS Simples Nacional: R$ 172,10</div>
-            </div>
-          </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
-            Total de {((metrics.pjExpenses / (metrics.pjServiceIncome || 1)) * 100).toFixed(1)}% do faturamento
-          </div>
-        </div>
-
-        {/* 3. Lucro Líquido */}
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border-2 border-amber-400 dark:border-amber-500 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 text-xs mb-2">
-              <span className="font-bold uppercase tracking-wider text-[10px]">3. Lucro Líquido Livre</span>
-              <TrendingUp className="w-4 h-4 text-amber-500" />
-            </div>
-            <div className="text-2xl font-black text-amber-600 dark:text-amber-400">
-              +{formatBRL(metrics.pjNetProfit)}
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Saldo 100% livre e isento para distribuição de lucros à PF.
-            </p>
-          </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-              Pronto p/ transferência
-            </span>
-            <button
-              onClick={handleTransferProfitToPf}
-              disabled={profitTransferred}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
-                profitTransferred
-                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                  : 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm'
-              }`}
-            >
-              {profitTransferred ? 'Integrado à PF ✅' : 'Transferir p/ PF'}
-            </button>
-          </div>
-        </div>
-
-      </div>
+      {/* Componente Resumo DRE: Cálculo Automático de Receita Bruta, DAS Estimado e Lucro Líquido p/ PF */}
+      <PjDreSummaryCard transactions={transactions} initialMonth="2026-10" />
 
       {/* DRE Comparativo: Mês Atual vs Média 3 Meses */}
       <PjDreComparative transactions={transactions} initialMonth="2026-10" />
