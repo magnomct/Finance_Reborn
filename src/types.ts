@@ -1,6 +1,6 @@
 export type JarType = 'NEC_55' | 'LIF_10' | 'PLP_10' | 'EDU_10' | 'DIV_10' | 'FER_5' | 'PJ_EXCLUIDO';
 export type CostCenter = 'Magno' | 'Nathan' | 'Suzy' | 'PJ';
-export type AccountType = 'Inter PF' | 'Inter PJ' | 'C6' | 'Passe' | 'Outro';
+export type AccountType = 'Inter PF' | 'Inter PJ' | 'C6' | 'Passe' | 'Outro' | (string & {});
 export type ActiveScreen = 'dashboard' | 'agenda' | 'graficos' | 'potes' | 'sonhos' | 'automacoes' | 'extratos' | 'pj' | 'hub';
 
 export interface AnnualItem {

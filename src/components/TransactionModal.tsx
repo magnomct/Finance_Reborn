@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { X, Sparkles, Check, Edit3, Trash2, ArrowDownLeft, ArrowUpRight, AlertCircle, Bell, Clock } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Sparkles, Check, Edit3, Trash2, ArrowDownLeft, ArrowUpRight, AlertCircle, Bell, Clock, Plus, Building2 } from 'lucide-react';
 import { Transaction, JarType, CostCenter, AccountType, AutoCategoryRule } from '../types';
 import { applyAutoRules } from '../utils/finance';
 import { validateTransactionInput, normalizeTransactionData } from '../utils/transactionEditor';
 import { getReminderPresetLabel } from '../utils/reminders';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { Wifi, WifiOff } from 'lucide-react';
+import { loadCustomAccounts, saveCustomAccount, getAllAvailableAccounts } from '../utils/customAccounts';
 
 export interface TransactionModalProps {
   isOpen: boolean;
@@ -40,6 +41,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [jar, setJar] = useState<JarType>(defaultScope === 'PJ' ? 'PJ_EXCLUIDO' : 'NEC_55');
   const [costCenter, setCostCenter] = useState<CostCenter>(defaultScope === 'PJ' ? 'PJ' : 'Magno');
   const [account, setAccount] = useState<AccountType>(defaultScope === 'PJ' ? 'Inter PJ' : 'Inter PF');
+  const [customAccountsList, setCustomAccountsList] = useState<string[]>(() => loadCustomAccounts());
+  const [showCustomAccountInput, setShowCustomAccountInput] = useState(false);
+  const [newCustomAccountName, setNewCustomAccountName] = useState('');
   const [status, setStatus] = useState<'liquidado' | 'agendado'>('liquidado');
   const [category, setCategory] = useState<string>('Geral');
   const [notes, setNotes] = useState<string>('');
@@ -48,6 +52,20 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [matchedRule, setMatchedRule] = useState<Partial<Transaction> | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const availableAccounts = useMemo(() => {
+    return getAllAvailableAccounts(customAccountsList);
+  }, [customAccountsList]);
+
+  const handleAddCustomAccount = () => {
+    const trimmed = newCustomAccountName.trim();
+    if (!trimmed) return;
+    const updated = saveCustomAccount(trimmed);
+    setCustomAccountsList(updated);
+    setAccount(trimmed);
+    setNewCustomAccountName('');
+    setShowCustomAccountInput(false);
+  };
 
   // Sync state whenever transactionToEdit or isOpen changes
   useEffect(() => {
@@ -373,18 +391,81 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           {/* Conta e Centro de Custos */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] font-bold text-slate-500 block mb-1">Conta de Pagamento</label>
-              <select
-                value={account}
-                onChange={e => setAccount(e.target.value as AccountType)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="Inter PF">Inter PF</option>
-                <option value="Inter PJ">Inter PJ</option>
-                <option value="C6">Cartão C6</option>
-                <option value="Passe">Passe / Transporte</option>
-                <option value="Outro">Outro</option>
-              </select>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold text-slate-500">Conta de Pagamento</label>
+                {!showCustomAccountInput && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomAccountInput(true)}
+                    className="text-[10px] text-teal-600 dark:text-teal-400 font-bold hover:underline flex items-center gap-0.5"
+                  >
+                    <Plus className="w-2.5 h-2.5" />
+                    <span>+ Outra</span>
+                  </button>
+                )}
+              </div>
+              {!showCustomAccountInput ? (
+                <select
+                  value={account}
+                  onChange={e => {
+                    if (e.target.value === '__NEW_CUSTOM_ACCOUNT__') {
+                      setShowCustomAccountInput(true);
+                    } else {
+                      setAccount(e.target.value as AccountType);
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <optgroup label="Contas">
+                    {availableAccounts.map(acc => (
+                      <option key={acc} value={acc}>
+                        {acc}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Ações">
+                    <option value="__NEW_CUSTOM_ACCOUNT__">
+                      ➕ + Adicionar Banco Personalizado...
+                    </option>
+                  </optgroup>
+                </select>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      value={newCustomAccountName}
+                      onChange={e => setNewCustomAccountName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddCustomAccount();
+                        }
+                      }}
+                      placeholder="Nome do Banco..."
+                      className="flex-1 px-2 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 border border-teal-500 text-slate-900 dark:text-white focus:outline-none"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCustomAccount}
+                      className="px-2 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700"
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCustomAccountInput(false);
+                      setNewCustomAccountName('');
+                    }}
+                    className="text-[10px] text-slate-400 hover:text-slate-600"
+                  >
+                    Voltar para lista
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>

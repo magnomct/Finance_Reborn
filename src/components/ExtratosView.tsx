@@ -10,6 +10,7 @@ import { JAR_DEFINITIONS } from '../data/initialData';
 import { BankImportModal } from './BankImportModal';
 import { ExportPdfModal } from './ExportPdfModal';
 import { downloadTransactionsCSV } from '../utils/csvExport';
+import { getAllAvailableAccounts } from '../utils/customAccounts';
 
 interface ExtratosViewProps {
   transactions: Transaction[];
@@ -237,18 +238,18 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
               <span>Exportar PDF Contábil</span>
             </button>
 
-            {/* Exportar Extrato (CSV com filtros ativos de busca e escopo) */}
+            {/* Exportar Extrato CSV (com filtros ativos de busca, período e escopo PF/PJ) */}
             <button
               type="button"
               onClick={handleExportCSV}
               disabled={filtered.length === 0}
               className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition shrink-0 shadow-sm hover:shadow cursor-pointer active:scale-95"
-              title={`Baixar ${filtered.length} lançamentos filtrados em formato CSV (compatível com Excel, Numbers e Google Sheets)`}
-              data-testid="btn-export-extrato"
+              title={`Baixar ${filtered.length} lançamentos filtrados em formato CSV considerando o escopo ${scopeFilter} (compatível com Excel, Numbers e Google Sheets)`}
+              data-testid="btn-export-csv"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Exportar Extrato</span>
-              <span className="hidden sm:inline opacity-80 text-[10px] font-semibold">
+              <span>Exportar CSV</span>
+              <span className="opacity-80 text-[10px] font-semibold">
                 ({filtered.length})
               </span>
             </button>
@@ -401,10 +402,11 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
             className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
           >
             <option value="ALL">Todas as Contas</option>
-            <option value="Inter PF">Inter PF</option>
-            <option value="Inter PJ">Inter PJ</option>
-            <option value="C6">Cartão C6</option>
-            <option value="Passe">Passe / Transporte</option>
+            {Array.from(new Set([...transactions.map(t => t.account), ...getAllAvailableAccounts()])).filter(Boolean).map(acc => (
+              <option key={acc} value={acc}>
+                {acc}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -525,6 +527,18 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              disabled={filtered.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold transition cursor-pointer disabled:opacity-50 shadow-2xs active:scale-95"
+              title={`Baixar ${filtered.length} lançamentos filtrados em formato CSV`}
+              data-testid="btn-export-extrato"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Exportar Extrato ({filtered.length})</span>
+            </button>
+
             <span className="text-slate-400 text-[11px] uppercase font-bold">Saldo Filtrado:</span>
             <strong className={`text-sm font-black ${
               totalFilteredReceipts - totalFilteredPayments >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600'

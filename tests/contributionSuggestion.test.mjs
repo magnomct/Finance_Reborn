@@ -92,3 +92,20 @@ test('calculateContributionSuggestion: handles expired/past deadlines correctly'
   assert.equal(res.status, 'past_deadline');
   assert.ok(res.recommendationMessage.includes('expirou'));
 });
+
+test('calculateContributionSuggestion: maps dream category/title to appropriate 6 Potes bucket', () => {
+  // 1. Viagem -> FER_5
+  const resTrip = calculateContributionSuggestion(8000, 2000, 500, '2027-10-31', 'Viagens & Férias', 'Viagem de Férias à Europa');
+  assert.equal(resTrip.targetJar, 'FER_5');
+  assert.equal(resTrip.jarShortName, 'Pote Férias (5%)');
+
+  // 2. Liberdade / Renda Passiva -> LIF_10
+  const resPassive = calculateContributionSuggestion(20000, 5000, 500, '2028-12-31', 'Renda Passiva (LIF 10%)', 'Investimentos de Longo Prazo');
+  assert.equal(resPassive.targetJar, 'LIF_10');
+  assert.equal(resPassive.jarShortName, 'Pote Liberdade (10%)');
+
+  // 3. Reserva / Outros -> PLP_10
+  const resReserve = calculateContributionSuggestion(15000, 3000, 1000, '2027-12-31', 'Reserva (PLP 10%)', 'Fundo de Emergência');
+  assert.equal(resReserve.targetJar, 'PLP_10');
+  assert.equal(resReserve.jarShortName, 'Pote Reserva & Metas (10%)');
+});

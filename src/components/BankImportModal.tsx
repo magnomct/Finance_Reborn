@@ -2,12 +2,13 @@ import React, { useState, useRef } from 'react';
 import { 
   Upload, FileText, CheckCircle2, AlertTriangle, X, 
   ArrowRight, ShieldCheck, RefreshCw, FileSpreadsheet,
-  Check, Trash2, HelpCircle, Layers, CreditCard
+  Check, Trash2, HelpCircle, Layers, CreditCard, Plus
 } from 'lucide-react';
 import { Transaction, AccountType, CostCenter, JarType, AutoCategoryRule } from '../types';
 import { parseOFX, parseCSV, ParsedImportItem } from '../utils/bankFileParsers';
 import { formatBRL } from '../utils/finance';
 import { JAR_DEFINITIONS } from '../data/initialData';
+import { loadCustomAccounts, saveCustomAccount, getAllAvailableAccounts } from '../utils/customAccounts';
 
 interface BankImportModalProps {
   isOpen: boolean;
@@ -283,11 +284,11 @@ export const BankImportModal: React.FC<BankImportModalProps> = ({
                     onChange={(e) => setSelectedAccount(e.target.value as AccountType)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold focus:outline-none"
                   >
-                    <option value="Inter PF">Banco Inter PF</option>
-                    <option value="Inter PJ">Banco Inter PJ</option>
-                    <option value="C6">Cartão / Conta C6</option>
-                    <option value="Passe">Passe / Transporte</option>
-                    <option value="Outro">Outra Conta</option>
+                    {getAllAvailableAccounts().map(acc => (
+                      <option key={acc} value={acc}>
+                        {acc}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

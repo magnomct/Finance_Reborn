@@ -5,7 +5,7 @@ import {
   Sparkles, DollarSign, Clock, AlertTriangle, AlertOctagon, Flame,
   Hourglass, X, Filter
 } from 'lucide-react';
-import { DreamGoal, DreamPriority, Transaction, DreamSortOption } from '../types';
+import { DreamGoal, DreamPriority, Transaction, DreamSortOption, RecurringExpense } from '../types';
 import { formatBRL } from '../utils/finance';
 import { DreamDepositChecklist } from './DreamDepositChecklist';
 import { DreamsDonutChart } from './DreamsDonutChart';
@@ -15,6 +15,7 @@ import {
   calculateSuggestedMonthlyDeposit, 
   calculateEstimatedTimeToGoal, 
   calculateContributionSuggestion,
+  mapDreamTo6Jar,
   sortDreams 
 } from '../utils/dreamCalculations';
 import { 
@@ -34,15 +35,22 @@ interface SonhosViewProps {
   dreams: DreamGoal[];
   setDreams: React.Dispatch<React.SetStateAction<DreamGoal[]>>;
   onAddTransaction: (tx: Partial<Transaction>) => void;
+  recurringList?: RecurringExpense[];
+  setRecurringList?: React.Dispatch<React.SetStateAction<RecurringExpense[]>>;
+  onNavigateToScreen?: (screen: string) => void;
 }
 
 export const SonhosView: React.FC<SonhosViewProps> = ({
   dreams,
   setDreams,
-  onAddTransaction
+  onAddTransaction,
+  recurringList = [],
+  setRecurringList,
+  onNavigateToScreen
 }) => {
   const [selectedDreamForDeposit, setSelectedDreamForDeposit] = useState<DreamGoal | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
+  const [notification, setNotification] = useState<string | null>(null);
   const [isNewDreamModalOpen, setIsNewDreamModalOpen] = useState(false);
   const [simulatorDream, setSimulatorDream] = useState<DreamGoal | null>(null);
   const [activeCalculatorDream, setActiveCalculatorDream] = useState<DreamGoal | null>(null);
@@ -97,6 +105,55 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
       }
       return d;
     }));
+  };
+
+  /**
+   * Integrates the dream's suggested monthly contribution as a recurring item in the 6 Potes system.
+   */
+  const handleIntegrateWith6Jars = (dream: DreamGoal, suggestedAmount: number) => {
+    if (suggestedAmount <= 0) return;
+    const jarInfo = mapDreamTo6Jar(dream.category, dream.title);
+
+    // 1. Update dream's monthlyDeposit
+    setDreams(prev => prev.map(d => d.id === dream.id ? { ...d, monthlyDeposit: suggestedAmount } : d));
+
+    // 2. Add or update recurring item in recurringList if setter is provided
+    if (setRecurringList) {
+      setRecurringList(prev => {
+        const existingIdx = prev.findIndex(r => r.id === `rec-dream-${dream.id}` || r.description.includes(dream.title));
+        if (existingIdx >= 0) {
+          const updated = [...prev];
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            amount: -Math.abs(suggestedAmount),
+            amountPlanned: suggestedAmount,
+            jar: jarInfo.jar,
+            isActive: true,
+          };
+          return updated;
+        } else {
+          const newRecurring: RecurringExpense = {
+            id: `rec-dream-${dream.id}`,
+            description: `Aporte Recorrente: ${dream.title}`,
+            amount: -Math.abs(suggestedAmount),
+            amountPlanned: suggestedAmount,
+            type: 'despesa',
+            frequency: 'mensal',
+            dayOfMonth: 10,
+            jar: jarInfo.jar,
+            account: 'Inter PF',
+            costCenter: 'Magno',
+            isActive: true,
+            category: dream.category || 'Sonhos & Poupança',
+            notes: `Integrado aos 6 Potes (${jarInfo.jarShortName})`
+          };
+          return [...prev, newRecurring];
+        }
+      });
+    }
+
+    setNotification(`Aporte de ${formatBRL(suggestedAmount)}/mês integrado com sucesso ao ${jarInfo.jarName}!`);
+    setTimeout(() => setNotification(null), 5000);
   };
 
   const handleSaveSimulatedDream = (updatedDream: DreamGoal) => {
@@ -235,6 +292,26 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
           <span>Novo Sonho</span>
         </button>
       </div>
+
+      {/* Notificação de Integração com 6 Potes */}
+      {notification && (
+        <div 
+          className="p-3.5 bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center justify-between gap-3 text-emerald-900 dark:text-emerald-100 text-xs font-semibold animate-in fade-in"
+          data-testid="notification-6jars-integrated"
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>{notification}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNotification(null)}
+            className="p-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 rounded-lg"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Banner de Metas Críticas com Alerta de Urgência */}
       {criticalGoals.length > 0 && (
@@ -458,7 +535,9 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
               dream.target,
               dream.current,
               dream.monthlyDeposit,
-              dream.targetDate
+              dream.targetDate,
+              dream.category,
+              dream.title
             );
 
             return (
@@ -784,38 +863,57 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                         </span>
                       </div>
 
-                      <div className="text-slate-500 dark:text-slate-400 text-[10px]">
-                        Falta acumular: <strong className="text-slate-800 dark:text-slate-200 font-bold">{formatBRL(contributionSuggestion.remainingAmount)}</strong>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          {contributionSuggestion.jarShortName}
+                        </span>
+                        <div className="text-slate-500 dark:text-slate-400 text-[10px]">
+                          Falta: <strong className="text-slate-800 dark:text-slate-200 font-bold">{formatBRL(contributionSuggestion.remainingAmount)}</strong>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Recomendação de Ação & Botão de 1 Clique para Adotar */}
+                    {/* Recomendação de Ação & Botão de 1 Clique para Adotar e Integrar aos 6 Potes */}
                     <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap">
                       <p className="text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-1 min-w-0 flex-1">
                         <span>💡 {contributionSuggestion.recommendationMessage}</span>
                       </p>
 
                       {contributionSuggestion.hasTargetDate && !contributionSuggestion.isCompleted && contributionSuggestion.suggestedMonthlyDeposit > 0 && (
-                        dream.monthlyDeposit === contributionSuggestion.suggestedMonthlyDeposit ? (
-                          <span 
-                            className="px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 text-[10px] font-bold flex items-center gap-1 shrink-0"
-                            data-testid={`badge-aporte-alinhado-${dream.id}`}
-                          >
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            Aporte Alinhado ao Prazo
-                          </span>
-                        ) : (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Botão de Integração Direta aos 6 Potes */}
                           <button
                             type="button"
-                            onClick={() => handleApplySuggestedDeposit(dream.id, contributionSuggestion.suggestedMonthlyDeposit)}
-                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[11px] shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
-                            title="Adotar sugestão de aporte como economia mensal para atingir a meta no prazo"
-                            data-testid={`btn-adotar-sugestao-${dream.id}`}
+                            onClick={() => handleIntegrateWith6Jars(dream, contributionSuggestion.suggestedMonthlyDeposit)}
+                            className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-[11px] shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
+                            title={`Integrar aporte recorrente de ${formatBRL(contributionSuggestion.suggestedMonthlyDeposit)} aos 6 Potes (${contributionSuggestion.jarName})`}
+                            data-testid={`btn-integrar-6potes-${dream.id}`}
                           >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            <span>Adotar Sugestão ({formatBRL(contributionSuggestion.suggestedMonthlyDeposit)}/mês)</span>
+                            <Zap className="w-3 h-3 text-amber-300" />
+                            <span>Integrar aos 6 Potes ({formatBRL(contributionSuggestion.suggestedMonthlyDeposit)}/mês)</span>
                           </button>
-                        )
+
+                          {dream.monthlyDeposit === contributionSuggestion.suggestedMonthlyDeposit ? (
+                            <span 
+                              className="px-2 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 text-[10px] font-bold flex items-center gap-1 shrink-0"
+                              data-testid={`badge-aporte-alinhado-${dream.id}`}
+                            >
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              Alinhado
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleApplySuggestedDeposit(dream.id, contributionSuggestion.suggestedMonthlyDeposit)}
+                              className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[11px] shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
+                              title="Adotar sugestão de aporte como economia mensal na meta"
+                              data-testid={`btn-adotar-sugestao-${dream.id}`}
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              <span>Adotar</span>
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>

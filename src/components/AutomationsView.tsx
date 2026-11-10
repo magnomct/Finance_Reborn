@@ -3,9 +3,9 @@ import {
   Zap, Calendar, RefreshCw, Plus, CheckCircle2, AlertTriangle, 
   Trash2, ArrowRight, ShieldCheck, HelpCircle, Sparkles, Filter, 
   SlidersHorizontal, Check, Edit3, TrendingUp, TrendingDown,
-  Clock, DollarSign, ArrowUpRight, ArrowDownRight, Layers
+  Clock, DollarSign, ArrowUpRight, ArrowDownRight, Layers, X
 } from 'lucide-react';
-import { RecurringExpense, AutoCategoryRule, RecurrenceFrequency, JarType, AccountType, CostCenter } from '../types';
+import { Transaction, RecurringExpense, AutoCategoryRule, RecurrenceFrequency, JarType, AccountType, CostCenter } from '../types';
 import { 
   formatBRL, 
   formatNumber,
@@ -15,8 +15,11 @@ import {
   calculateRecurringVariance
 } from '../utils/finance';
 import { JAR_DEFINITIONS } from '../data/initialData';
+import { getAllAvailableAccounts } from '../utils/customAccounts';
+import { findCategoryRuleSuggestions, CategorySuggestion } from '../utils/categorySuggestions';
 
 interface AutomationsViewProps {
+  transactions?: Transaction[];
   recurringList: RecurringExpense[];
   setRecurringList: React.Dispatch<React.SetStateAction<RecurringExpense[]>>;
   autoRules: AutoCategoryRule[];
@@ -39,6 +42,7 @@ const FREQUENCY_LABELS: Record<RecurrenceFrequency, { label: string; icon: strin
 const DAY_OF_WEEK_NAMES = ['', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo'];
 
 export const AutomationsView: React.FC<AutomationsViewProps> = ({
+  transactions = [],
   recurringList,
   setRecurringList,
   autoRules,
@@ -51,6 +55,28 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
   cushionApplied,
 }) => {
   const [activeTab, setActiveTab] = useState<'recorrencias' | 'regras' | 'cheque_especial'>('recorrencias');
+  const [ruleNotification, setRuleNotification] = useState<string | null>(null);
+
+  // Category rule suggestions for unautomated common transactions
+  const categorySuggestions = useMemo(() => {
+    return findCategoryRuleSuggestions(transactions, autoRules);
+  }, [transactions, autoRules]);
+
+  const handleApplySuggestion = (sug: CategorySuggestion) => {
+    const newRule: AutoCategoryRule = {
+      id: `rule-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      keyword: sug.keyword,
+      jar: sug.jar,
+      category: sug.category,
+      costCenter: sug.costCenter,
+      account: sug.account,
+    };
+    setAutoRules(prev => [...prev, newRule]);
+    setRuleNotification(`Regra criada com 1 clique para "${sug.keyword}" (${sug.category})!`);
+    setTimeout(() => {
+      setRuleNotification(null);
+    }, 4000);
+  };
   
   // Filters
   const [frequencyFilter, setFrequencyFilter] = useState<'todas' | RecurrenceFrequency>('todas');
@@ -283,9 +309,15 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
               ? 'bg-blue-500 text-white shadow-sm'
               : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
+          data-testid="tab-regras"
         >
           <Sparkles className="w-4 h-4" />
-          <span>Regras de Auto-categorização ({autoRules.length})</span>
+          <span>Regras de Categorização ({autoRules.length})</span>
+          {categorySuggestions.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 animate-pulse">
+              {categorySuggestions.length} sugestõ{categorySuggestions.length === 1 ? 'e' : 'es'}
+            </span>
+          )}
         </button>
 
         <button
@@ -677,23 +709,166 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
       {/* ABA 2: REGRAS INTELIGENTES DE CATEGORIZAÇÃO               */}
       {/* ========================================================= */}
       {activeTab === 'regras' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="space-y-5">
+          {/* Feedback banner ao criar regra com 1 clique */}
+          {ruleNotification && (
+            <div 
+              className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-center justify-between text-emerald-800 dark:text-emerald-200 text-xs font-semibold animate-in fade-in"
+              data-testid="notification-rule-created"
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>{ruleNotification}</span>
+              </div>
+              <button 
+                onClick={() => setRuleNotification(null)}
+                className="p-1 hover:bg-emerald-100 dark:hover:bg-emerald-900 rounded-lg"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* PAINEL DE SUGESTÕES DE CATEGORIAS / REGRAS COM 1 CLIQUE */}
+          <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-300 dark:border-amber-800/80 rounded-3xl p-5 shadow-sm space-y-3.5">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-sm">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-sm text-slate-900 dark:text-white">
+                      Sugestões Automáticas de Categorização
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                      1 Clique
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Identificamos padrões em transações comuns que ainda não possuem regra. Adicione com um clique:
+                  </p>
+                </div>
+              </div>
+
+              {categorySuggestions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    categorySuggestions.forEach(sug => {
+                      const newRule: AutoCategoryRule = {
+                        id: `rule-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                        keyword: sug.keyword,
+                        jar: sug.jar,
+                        category: sug.category,
+                        costCenter: sug.costCenter,
+                        account: sug.account,
+                      };
+                      setAutoRules(prev => [...prev, newRule]);
+                    });
+                    setRuleNotification(`Todas as ${categorySuggestions.length} regras sugeridas foram criadas!`);
+                    setTimeout(() => setRuleNotification(null), 4000);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-sm hover:shadow"
+                  data-testid="btn-add-all-suggestions"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Adicionar Todas ({categorySuggestions.length})</span>
+                </button>
+              )}
+            </div>
+
+            {categorySuggestions.length === 0 ? (
+              <div className="p-4 rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 text-center py-6">
+                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Todas as transações comuns já estão automatizadas!
+                </h4>
+                <p className="text-[11px] text-slate-400 max-w-md mx-auto mt-0.5">
+                  Conforme você cadastrar novos gastos no Extrato ou lançamentos rápidos, novas sugestões inteligentes aparecerão aqui para otimizar sua rotina.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                {categorySuggestions.map(sug => {
+                  const jarDef = JAR_DEFINITIONS[sug.jar] || JAR_DEFINITIONS.NEC_55;
+                  return (
+                    <div
+                      key={sug.keyword}
+                      className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-amber-200/70 dark:border-amber-900/40 hover:border-amber-400 dark:hover:border-amber-600 transition shadow-sm flex flex-col justify-between gap-3 group"
+                      data-testid={`card-suggestion-${sug.keyword}`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800">
+                            "{sug.keyword}"
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {sug.frequency}x nas transações
+                          </span>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="text-slate-400 font-medium">Categoria:</span>
+                            <strong className="text-slate-800 dark:text-white font-bold truncate">
+                              {sug.category}
+                            </strong>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-400 text-[11px]">Pote:</span>
+                            <span
+                              className="px-2 py-0.5 rounded text-[10px] font-bold"
+                              style={{ backgroundColor: `${jarDef.colorHex}15`, color: jarDef.colorHex }}
+                            >
+                              {jarDef.shortName}
+                            </span>
+                          </div>
+
+                          {sug.sampleDescriptions.length > 0 && (
+                            <div className="text-[10px] text-slate-400 truncate italic pt-0.5">
+                              Ex: {sug.sampleDescriptions[0]}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleApplySuggestion(sug)}
+                        className="w-full py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-white dark:bg-amber-950/40 dark:hover:bg-amber-600 text-amber-900 dark:text-amber-200 text-xs font-bold transition flex items-center justify-center gap-1.5 border border-amber-300 dark:border-amber-800 group-hover:border-transparent cursor-pointer active:scale-95"
+                        data-testid={`btn-apply-suggestion-${sug.keyword}`}
+                        title={`Criar regra para classificar automaticamente "${sug.keyword}" como ${sug.category} (${jarDef.shortName})`}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Criar Regra com 1 Clique</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* LISTA DE REGRAS ATIVAS */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-2">
             <div>
               <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                Regras de Auto-categorização por Palavra-Chave
+                Regras de Auto-categorização Ativas ({autoRules.length})
               </h3>
               <p className="text-xs text-slate-500">
-                Ao digitar uma palavra-chave no lançamento rápido, o Yupee pré-seleciona o pote e a conta certa.
+                Ao digitar uma palavra-chave no lançamento rápido, o Yupee pré-seleciona o pote e a categoria.
               </p>
             </div>
 
             <button
               onClick={() => setIsNewRuleModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold shadow-sm transition"
+              data-testid="btn-nova-regra-manual"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Nova Regra</span>
+              <span>Nova Regra Manual</span>
             </button>
           </div>
 
@@ -985,11 +1160,11 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
                     onChange={e => setRecAccount(e.target.value as any)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium"
                   >
-                    <option value="Inter PF">Inter PF</option>
-                    <option value="Inter PJ">Inter PJ</option>
-                    <option value="C6">C6 Bank</option>
-                    <option value="Passe">Passe / Transporte</option>
-                    <option value="Outro">Outro</option>
+                    {getAllAvailableAccounts().map(acc => (
+                      <option key={acc} value={acc}>
+                        {acc}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

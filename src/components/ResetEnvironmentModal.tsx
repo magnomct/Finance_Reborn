@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { 
   RotateCcw, Sparkles, Trash2, CheckCircle2, Shield, 
   Wallet, DollarSign, Target, ChevronRight, ChevronLeft,
-  X, AlertTriangle, ArrowRight, Layers, Sliders, RefreshCw
+  X, AlertTriangle, ArrowRight, Layers, Sliders, RefreshCw,
+  Plus, Building2, Check
 } from 'lucide-react';
 import { JarType, AccountType, CostCenter } from '../types';
 import { JAR_DEFINITIONS } from '../data/initialData';
@@ -15,6 +16,11 @@ import {
   DEFAULT_JAR_PERCENTAGES,
   purgeAllApplicationStorage
 } from '../utils/environmentSetup';
+import {
+  loadCustomAccounts,
+  saveCustomAccount,
+  getAllAvailableAccounts,
+} from '../utils/customAccounts';
 
 interface ResetEnvironmentModalProps {
   isOpen: boolean;
@@ -37,6 +43,30 @@ export const ResetEnvironmentModal: React.FC<ResetEnvironmentModalProps> = ({
   const [scope, setScope] = useState<'PF' | 'PJ' | 'CONSOLIDADO'>('PF');
   const [accountName, setAccountName] = useState<string>('Inter PF');
   const [initialBalance, setInitialBalance] = useState<string>('1500');
+
+  // Custom Accounts State
+  const [customAccountsList, setCustomAccountsList] = useState<string[]>(() => loadCustomAccounts());
+  const [showCustomBankInput, setShowCustomBankInput] = useState(false);
+  const [newCustomBankName, setNewCustomBankName] = useState('');
+  const [customBankError, setCustomBankError] = useState<string | null>(null);
+
+  const availableAccounts = useMemo(() => {
+    return getAllAvailableAccounts(customAccountsList);
+  }, [customAccountsList]);
+
+  const handleAddCustomAccount = () => {
+    const trimmed = newCustomBankName.trim();
+    if (!trimmed) {
+      setCustomBankError('Digite o nome do banco ou instituição');
+      return;
+    }
+    const updated = saveCustomAccount(trimmed);
+    setCustomAccountsList(updated);
+    setAccountName(trimmed);
+    setNewCustomBankName('');
+    setShowCustomBankInput(false);
+    setCustomBankError(null);
+  };
   
   // Step 2: Income & Jars
   const [monthlyIncome, setMonthlyIncome] = useState<string>('5000');
@@ -309,22 +339,112 @@ export const ResetEnvironmentModal: React.FC<ResetEnvironmentModalProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
-                      <label className="block text-xs font-bold uppercase text-slate-500 mb-1">
-                        Conta Bancária Principal
-                      </label>
-                      <select
-                        value={accountName}
-                        onChange={e => setAccountName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
-                        data-testid="select-account"
-                      >
-                        <option value="Inter PF">Inter PF</option>
-                        <option value="Inter PJ">Inter PJ</option>
-                        <option value="Nubank">Nubank</option>
-                        <option value="Itaú">Itaú</option>
-                        <option value="C6">C6 Bank</option>
-                        <option value="Outro">Outra Conta / Dinheiro</option>
-                      </select>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold uppercase text-slate-500">
+                          Conta Bancária Principal
+                        </label>
+                        {!showCustomBankInput && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowCustomBankInput(true);
+                              setCustomBankError(null);
+                            }}
+                            className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 flex items-center gap-1 hover:underline cursor-pointer"
+                            data-testid="btn-add-custom-account"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>+ Adicionar Outro Banco</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {!showCustomBankInput ? (
+                        <div className="relative">
+                          <select
+                            value={accountName}
+                            onChange={e => {
+                              if (e.target.value === '__NEW_CUSTOM_ACCOUNT__') {
+                                setShowCustomBankInput(true);
+                              } else {
+                                setAccountName(e.target.value);
+                              }
+                            }}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                            data-testid="select-account"
+                          >
+                            <optgroup label="Bancos Disponíveis">
+                              {availableAccounts.map(acc => (
+                                <option key={acc} value={acc}>
+                                  {acc}
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Ações">
+                              <option value="__NEW_CUSTOM_ACCOUNT__" data-testid="opt-conta-personalizada">
+                                ➕ + Adicionar Banco / Conta Personalizada...
+                              </option>
+                            </optgroup>
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 rounded-xl space-y-2 animate-in fade-in duration-150">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-teal-900 dark:text-teal-200 flex items-center gap-1.5">
+                              <Building2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                              Adicionar Conta Personalizada
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCustomBankInput(false);
+                                setNewCustomBankName('');
+                                setCustomBankError(null);
+                              }}
+                              className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newCustomBankName}
+                              onChange={e => {
+                                setNewCustomBankName(e.target.value);
+                                if (customBankError) setCustomBankError(null);
+                              }}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleAddCustomAccount();
+                                }
+                              }}
+                              placeholder="Ex: Banco Safra, Caixa Tem, Nomad, Wise..."
+                              className="flex-1 px-3 py-2 rounded-lg border border-teal-300 dark:border-teal-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                              data-testid="input-conta-personalizada"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={handleAddCustomAccount}
+                              className="px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shrink-0"
+                              data-testid="btn-confirm-custom-account"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Adicionar</span>
+                            </button>
+                          </div>
+                          {customBankError && (
+                            <span className="text-[10px] font-semibold text-rose-500 block">
+                              {customBankError}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
+                            Esse banco será adicionado à sua lista de contas disponíveis no Yupee.
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div>

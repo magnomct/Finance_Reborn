@@ -137,6 +137,46 @@ export interface ContributionSuggestionResult {
   differenceVsCurrentDeposit: number;
   status: 'completed' | 'no_deadline' | 'past_deadline' | 'on_track' | 'needs_increase' | 'can_decrease';
   recommendationMessage: string;
+  // 6 Potes Integration
+  targetJar: 'PLP_10' | 'LIF_10' | 'FER_5';
+  jarName: string;
+  jarShortName: string;
+}
+
+/**
+ * Maps dream category or title to the best matching Harv Eker 6 Potes bucket.
+ * Reserva/Sonhos -> PLP_10 (10% Poupança de Longo Prazo)
+ * Investimentos/Renda Passiva -> LIF_10 (10% Liberdade Financeira)
+ * Viagem/Férias -> FER_5 (5% Férias & Generosidade)
+ */
+export function mapDreamTo6Jar(category?: string, title?: string): {
+  jar: 'PLP_10' | 'LIF_10' | 'FER_5';
+  jarName: string;
+  jarShortName: string;
+} {
+  const text = `${category || ''} ${title || ''}`.toLowerCase();
+
+  if (text.includes('viagem') || text.includes('férias') || text.includes('ferias') || text.includes('intercâmbio') || text.includes('carro')) {
+    return {
+      jar: 'FER_5',
+      jarName: '5% Férias & Grandes Desejos (FER 5%)',
+      jarShortName: 'Pote Férias (5%)'
+    };
+  }
+
+  if (text.includes('passiva') || text.includes('independência') || text.includes('investimento') || text.includes('liberdade') || text.includes('lif')) {
+    return {
+      jar: 'LIF_10',
+      jarName: '10% Liberdade Financeira (LIF 10%)',
+      jarShortName: 'Pote Liberdade (10%)'
+    };
+  }
+
+  return {
+    jar: 'PLP_10',
+    jarName: '10% Reserva & Poupança Longo Prazo (PLP 10%)',
+    jarShortName: 'Pote Reserva & Metas (10%)'
+  };
 }
 
 /**
@@ -148,10 +188,24 @@ export function calculateContributionSuggestion(
   current: number,
   currentMonthlyDeposit: number = 0,
   targetDateStr?: string,
-  referenceDateInput?: Date | string
+  referenceDateInput?: Date | string,
+  category?: string,
+  title?: string
 ): ContributionSuggestionResult {
+  // If 5th argument looks like a category rather than a date, shift arguments gracefully
+  let refDate: Date | string | undefined = referenceDateInput;
+  let cat = category;
+  let tit = title;
+
+  if (typeof referenceDateInput === 'string' && (referenceDateInput.includes('Reserva') || referenceDateInput.includes('Viagens') || referenceDateInput.includes('LIF') || referenceDateInput.includes('PLP') || referenceDateInput.includes('FER'))) {
+    cat = referenceDateInput;
+    tit = category;
+    refDate = undefined;
+  }
+
   const remainingAmount = Math.max(0, target - current);
   const isCompleted = remainingAmount === 0;
+  const jarMapping = mapDreamTo6Jar(cat, tit);
 
   if (isCompleted) {
     return {
@@ -165,7 +219,10 @@ export function calculateContributionSuggestion(
       formattedTargetDate: targetDateStr ? formatTargetDate(targetDateStr) : '',
       differenceVsCurrentDeposit: 0,
       status: 'completed',
-      recommendationMessage: 'Meta atingida! O valor total já foi 100% acumulado.'
+      recommendationMessage: 'Meta atingida! O valor total já foi 100% acumulado.',
+      targetJar: jarMapping.jar,
+      jarName: jarMapping.jarName,
+      jarShortName: jarMapping.jarShortName
     };
   }
 
@@ -181,12 +238,15 @@ export function calculateContributionSuggestion(
       formattedTargetDate: '',
       differenceVsCurrentDeposit: 0,
       status: 'no_deadline',
-      recommendationMessage: 'Defina uma data alvo para calcular a sugestão de aporte mensal ideal.'
+      recommendationMessage: 'Defina uma data alvo para calcular a sugestão de aporte mensal ideal.',
+      targetJar: jarMapping.jar,
+      jarName: jarMapping.jarName,
+      jarShortName: jarMapping.jarShortName
     };
   }
 
-  const remainingMonths = calculateRemainingMonths(targetDateStr, referenceDateInput);
-  const remainingDays = getCalendarDaysRemaining(targetDateStr, referenceDateInput);
+  const remainingMonths = calculateRemainingMonths(targetDateStr, refDate);
+  const remainingDays = getCalendarDaysRemaining(targetDateStr, refDate);
   const formattedTargetDate = formatTargetDate(targetDateStr);
 
   if (remainingMonths <= 0 || remainingDays <= 0) {
@@ -202,7 +262,10 @@ export function calculateContributionSuggestion(
       formattedTargetDate,
       differenceVsCurrentDeposit: diff,
       status: 'past_deadline',
-      recommendationMessage: `Prazo alvo expirou em ${formattedTargetDate}. Necessário aporte de ${formatBRL(remainingAmount)} para liquidar a meta.`
+      recommendationMessage: `Prazo alvo expirou em ${formattedTargetDate}. Necessário aporte de ${formatBRL(remainingAmount)} para liquidar a meta.`,
+      targetJar: jarMapping.jar,
+      jarName: jarMapping.jarName,
+      jarShortName: jarMapping.jarShortName
     };
   }
 
@@ -236,7 +299,10 @@ export function calculateContributionSuggestion(
     formattedTargetDate,
     differenceVsCurrentDeposit,
     status,
-    recommendationMessage
+    recommendationMessage,
+    targetJar: jarMapping.jar,
+    jarName: jarMapping.jarName,
+    jarShortName: jarMapping.jarShortName
   };
 }
 

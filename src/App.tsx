@@ -40,6 +40,8 @@ import { ExtratosView } from './components/ExtratosView';
 import { TransactionModal } from './components/TransactionModal';
 import { DicaDoDiaCard } from './components/DicaDoDiaCard';
 import { FinanceReadingCard } from './components/FinanceReadingCard';
+import { C6InvoiceCard } from './components/C6InvoiceCard';
+import { DebtPayoffSimulator } from './components/DebtPayoffSimulator';
 import { BudgetAlertsBanner } from './components/BudgetAlertsBanner';
 import { BudgetLimitsModal } from './components/BudgetLimitsModal';
 import { ResetEnvironmentModal } from './components/ResetEnvironmentModal';
@@ -1090,6 +1092,9 @@ export default function App() {
               dreams={dreams}
               setDreams={setDreams}
               onAddTransaction={handleAddTransaction}
+              recurringList={recurringList}
+              setRecurringList={setRecurringList}
+              onNavigateToScreen={(scr) => setActiveScreen(scr as any)}
             />
           </div>
         )}
@@ -1100,6 +1105,7 @@ export default function App() {
         {activeScreen === 'automacoes' && (
           <div className="px-4">
             <AutomationsView
+              transactions={transactions}
               recurringList={recurringList}
               setRecurringList={setRecurringList}
               autoRules={autoRules}
@@ -1292,19 +1298,11 @@ export default function App() {
 
             {/* Strategic Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className={`${theme.card} p-5 rounded-3xl space-y-2`}>
-                <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold text-xs">
-                  <CreditCard className="w-4 h-4" />
-                  <span>Cartão C6 Concentrador</span>
-                </div>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-xl font-black text-slate-900 dark:text-white">R$ 2.600,00</span>
-                  <span className="text-[11px] text-slate-400">Total Fatura Mensal</span>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  R$ 2.000 em contas essenciais (água, luz, gás, mercado, transporte) + R$ 600 em lazer.
-                </p>
-              </div>
+              <C6InvoiceCard
+                transactions={transactions}
+                themeCardClass={theme.card}
+                onNavigateToScreen={(scr) => setActiveScreen(scr as any)}
+              />
 
               <div className={`${theme.card} p-5 rounded-3xl space-y-2 border-l-4 border-l-blue-500`}>
                 <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-xs">
@@ -1320,6 +1318,12 @@ export default function App() {
                 </p>
               </div>
             </div>
+
+            {/* Simulador Financeiro: Impacto da Antecipação de Parcelas (Dívidas / Cartões) */}
+            <DebtPayoffSimulator
+              themeCardClass={theme.card}
+              onNavigateToScreen={(scr) => setActiveScreen(scr as any)}
+            />
 
           </div>
         )}
