@@ -17,6 +17,7 @@ import {
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { getAllAvailableAccounts } from '../utils/customAccounts';
 import { findCategoryRuleSuggestions, CategorySuggestion } from '../utils/categorySuggestions';
+import { RecurringTopCategoriesCard } from './RecurringTopCategoriesCard';
 
 interface AutomationsViewProps {
   transactions?: Transaction[];
@@ -453,6 +454,9 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
               </p>
             </div>
           </div>
+
+          {/* Gráfico de Barras Horizontal: 3 Maiores Categorias Recorrentes */}
+          <RecurringTopCategoriesCard recurringList={recurringList} />
 
           {/* Action & Filter Bar */}
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 pt-2">

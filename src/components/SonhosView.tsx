@@ -11,6 +11,7 @@ import { DreamDepositChecklist } from './DreamDepositChecklist';
 import { DreamsDonutChart } from './DreamsDonutChart';
 import { DeadlineSimulatorModal } from './DeadlineSimulatorModal';
 import { CompoundInterestCalculator } from './CompoundInterestCalculator';
+import { DreamMonthlySavingsPlanner } from './DreamMonthlySavingsPlanner';
 import { 
   calculateSuggestedMonthlyDeposit, 
   calculateEstimatedTimeToGoal, 
@@ -400,6 +401,16 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Planejador de Metas Mensais de Economia com Barra de Progresso Visual */}
+      <DreamMonthlySavingsPlanner
+        dreams={dreams}
+        setDreams={setDreams}
+        recurringList={recurringList}
+        setRecurringList={setRecurringList}
+        onDepositCustom={(dream) => setSelectedDreamForDeposit(dream)}
+        onNavigateToScreen={onNavigateToScreen}
+      />
 
       {/* Gráfico de Rosca de Conclusão dos Sonhos */}
       <DreamsDonutChart 

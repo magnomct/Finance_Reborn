@@ -197,7 +197,7 @@ export function calculateContributionSuggestion(
   let cat = category;
   let tit = title;
 
-  if (typeof referenceDateInput === 'string' && (referenceDateInput.includes('Reserva') || referenceDateInput.includes('Viagens') || referenceDateInput.includes('LIF') || referenceDateInput.includes('PLP') || referenceDateInput.includes('FER'))) {
+  if (typeof referenceDateInput === 'string' && (isNaN(Date.parse(referenceDateInput)) || !/^\d{4}-\d{2}-\d{2}/.test(referenceDateInput))) {
     cat = referenceDateInput;
     tit = category;
     refDate = undefined;
