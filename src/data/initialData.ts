@@ -223,14 +223,15 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
   { 
     id: 'tx-11', 
     date: '2026-10-22', 
+    time: '21:30',
     description: 'Fatura Cartão C6 (Lazer & Estilo)', 
     amount: -600.00, 
     type: 'despesa', 
     jar: 'DIV_10', 
     costCenter: 'Magno', 
     account: 'C6', 
-    status: 'liquidado',
-    isRecurring: true,
+    status: 'liquidado', 
+    isRecurring: true, 
     category: 'Lazer'
   },
   

@@ -13,6 +13,7 @@ export interface TransactionInput {
   category?: string;
   notes?: string;
   reminderDaysBefore?: number | null;
+  time?: string;
 }
 
 export interface ValidationResult {
@@ -85,7 +86,8 @@ export function normalizeTransactionData(input: TransactionInput): Transaction {
     notes: input.notes?.trim() || undefined,
     reminderDaysBefore: typeof input.reminderDaysBefore === 'number' && !isNaN(input.reminderDaysBefore) && input.reminderDaysBefore >= 0
       ? Math.floor(input.reminderDaysBefore)
-      : undefined
+      : undefined,
+    time: input.time && input.time.trim() ? input.time.trim() : undefined
   };
 }
 

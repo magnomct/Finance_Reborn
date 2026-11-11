@@ -47,6 +47,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [status, setStatus] = useState<'liquidado' | 'agendado'>('liquidado');
   const [category, setCategory] = useState<string>('Geral');
   const [notes, setNotes] = useState<string>('');
+  const [time, setTime] = useState<string>('');
   const [reminderDaysBefore, setReminderDaysBefore] = useState<number | null>(null);
   const [customDays, setCustomDays] = useState<string>('');
   const [matchedRule, setMatchedRule] = useState<Partial<Transaction> | null>(null);
@@ -84,6 +85,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         setStatus(transactionToEdit.status);
         setCategory(transactionToEdit.category || 'Geral');
         setNotes(transactionToEdit.notes || '');
+        setTime(transactionToEdit.time || '');
         setReminderDaysBefore(transactionToEdit.reminderDaysBefore ?? null);
         setCustomDays(
           transactionToEdit.reminderDaysBefore !== undefined && transactionToEdit.reminderDaysBefore !== null
@@ -95,6 +97,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         setDesc('');
         setAmount('');
         setDate(defaultDate);
+        setTime('');
         setType('despesa');
         setJar(defaultScope === 'PJ' ? 'PJ_EXCLUIDO' : 'NEC_55');
         setCostCenter(defaultScope === 'PJ' ? 'PJ' : 'Magno');
@@ -165,7 +168,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         status,
         category: category || matchedRule?.category || 'Geral',
         notes: notes.trim() || undefined,
-        reminderDaysBefore: reminderVal
+        reminderDaysBefore: reminderVal,
+        time: time.trim() || undefined
       });
       onUpdate(updated);
       onClose();
@@ -182,7 +186,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         status,
         category: category || matchedRule?.category || 'Geral',
         notes: notes.trim() || undefined,
-        reminderDaysBefore: reminderVal
+        reminderDaysBefore: reminderVal,
+        time: time.trim() || undefined
       });
       onClose();
     }
@@ -314,16 +319,28 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
-          {/* Data e Valor */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Data, Horário e Valor */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
               <label className="text-[11px] font-bold text-slate-500 block mb-1">Data</label>
               <input
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs sm:text-sm"
                 required
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 block mb-1 flex items-center justify-between">
+                <span>Horário</span>
+                <span className="text-[9px] text-slate-400 font-normal">opcional</span>
+              </label>
+              <input
+                type="time"
+                value={time}
+                onChange={e => setTime(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-purple-500 text-xs sm:text-sm"
               />
             </div>
             <div>
@@ -335,7 +352,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 autoFocus={!isEditing}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-black text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-black text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                 required
               />
             </div>

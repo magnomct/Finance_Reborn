@@ -49,6 +49,8 @@ import { FinanceReadingCard } from './components/FinanceReadingCard';
 import { C6InvoiceCard } from './components/C6InvoiceCard';
 import { DebtPayoffSimulator } from './components/DebtPayoffSimulator';
 import { CashFlowDebtImpactCard } from './components/CashFlowDebtImpactCard';
+import { LeisureVariableSavingsCard } from './components/LeisureVariableSavingsCard';
+import { BehavioralAnalysisCard } from './components/BehavioralAnalysisCard';
 import { BudgetAlertsBanner } from './components/BudgetAlertsBanner';
 import { BudgetLimitsModal } from './components/BudgetLimitsModal';
 import { ResetEnvironmentModal } from './components/ResetEnvironmentModal';
@@ -1352,6 +1354,20 @@ export default function App() {
                 </p>
               </div>
             </div>
+
+            {/* Análise de Lazer & Gastos Variáveis com Sugestão de Corte e Economia em R$ */}
+            <LeisureVariableSavingsCard
+              transactions={transactions}
+              themeCardClass={theme.card}
+              onNavigateToScreen={(scr) => setActiveScreen(scr as any)}
+            />
+
+            {/* Análise Comportamental: Gastos de Lazer por Horário & Bloqueio Mental */}
+            <BehavioralAnalysisCard
+              transactions={transactions}
+              themeCardClass={theme.card}
+              onNavigateToScreen={(scr) => setActiveScreen(scr as any)}
+            />
 
             {/* Impacto de Parcelamentos & Juros no Fluxo de Caixa (Próximos 3 Meses) */}
             <CashFlowDebtImpactCard

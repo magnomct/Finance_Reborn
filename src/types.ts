@@ -35,6 +35,7 @@ export interface Transaction {
   category?: string;
   notes?: string; // Observações / notas adicionais (ex: 'Nathan 60%')
   reminderDaysBefore?: number; // Dias de antecedência para lembrete visual de vencimento
+  time?: string; // Horário da transação (ex: '21:30', '14:00')
 }
 
 export type DreamPriority = 'alta' | 'media' | 'baixa';
