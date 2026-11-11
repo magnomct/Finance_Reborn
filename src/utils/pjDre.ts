@@ -48,6 +48,19 @@ export interface DreLineItem {
   note?: string;
 }
 
+export interface PjMarginVarianceKpi {
+  currentMarginPct: number;
+  avgMarginPct: number;
+  diffPoints: number; // e.g. +0.26 p.p.
+  percentVariance: number; // e.g. +0.50%
+  polarity: VariancePolarity;
+  isExpansion: boolean;
+  statusLabel: string;
+  headline: string;
+  explanation: string;
+  actionGuidance: string;
+}
+
 export interface PjDreComparisonResult {
   referenceMonth: string; // YYYY-MM
   referenceMonthLabel: string;
@@ -62,6 +75,7 @@ export interface PjDreComparisonResult {
     expenseVariance: { nominal: number; percent: number; polarity: VariancePolarity };
     profitVariance: { nominal: number; percent: number; polarity: VariancePolarity };
     marginDiffPoints: number; // p.p. difference
+    marginVariance: PjMarginVarianceKpi;
   };
   insights: string[];
 }
@@ -398,7 +412,7 @@ export function calculatePjDreComparison(
   ): DreLineItem => {
     const nominalVariance = currVal - avgVal;
     const percentVariance = options.isPercentage
-      ? nominalVariance // Percentage points difference (p.p.)
+      ? (avgVal !== 0 ? ((currVal - avgVal) / Math.abs(avgVal)) * 100 : 0)
       : calculatePercentVariance(currVal, avgVal);
     const polarity = determinePolarity(category, nominalVariance);
 
@@ -543,6 +557,30 @@ export function calculatePjDreComparison(
     insights.push(`Lucro Líquido do mês ficou ${Math.abs(profitVarPct).toFixed(1)}% abaixo da média trimestral.`);
   }
 
+  // Margin variance calculation
+  const currentMarginPct = Math.round(currentMonth.netMarginPct * 100) / 100;
+  const avgMarginPct = Math.round(avg3Months.netMarginPct * 100) / 100;
+  const marginDiffPoints = Math.round((currentMarginPct - avgMarginPct) * 100) / 100;
+  const marginPercentVariance = Math.round(calculatePercentVariance(currentMarginPct, avgMarginPct) * 100) / 100;
+  const marginPolarity = determinePolarity('indicador', marginDiffPoints);
+  const isExpansion = marginDiffPoints >= 0;
+
+  const statusLabel = isExpansion ? 'Expansão de Margem' : 'Compressão de Margem';
+  const marginSign = marginPercentVariance > 0 ? '+' : '';
+  const diffSign = marginDiffPoints > 0 ? '+' : '';
+
+  const headline = isExpansion
+    ? `Expansão de Margem Líquida (${marginSign}${marginPercentVariance.toFixed(1)}%)`
+    : `Compressão de Margem Líquida (${marginPercentVariance.toFixed(1)}%)`;
+
+  const explanation = isExpansion
+    ? `No mês de ${formatMonthLabel(referenceMonth)}, a margem de lucro líquida da operação PJ alcançou ${currentMarginPct.toFixed(1)}%, superando a média dos últimos 3 meses (${avgMarginPct.toFixed(1)}%) em ${marginSign}${marginPercentVariance.toFixed(1)}% (${diffSign}${marginDiffPoints.toFixed(1)} p.p.). Essa variação positiva reflete maior eficiência na retenção de lucro após a dedução do DAS e custos fixos.`
+    : `No mês de ${formatMonthLabel(referenceMonth)}, a margem líquida da PJ ficou em ${currentMarginPct.toFixed(1)}%, recuando ${Math.abs(marginPercentVariance).toFixed(1)}% (${marginDiffPoints.toFixed(1)} p.p.) em relação à média dos últimos 3 meses (${avgMarginPct.toFixed(1)}%). O aumento proporcional dos custos operacionais ou deduções reduziu a fatia do faturamento convertida em lucro livre.`;
+
+  const actionGuidance = isExpansion
+    ? 'Com a margem em expansão, o excedente financeiro pode ser transferido com isenção fiscal para aportes estratégicos na PF (Sonhos e Liberdade Financeira).'
+    : 'Monitore as despesas de tarifas e reajustes contratuais na PJ para recompor a margem líquida e garantir repasses consistentes à PF.';
+
   return {
     referenceMonth,
     referenceMonthLabel: formatMonthLabel(referenceMonth),
@@ -572,7 +610,19 @@ export function calculatePjDreComparison(
         percent: profitVarPct,
         polarity: determinePolarity('resultado', currentMonth.netProfit - avg3Months.netProfit)
       },
-      marginDiffPoints: currentMonth.netMarginPct - avg3Months.netMarginPct
+      marginDiffPoints,
+      marginVariance: {
+        currentMarginPct,
+        avgMarginPct,
+        diffPoints: marginDiffPoints,
+        percentVariance: marginPercentVariance,
+        polarity: marginPolarity,
+        isExpansion,
+        statusLabel,
+        headline,
+        explanation,
+        actionGuidance
+      }
     },
     insights
   };

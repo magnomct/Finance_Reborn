@@ -1055,6 +1055,7 @@ export default function App() {
                 setDreams(prev => prev.map(d => d.id === dreamId ? { ...d, current: newBal } : d));
               }}
               onNavigateToDreams={() => setActiveScreen('sonhos')}
+              onNavigateToScreen={(scr) => setActiveScreen(scr as any)}
             />
           </div>
         )}
@@ -1115,6 +1116,7 @@ export default function App() {
               jarSavingsTargets={jarSavingsTargets}
               onOpenLimitsModal={() => setIsLimitsModalOpen(true)}
               onSaveLimits={handleSaveJarLimits}
+              onSaveSavingsTargets={handleSaveJarSavingsTargets}
             />
           </div>
         )}

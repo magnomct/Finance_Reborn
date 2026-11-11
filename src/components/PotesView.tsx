@@ -16,6 +16,7 @@ import {
   saveJarLimits 
 } from '../utils/budgetAlerts';
 import { JarOptimizationModal } from './JarOptimizationModal';
+import { JarSavingsGoalsManager } from './JarSavingsGoalsManager';
 
 interface PotesViewProps {
   transactions: Transaction[];
@@ -26,6 +27,7 @@ interface PotesViewProps {
   jarSavingsTargets?: Record<JarType, number>;
   onOpenLimitsModal?: () => void;
   onSaveLimits?: (newLimits: Record<JarType, number>) => void;
+  onSaveSavingsTargets?: (newTargets: Record<JarType, number>) => void;
 }
 
 export const PotesView: React.FC<PotesViewProps> = ({
@@ -36,7 +38,8 @@ export const PotesView: React.FC<PotesViewProps> = ({
   jarLimits,
   jarSavingsTargets,
   onOpenLimitsModal,
-  onSaveLimits
+  onSaveLimits,
+  onSaveSavingsTargets
 }) => {
   const [selectedJarKey, setSelectedJarKey] = useState<JarType | null>('NEC_55');
   const [isOptimizationModalOpen, setIsOptimizationModalOpen] = useState(false);
@@ -171,6 +174,16 @@ export const PotesView: React.FC<PotesViewProps> = ({
         selectedJarKey={selectedJarKey}
         onSelectJar={setSelectedJarKey}
         onOpenLimitsModal={onOpenLimitsModal}
+      />
+
+      {/* Componente de Metas de Economia dos 6 Potes & Alcance Mensal */}
+      <JarSavingsGoalsManager
+        transactions={transactions}
+        effectiveIncomeBase={metrics.effectiveIncomeBase}
+        jarLimits={jarLimits}
+        jarSavingsTargets={jarSavingsTargets}
+        onSaveSavingsTargets={onSaveSavingsTargets}
+        onFilterJarInAgenda={onFilterJarInAgenda}
       />
 
       {/* Grid dos 6 Potes */}

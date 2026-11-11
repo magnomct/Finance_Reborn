@@ -4,6 +4,7 @@ import { Transaction } from '../types';
 import { calculateFinancialMetrics, formatBRL } from '../utils/finance';
 import { PjDreComparative } from './PjDreComparative';
 import { PjDreSummaryCard } from './PjDreSummaryCard';
+import { PjDreMarginComparisonCard } from './PjDreMarginComparisonCard';
 
 interface PjViewProps {
   transactions: Transaction[];
@@ -45,7 +46,10 @@ export const PjView: React.FC<PjViewProps> = ({ transactions, onAddTransaction, 
       {/* Componente Resumo DRE: Cálculo Automático de Receita Bruta, DAS Estimado e Lucro Líquido p/ PF */}
       <PjDreSummaryCard transactions={transactions} initialMonth="2026-10" />
 
-      {/* DRE Comparativo: Mês Atual vs Média 3 Meses */}
+      {/* Comparativo DRE: Mês Atual vs Média dos Últimos 3 Meses com Destaque em Verde/Vermelho da Margem Líquida */}
+      <PjDreMarginComparisonCard transactions={transactions} initialMonth="2026-10" />
+
+      {/* DRE Comparativo Analítico: Mês Atual vs Média 3 Meses */}
       <PjDreComparative transactions={transactions} initialMonth="2026-10" />
 
       {/* Tabela de Lançamentos PJ */}

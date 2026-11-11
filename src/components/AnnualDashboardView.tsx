@@ -13,6 +13,7 @@ import { DashboardMonthlyPdfModal } from './DashboardMonthlyPdfModal';
 import { EmergencyReserveCard } from './EmergencyReserveCard';
 import { SeasonalCashFlowChart } from './SeasonalCashFlowChart';
 import { SavingsTrendsBarChart } from './SavingsTrendsBarChart';
+import { SavingsVsNecessitiesCard } from './SavingsVsNecessitiesCard';
 import { DreamsProgressCard } from './DreamsProgressCard';
 import { Transaction, JarType, DreamGoal } from '../types';
 
@@ -25,6 +26,7 @@ interface AnnualDashboardViewProps {
   selectedMonthIndex?: number;
   onUpdateDreamBalance?: (dreamId: string, newBalance: number) => void;
   onNavigateToDreams?: () => void;
+  onNavigateToScreen?: (screen: string) => void;
 }
 
 export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({ 
@@ -35,7 +37,8 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
   selectedMonth = 'Outubro / 2026',
   selectedMonthIndex = 2,
   onUpdateDreamBalance,
-  onNavigateToDreams
+  onNavigateToDreams,
+  onNavigateToScreen
 }) => {
   const { isMobile } = useMobileLayout();
   const [viewMode, setViewMode] = useState<'resumo' | 'fluxo' | 'detalhada' | 'graficos' | 'metas'>('resumo');
@@ -406,6 +409,19 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
           annualDespesas={computed.totalDespesas}
           referenceMonthIndex={9} // Outubro (mês referência corrente)
           onSelectMonth={onSelectMonth}
+        />
+      )}
+
+      {/* Componente Comparativo dos Últimos 6 Meses: Poupança vs Gastos em Necessidades com Tendência */}
+      {(viewMode === 'resumo' || viewMode === 'fluxo' || viewMode === 'graficos') && (
+        <SavingsVsNecessitiesCard
+          transactions={transactions}
+          annualReceitas={computed.totalReceitas}
+          annualDespesas={computed.totalDespesas}
+          annualNecessidades={computed.hab.map((h, i) => h + computed.alim[i] + computed.trans[i] + computed.sau[i] + computed.banc[i])}
+          referenceMonthIndex={9}
+          onSelectMonth={onSelectMonth}
+          onNavigateToScreen={onNavigateToScreen}
         />
       )}
 
