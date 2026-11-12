@@ -2,27 +2,32 @@ import React, { useState, useMemo } from 'react';
 import { 
   BarChart3, PieChart, TrendingUp, TrendingDown, AlertCircle, 
   CheckCircle2, DollarSign, Calendar, Flame, ShieldCheck, Zap,
-  Layers, ArrowRight
+  Layers, ArrowRight, Activity, PiggyBank
 } from 'lucide-react';
-import { Transaction, JarType } from '../types';
+import { Transaction, JarType, ParentCategoryItem } from '../types';
 import { calculateFinancialMetrics, simulateDailyCashflow, formatBRL } from '../utils/finance';
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { CategoryPieChart } from './CategoryPieChart';
 import { MonthlyBalanceLineChart } from './MonthlyBalanceLineChart';
+import { ExpenseHeatmapChart } from './ExpenseHeatmapChart';
+import { MonthlyVariabilityCard } from './MonthlyVariabilityCard';
+import { CumulativeSavingsLineChart } from './CumulativeSavingsLineChart';
 
 interface ChartsViewProps {
   transactions: Transaction[];
   usePjProfitInPf: boolean;
   selectedMonth: string;
+  hierarchy?: ParentCategoryItem[];
 }
 
 export const ChartsView: React.FC<ChartsViewProps> = ({
   transactions,
   usePjProfitInPf,
-  selectedMonth
+  selectedMonth,
+  hierarchy
 }) => {
   const [selectedJarSlice, setSelectedJarSlice] = useState<JarType | null>(null);
-  const [chartMode, setChartMode] = useState<'donut' | 'categorias' | 'linha' | 'ritmo' | 'evolucao'>('donut');
+  const [chartMode, setChartMode] = useState<'donut' | 'categorias' | 'linha' | 'ritmo' | 'evolucao' | 'calor' | 'variabilidade' | 'poupanca_acumulada'>('donut');
 
   const metrics = useMemo(() => {
     return calculateFinancialMetrics(transactions, usePjProfitInPf);
@@ -151,6 +156,45 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
             <BarChart3 className="w-4 h-4" />
             <span>Comparativo Mensal</span>
           </button>
+
+          <button
+            onClick={() => setChartMode('calor')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
+              chartMode === 'calor'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+            }`}
+            data-testid="tab-chart-mapa-calor"
+          >
+            <Flame className="w-4 h-4 text-orange-400" />
+            <span>Mapa de Calor de Despesas</span>
+          </button>
+
+          <button
+            onClick={() => setChartMode('variabilidade')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
+              chartMode === 'variabilidade'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+            }`}
+            data-testid="tab-chart-variabilidade"
+          >
+            <Activity className="w-4 h-4 text-indigo-400" />
+            <span>Estabilidade (Fixos vs. Variáveis)</span>
+          </button>
+
+          <button
+            onClick={() => setChartMode('poupanca_acumulada')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
+              chartMode === 'poupanca_acumulada'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+            }`}
+            data-testid="tab-chart-poupanca-acumulada"
+          >
+            <PiggyBank className="w-4 h-4 text-emerald-400" />
+            <span>Faturamento vs. Despesas (Margem de Poupança)</span>
+          </button>
         </div>
 
         <div className="text-xs text-slate-400 font-medium px-2">
@@ -238,6 +282,39 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
               >
                 <Layers className="w-3.5 h-3.5" />
                 <span>Ver por Categoria</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+
+              <button
+                onClick={() => setChartMode('calor')}
+                className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/60 px-2.5 py-1.5 rounded-xl border border-orange-200 dark:border-orange-900 flex items-center gap-1.5 transition cursor-pointer"
+                title="Visualizar mapa de calor de intensidade de gastos por dia do ano"
+                data-testid="btn-ver-mapa-calor-atalho"
+              >
+                <Flame className="w-3.5 h-3.5" />
+                <span>Mapa de Calor Sazonal</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+
+              <button
+                onClick={() => setChartMode('variabilidade')}
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 px-2.5 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-900 flex items-center gap-1.5 transition cursor-pointer"
+                title="Analisar estabilidade do orçamento nos últimos 6 meses (Fixos vs. Variáveis)"
+                data-testid="btn-ver-variabilidade-atalho"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>Estabilidade 6M</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+
+              <button
+                onClick={() => setChartMode('poupanca_acumulada')}
+                className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 px-2.5 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-900 flex items-center gap-1.5 transition cursor-pointer"
+                title="Analisar Faturamento Total Acumulado vs Despesas com Margem de Poupança"
+                data-testid="btn-ver-poupanca-atalho"
+              >
+                <PiggyBank className="w-3.5 h-3.5" />
+                <span>Margem de Poupança</span>
                 <ArrowRight className="w-3 h-3" />
               </button>
 
@@ -623,6 +700,39 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
             })}
           </div>
         </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* NOVO MODO: MAPA DE CALOR DE DESPESAS (SAZONALIDADE ANUAL)  */}
+      {/* ========================================================= */}
+      {chartMode === 'calor' && (
+        <ExpenseHeatmapChart 
+          transactions={transactions} 
+          selectedMonth={selectedMonth} 
+        />
+      )}
+
+      {/* ========================================================= */}
+      {/* NOVO MODO: FATURAMENTO ACUMULADO vs DESPESAS (MARGEM)     */}
+      {/* ========================================================= */}
+      {chartMode === 'poupanca_acumulada' && (
+        <CumulativeSavingsLineChart
+          transactions={transactions}
+          usePjProfitInPf={usePjProfitInPf}
+          selectedMonth={selectedMonth}
+        />
+      )}
+
+      {/* ========================================================= */}
+      {/* NOVO MODO: DISTRIBUIÇÃO DE VARIABILIDADE MENSAL (6 MESES)  */}
+      {/* ========================================================= */}
+      {(chartMode === 'variabilidade' || chartMode === 'evolucao' || chartMode === 'donut') && (
+        <div className="pt-2">
+          <MonthlyVariabilityCard 
+            transactions={transactions} 
+            hierarchy={hierarchy}
+          />
         </div>
       )}
 

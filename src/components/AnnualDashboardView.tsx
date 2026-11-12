@@ -15,6 +15,7 @@ import { SeasonalCashFlowChart } from './SeasonalCashFlowChart';
 import { SavingsTrendsBarChart } from './SavingsTrendsBarChart';
 import { SavingsVsNecessitiesCard } from './SavingsVsNecessitiesCard';
 import { DreamsProgressCard } from './DreamsProgressCard';
+import { AnnualSavingsGoalsAccumulator } from './AnnualSavingsGoalsAccumulator';
 import { Transaction, JarType, DreamGoal } from '../types';
 
 interface AnnualDashboardViewProps {
@@ -422,6 +423,17 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
           referenceMonthIndex={9}
           onSelectMonth={onSelectMonth}
           onNavigateToScreen={onNavigateToScreen}
+        />
+      )}
+
+      {/* Metas Globais de Economia Mensal para o Ano Inteiro com Comparativo Acumulado */}
+      {(viewMode === 'resumo' || viewMode === 'metas' || viewMode === 'fluxo' || viewMode === 'graficos') && (
+        <AnnualSavingsGoalsAccumulator
+          realizedMonthlySavings={computed.saldoResumoValues}
+          monthlyIncomes={computed.totalReceitas}
+          currentMonthIndex={9}
+          year={2026}
+          onSelectMonth={onSelectMonth}
         />
       )}
 

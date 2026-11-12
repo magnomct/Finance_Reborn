@@ -3,7 +3,7 @@ import {
   Zap, Calendar, RefreshCw, Plus, CheckCircle2, AlertTriangle, 
   Trash2, ArrowRight, ShieldCheck, HelpCircle, Sparkles, Filter, 
   SlidersHorizontal, Check, Edit3, TrendingUp, TrendingDown,
-  Clock, DollarSign, ArrowUpRight, ArrowDownRight, Layers, X
+  Clock, DollarSign, ArrowUpRight, ArrowDownRight, Layers, X, FolderTree
 } from 'lucide-react';
 import { Transaction, RecurringExpense, AutoCategoryRule, RecurrenceFrequency, JarType, AccountType, CostCenter } from '../types';
 import { 
@@ -18,9 +18,13 @@ import { JAR_DEFINITIONS } from '../data/initialData';
 import { getAllAvailableAccounts } from '../utils/customAccounts';
 import { findCategoryRuleSuggestions, CategorySuggestion } from '../utils/categorySuggestions';
 import { RecurringTopCategoriesCard } from './RecurringTopCategoriesCard';
+import { CategoryHierarchyManager } from './CategoryHierarchyManager';
+import { CategoryManagerModal } from './CategoryManagerModal';
+import { ParentCategoryItem } from '../types';
 
 interface AutomationsViewProps {
   transactions?: Transaction[];
+  setTransactions?: React.Dispatch<React.SetStateAction<Transaction[]>>;
   recurringList: RecurringExpense[];
   setRecurringList: React.Dispatch<React.SetStateAction<RecurringExpense[]>>;
   autoRules: AutoCategoryRule[];
@@ -31,6 +35,8 @@ interface AutomationsViewProps {
   totalSpent: number;
   onApplyCushionStrategy: () => void;
   cushionApplied: boolean;
+  hierarchy?: ParentCategoryItem[];
+  setHierarchy?: React.Dispatch<React.SetStateAction<ParentCategoryItem[]>>;
 }
 
 const FREQUENCY_LABELS: Record<RecurrenceFrequency, { label: string; icon: string; cycleText: string }> = {
@@ -44,6 +50,7 @@ const DAY_OF_WEEK_NAMES = ['', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 
 
 export const AutomationsView: React.FC<AutomationsViewProps> = ({
   transactions = [],
+  setTransactions,
   recurringList,
   setRecurringList,
   autoRules,
@@ -54,9 +61,12 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
   totalSpent,
   onApplyCushionStrategy,
   cushionApplied,
+  hierarchy = [],
+  setHierarchy,
 }) => {
-  const [activeTab, setActiveTab] = useState<'recorrencias' | 'regras' | 'cheque_especial'>('recorrencias');
+  const [activeTab, setActiveTab] = useState<'recorrencias' | 'regras' | 'cheque_especial' | 'hierarquia'>('recorrencias');
   const [ruleNotification, setRuleNotification] = useState<string | null>(null);
+  const [isCategoryManagerModalOpen, setIsCategoryManagerModalOpen] = useState(false);
 
   // Category rule suggestions for unautomated common transactions
   const categorySuggestions = useMemo(() => {
@@ -289,6 +299,37 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
         </div>
       </div>
 
+      {/* Banner de Destaque para Abertura do Gerenciador de Categorias */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3.5 p-4 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-blue-500/10 dark:from-indigo-950/40 dark:via-purple-950/30 dark:to-blue-950/40 border border-indigo-200/80 dark:border-indigo-800/80 rounded-3xl shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
+            <FolderTree className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-black text-sm text-slate-900 dark:text-white">
+                Gerenciador de Categorias
+              </h3>
+              <span className="text-[10px] font-extrabold px-2 py-0.2 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                Pai &gt; Sub
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Crie, renomeie e organize Categorias Pai e Subcategorias com atualização em cascata e disponibilidade imediata na Nova Transação.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setIsCategoryManagerModalOpen(true)}
+          className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-black shadow-md flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 shrink-0"
+          data-testid="btn-open-category-manager"
+        >
+          <FolderTree className="w-4 h-4" />
+          <span>Gerenciar Categorias</span>
+        </button>
+      </div>
+
       {/* Tabs */}
       <div className="flex bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm gap-1">
         <button
@@ -331,6 +372,19 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
         >
           <AlertTriangle className="w-4 h-4" />
           <span>Escudo Cheque Especial</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('hierarquia')}
+          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
+            activeTab === 'hierarquia'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+          }`}
+          data-testid="tab-hierarquia-categorias"
+        >
+          <Layers className="w-4 h-4" />
+          <span>Hierarquia de Categorias</span>
         </button>
       </div>
 
@@ -959,6 +1013,20 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
       )}
 
       {/* ========================================================= */}
+      {/* ABA 4: GERENCIADOR DE HIERARQUIA DE CATEGORIAS            */}
+      {/* ========================================================= */}
+      {activeTab === 'hierarquia' && (
+        <CategoryHierarchyManager
+          hierarchy={hierarchy}
+          setHierarchy={setHierarchy}
+          transactions={transactions}
+          setTransactions={setTransactions}
+          autoRules={autoRules}
+          setAutoRules={setAutoRules}
+        />
+      )}
+
+      {/* ========================================================= */}
       {/* MODAL: NOVA RECORRÊNCIA COM PREVISTO X REALIZADO           */}
       {/* ========================================================= */}
       {isNewRecModalOpen && (
@@ -1406,6 +1474,18 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal Gerenciador de Categorias */}
+      <CategoryManagerModal
+        isOpen={isCategoryManagerModalOpen}
+        onClose={() => setIsCategoryManagerModalOpen(false)}
+        hierarchy={hierarchy}
+        setHierarchy={setHierarchy}
+        transactions={transactions}
+        setTransactions={setTransactions}
+        autoRules={autoRules}
+        setAutoRules={setAutoRules}
+      />
 
     </div>
   );

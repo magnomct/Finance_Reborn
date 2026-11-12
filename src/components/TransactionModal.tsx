@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Sparkles, Check, Edit3, Trash2, ArrowDownLeft, ArrowUpRight, AlertCircle, Bell, Clock, Plus, Building2 } from 'lucide-react';
-import { Transaction, JarType, CostCenter, AccountType, AutoCategoryRule } from '../types';
+import { Transaction, JarType, CostCenter, AccountType, AutoCategoryRule, ParentCategoryItem } from '../types';
 import { applyAutoRules } from '../utils/finance';
 import { validateTransactionInput, normalizeTransactionData } from '../utils/transactionEditor';
 import { getReminderPresetLabel } from '../utils/reminders';
@@ -18,6 +18,7 @@ export interface TransactionModalProps {
   autoRules: AutoCategoryRule[];
   defaultDate?: string;
   defaultScope?: 'PF' | 'PJ' | 'CONSOLIDADO';
+  hierarchy?: ParentCategoryItem[];
 }
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
@@ -29,10 +30,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   transactionToEdit = null,
   autoRules,
   defaultDate = '2026-10-27',
-  defaultScope = 'PF'
+  defaultScope = 'PF',
+  hierarchy = []
 }) => {
   const isOnline = useOnlineStatus();
   const isEditing = Boolean(transactionToEdit);
+  const [customCategoryMode, setCustomCategoryMode] = useState(false);
 
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
@@ -108,6 +111,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         setReminderDaysBefore(null);
         setCustomDays('');
         setMatchedRule(null);
+        setCustomCategoryMode(false);
       }
     }
   }, [isOpen, transactionToEdit, defaultDate, defaultScope]);
@@ -499,16 +503,69 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
-          {/* Categoria Opcional */}
+          {/* Categoria Hierárquica (Categoria Pai > Subcategoria) */}
           <div>
-            <label className="text-[11px] font-bold text-slate-500 block mb-1">Categoria (opcional)</label>
-            <input
-              type="text"
-              placeholder="Ex: Habitação, Alimentação, Transporte, Saúde"
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-bold text-slate-500">
+                Categoria (Hierarquia: Categoria Pai &gt; Subcategoria)
+              </label>
+              {hierarchy && hierarchy.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCustomCategoryMode(prev => !prev)}
+                  className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold hover:underline cursor-pointer"
+                >
+                  {customCategoryMode ? 'Selecionar da árvore' : '+ Digitar personalizada'}
+                </button>
+              )}
+            </div>
+
+            {!customCategoryMode && hierarchy && hierarchy.length > 0 ? (
+              <select
+                value={category}
+                onChange={e => {
+                  if (e.target.value === '__CUSTOM__') {
+                    setCustomCategoryMode(true);
+                  } else {
+                    setCategory(e.target.value);
+                  }
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                data-testid="select-transaction-category"
+              >
+                <option value="Geral">Geral (Sem categoria específica)</option>
+                {hierarchy.map(parent => {
+                  const natureLabel = (parent.nature || parent.type) === 'fixed'
+                    ? 'Fixo'
+                    : (parent.nature || parent.type) === 'income'
+                    ? 'Receita'
+                    : 'Variável';
+
+                  return (
+                    <optgroup key={parent.id} label={`${parent.name} (${natureLabel})`}>
+                      {parent.subcategories.map(sub => {
+                        const formattedVal = `${parent.name} > ${sub.name}`;
+                        return (
+                          <option key={sub.id} value={formattedVal}>
+                            {parent.name} &gt; {sub.name}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  );
+                })}
+                <option value="__CUSTOM__">➕ Digitar outra categoria personalizada...</option>
+              </select>
+            ) : (
+              <input
+                type="text"
+                placeholder="Ex: Alimentação > Delivery, Moradia > Aluguel"
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                data-testid="input-transaction-category"
+              />
+            )}
           </div>
 
           {/* Observações / Notas */}

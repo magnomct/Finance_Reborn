@@ -5,6 +5,7 @@ import { JAR_DEFINITIONS } from '../data/initialData';
 import { formatBRL } from './finance';
 import { calculateJarExpense } from './budgetAlerts';
 import { calculateRemainingMonths, calculateSuggestedMonthlyDeposit } from './dreamCalculations';
+import { calculateMEIMetrics, MEIMetrics, MEI_ANNUAL_CEILING } from './meiMetrics';
 
 export interface DashboardReportConfig {
   monthName: string; // e.g. "Outubro / 2026"
@@ -54,6 +55,7 @@ export interface DashboardMonthlySummary {
   totalDreamCurrent: number;
   dreamOverallCompletion: number;
   topTransactions: Transaction[];
+  meiMetrics: MEIMetrics;
 }
 
 /**
@@ -185,6 +187,14 @@ export function computeDashboardMonthlySummary(
     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
     .slice(0, 10);
 
+  // MEI metrics for selected month
+  const meiMetrics = calculateMEIMetrics(transactions, {
+    referenceMonth: ym,
+    activityType: 'servicos',
+    pjReservePct: 10,
+    irpfMode: 'presuncao_32',
+  });
+
   return {
     periodLabel: config.monthName,
     totalIncome,
@@ -198,7 +208,8 @@ export function computeDashboardMonthlySummary(
     totalDreamTarget,
     totalDreamCurrent,
     dreamOverallCompletion,
-    topTransactions
+    topTransactions,
+    meiMetrics
   };
 }
 
@@ -439,7 +450,35 @@ export function generateDashboardMonthlyPDF(
     doc.text(`Déficit Líquido: ${formatBRL(summary.netBalance)} (Alerta de Saída)`, rightX, y + 33.5);
   }
 
-  y += chartBoxH + 6;
+  y += chartBoxH + 4;
+
+  // 3.8 RESUMO MEI (FATURAMENTO ACUMULADO ANUAL, META R$ 81.000 & STATUS DO DAS)
+  const meiBoxW = 182;
+  const meiBoxH = 14;
+  doc.setFillColor(240, 253, 250); // Teal 50
+  doc.setDrawColor(153, 246, 228); // Teal 200
+  doc.roundedRect(14, y, meiBoxW, meiBoxH, 1.5, 1.5, 'FD');
+
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 118, 110); // Teal 700
+  doc.text(`RESUMO MEI • FATURAMENTO ANUAL (META R$ 81.000,00) & STATUS DO DAS (${config.monthName})`, 18, y + 4.5);
+
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(51, 65, 85);
+  doc.text(`Faturamento Acumulado: ${formatBRL(summary.meiMetrics.ytdRevenue)} de ${formatBRL(MEI_ANNUAL_CEILING)} (${summary.meiMetrics.consumedPct.toFixed(1)}%) • Restam p/ emitir: ${formatBRL(summary.meiMetrics.remainingAnnualQuota)}`, 18, y + 9.5);
+
+  const dasStatusText = summary.meiMetrics.isDasPaidThisMonth ? 'STATUS DO DAS: PAGO' : 'STATUS DO DAS: PENDENTE';
+  doc.setFont('helvetica', 'bold');
+  if (summary.meiMetrics.isDasPaidThisMonth) {
+    doc.setTextColor(21, 128, 61);
+  } else {
+    doc.setTextColor(217, 119, 6);
+  }
+  doc.text(`${dasStatusText} (${formatBRL(summary.meiMetrics.dasAmount)} - Venc: 20/${summary.meiMetrics.referenceMonth.slice(5)})`, 124, y + 9.5);
+
+  y += meiBoxH + 5;
 
   // 4. TABELA 1: RESUMO DE GASTOS POR POTE
   doc.setFontSize(10);

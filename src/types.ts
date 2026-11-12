@@ -15,6 +15,31 @@ export interface AnnualItem {
 
 export type RecurrenceFrequency = 'diaria' | 'semanal' | 'quinzenal' | 'mensal';
 export type PaymentMethodType = 'Dinheiro' | 'Cartão de Crédito' | 'Conta Corrente';
+export type ExpenseNature = 'fixed' | 'variable' | 'income';
+
+export interface SubcategoryItem {
+  id: string;
+  name: string; // e.g., "Supermercado", "Delivery", "Combustível"
+  parentId: string; // e.g., "cat-alimentacao"
+  parentName: string; // e.g., "Alimentação"
+  nature: ExpenseNature; // 'fixed' | 'variable' | 'income'
+  type?: ExpenseNature; // alias for nature: 'fixed' | 'variable' | 'income'
+  color?: string;
+  keywords: string[]; // Termos gatilho (ex: ["IFOOD", "UBER EATS"])
+  icon?: string;
+  jarDefault?: JarType;
+}
+
+export interface ParentCategoryItem {
+  id: string;
+  name: string; // e.g., "Moradia", "Alimentação", "Transporte"
+  nature: ExpenseNature; // 'fixed' | 'variable' | 'income'
+  type?: ExpenseNature; // alias for nature: 'fixed' | 'variable' | 'income'
+  subcategories: SubcategoryItem[];
+  icon?: string;
+  colorHex?: string;
+  color?: string; // alias for colorHex
+}
 
 export interface Transaction {
   id: string;
@@ -33,10 +58,14 @@ export interface Transaction {
   recurringId?: string;
   recurrenceFrequency?: RecurrenceFrequency;
   category?: string;
+  parentCategory?: string; // Categoria Pai (ex: "Alimentação")
+  subcategory?: string; // Subcategoria (ex: "Delivery")
+  nature?: ExpenseNature; // 'fixed' | 'variable'
   notes?: string; // Observações / notas adicionais (ex: 'Nathan 60%')
   reminderDaysBefore?: number; // Dias de antecedência para lembrete visual de vencimento
   time?: string; // Horário da transação (ex: '21:30', '14:00')
 }
+
 
 export type DreamPriority = 'alta' | 'media' | 'baixa';
 export type DreamSortOption = 'urgency' | 'priority' | 'targetDate' | 'estimatedTime' | 'progress' | 'default';

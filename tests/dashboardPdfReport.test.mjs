@@ -117,6 +117,15 @@ test('computeDashboardMonthlySummary: accurately computes month totals, jars, an
   assert.equal(summary.totalDreamCurrent, 7000);
   // Overall completion: 7000 / 15000 = 47%
   assert.equal(summary.dreamOverallCompletion, 47);
+
+  // MEI Metrics Block
+  assert.ok(summary.meiMetrics, 'summary.meiMetrics should be defined');
+  assert.equal(summary.meiMetrics.annualCeiling, 81000);
+  assert.equal(summary.meiMetrics.year, 2026);
+  assert.ok(summary.meiMetrics.ytdRevenue >= 0);
+  assert.ok(summary.meiMetrics.dasAmount > 0);
+  assert.ok(summary.meiMetrics.statusBadge.label);
+  assert.ok(typeof summary.meiMetrics.isDasPaidThisMonth === 'boolean');
 });
 
 test('generateDashboardMonthlyPDF: creates valid jsPDF instance with required tables and headers', () => {

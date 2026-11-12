@@ -10,12 +10,14 @@ import { DashboardMonthlyPdfModal } from './components/DashboardMonthlyPdfModal'
 
 import { 
   Transaction, JarType, CostCenter, AccountType, ActiveScreen, 
-  DreamGoal, RecurringExpense, AutoCategoryRule, PaymentMethodType 
+  DreamGoal, RecurringExpense, AutoCategoryRule, PaymentMethodType,
+  ParentCategoryItem
 } from './types';
 import { 
   INITIAL_TRANSACTIONS, INITIAL_RECURRING, INITIAL_DREAMS, 
   INITIAL_AUTO_RULES, JAR_DEFINITIONS 
 } from './data/initialData';
+import { loadCategoryHierarchy, saveCategoryHierarchy } from './utils/categoryHierarchy';
 import { 
   calculateFinancialMetrics, formatBRL, generateRecurringTransactions 
 } from './utils/finance';
@@ -51,6 +53,7 @@ import { DebtPayoffSimulator } from './components/DebtPayoffSimulator';
 import { CashFlowDebtImpactCard } from './components/CashFlowDebtImpactCard';
 import { LeisureVariableSavingsCard } from './components/LeisureVariableSavingsCard';
 import { BehavioralAnalysisCard } from './components/BehavioralAnalysisCard';
+import { QuickJarInsightsSection } from './components/QuickJarInsightsSection';
 import { BudgetAlertsBanner } from './components/BudgetAlertsBanner';
 import { BudgetLimitsModal } from './components/BudgetLimitsModal';
 import { ResetEnvironmentModal } from './components/ResetEnvironmentModal';
@@ -126,6 +129,15 @@ export default function App() {
       return INITIAL_AUTO_RULES;
     }
   });
+
+  // Category Hierarchy (2-level hierarchy: Categoria Pai > Subcategoria with Fixo/Variável classification)
+  const [categoryHierarchy, setCategoryHierarchy] = useState<ParentCategoryItem[]>(() => {
+    return loadCategoryHierarchy();
+  });
+
+  useEffect(() => {
+    saveCategoryHierarchy(categoryHierarchy);
+  }, [categoryHierarchy]);
 
   const [usePjProfitInPf, setUsePjProfitInPf] = useState<boolean>(true);
   const [isMobileFrame, setIsMobileFrame] = useState<boolean>(false);
@@ -1095,6 +1107,7 @@ export default function App() {
               transactions={transactions} 
               usePjProfitInPf={usePjProfitInPf} 
               selectedMonth={selectedMonth} 
+              hierarchy={categoryHierarchy}
             />
           </div>
         )}
@@ -1144,6 +1157,7 @@ export default function App() {
           <div className="px-4">
             <AutomationsView
               transactions={transactions}
+              setTransactions={setTransactions}
               recurringList={recurringList}
               setRecurringList={setRecurringList}
               autoRules={autoRules}
@@ -1154,6 +1168,8 @@ export default function App() {
               totalSpent={financialMetrics.totalSpentPF}
               onApplyCushionStrategy={handleApplyCushionStrategy}
               cushionApplied={cushionApplied}
+              hierarchy={categoryHierarchy}
+              setHierarchy={setCategoryHierarchy}
             />
           </div>
         )}
@@ -1205,6 +1221,16 @@ export default function App() {
               transactions={transactions}
               jarLimits={jarLimits}
               usePjProfitInPf={usePjProfitInPf}
+            />
+
+            {/* Seção Insights Rápidos: Realocação de Verba dos 6 Potes */}
+            <QuickJarInsightsSection
+              transactions={transactions}
+              jarLimits={jarLimits}
+              onSaveLimits={handleSaveJarLimits}
+              usePjProfitInPf={usePjProfitInPf}
+              onNavigateToScreen={(scr) => setActiveScreen(scr as any)}
+              themeCardClass={theme.card}
             />
 
             <div className="text-center sm:text-left">
@@ -1390,7 +1416,7 @@ export default function App() {
 
       </main>
 
-      {/* Modal Lançamento (Novo / Edição) com Auto-Regra */}
+      {/* Modal Lançamento (Novo / Edição) com Auto-Regra e Hierarquia Sincronizada */}
       <TransactionModal
         isOpen={isModalOpen}
         onClose={() => {
@@ -1403,6 +1429,7 @@ export default function App() {
         transactionToEdit={editingTransaction}
         autoRules={autoRules}
         defaultScope={viewScope}
+        hierarchy={categoryHierarchy}
       />
 
       {/* Modal Configuração de Limites Máximos e Alertas dos 6 Potes */}
