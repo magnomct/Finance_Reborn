@@ -27,6 +27,94 @@ var import_vite = require("vite");
 var import_genai = require("@google/genai");
 var import_dotenv = __toESM(require("dotenv"), 1);
 
+// src/data/initialData.ts
+var JAR_DEFINITIONS = {
+  NEC_55: {
+    id: "NEC_55",
+    name: "Necessidades B\xE1sicas",
+    shortName: "Necessidades",
+    desc: "Moradia, alimenta\xE7\xE3o, contas de casa, sa\xFAde, transporte essencial",
+    pct: 0.55,
+    colorHex: "#3B82F6",
+    // Blue
+    bgClass: "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900",
+    textClass: "text-blue-600 dark:text-blue-400",
+    iconName: "Home"
+  },
+  DIV_10: {
+    id: "DIV_10",
+    name: "Divers\xE3o & Estilo",
+    shortName: "Lazer",
+    desc: "Passeios, jantares, compras livres, lazer no cart\xE3o C6",
+    pct: 0.1,
+    colorHex: "#A855F7",
+    // Purple
+    bgClass: "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-900",
+    textClass: "text-purple-600 dark:text-purple-400",
+    iconName: "Smile"
+  },
+  PLP_10: {
+    id: "PLP_10",
+    name: "Reserva & Poupan\xE7a Longo Prazo",
+    shortName: "Reserva & Sonhos",
+    desc: "Fundo de emerg\xEAncia, seguran\xE7a familiar, grandes metas futuras",
+    pct: 0.1,
+    colorHex: "#6366F1",
+    // Indigo
+    bgClass: "bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900",
+    textClass: "text-indigo-600 dark:text-indigo-400",
+    iconName: "PiggyBank"
+  },
+  LIF_10: {
+    id: "LIF_10",
+    name: "Liberdade Financeira",
+    shortName: "Investimentos",
+    desc: "Renda passiva, dividendos, tesouro direto, independ\xEAncia",
+    pct: 0.1,
+    colorHex: "#10B981",
+    // Emerald
+    bgClass: "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900",
+    textClass: "text-emerald-600 dark:text-emerald-400",
+    iconName: "Wallet"
+  },
+  EDU_10: {
+    id: "EDU_10",
+    name: "Educa\xE7\xE3o Continuada",
+    shortName: "Educa\xE7\xE3o",
+    desc: "Livros, capacita\xE7\xF5es, p\xF3s-gradua\xE7\xE3o, cursos e ferramentas",
+    pct: 0.1,
+    colorHex: "#F59E0B",
+    // Amber
+    bgClass: "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900",
+    textClass: "text-amber-600 dark:text-amber-400",
+    iconName: "BookOpen"
+  },
+  FER_5: {
+    id: "FER_5",
+    name: "F\xE9rias & Generosidade",
+    shortName: "F\xE9rias & Doa\xE7\xF5es",
+    desc: "Viagens anuais de lazer, presentes especiais e doa\xE7\xF5es",
+    pct: 0.05,
+    colorHex: "#F43F5E",
+    // Rose
+    bgClass: "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900",
+    textClass: "text-rose-600 dark:text-rose-400",
+    iconName: "Plane"
+  },
+  PJ_EXCLUIDO: {
+    id: "PJ_EXCLUIDO",
+    name: "Opera\xE7\xE3o PJ (Corporativo)",
+    shortName: "PJ Opera\xE7\xE3o",
+    desc: "Custos diretos da empresa, impostos DAS e conv\xEAnio corporativo",
+    pct: 0,
+    colorHex: "#EA580C",
+    // Orange
+    bgClass: "bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-900",
+    textClass: "text-orange-600 dark:text-orange-400",
+    iconName: "Building2"
+  }
+};
+
 // src/utils/financeReading.ts
 function generateSearchQueriesForProfile(profile) {
   const queries = [];
@@ -200,10 +288,144 @@ function parseGeminiReadingResponse(rawText, groundingChunks = [], profile) {
         searchQueryUsed: item.searchQueryUsed
       };
     });
-  } catch (e) {
-    console.warn("Could not parse Gemini JSON response directly, using curated grounded articles:", e);
+  } catch {
     return getCuratedFallbackArticles(profile);
   }
+}
+
+// src/utils/jarOptimization.ts
+var STANDARD_JAR_PERCENTAGES = {
+  NEC_55: 55,
+  DIV_10: 10,
+  PLP_10: 10,
+  LIF_10: 10,
+  EDU_10: 10,
+  FER_5: 5,
+  PJ_EXCLUIDO: 0
+};
+var CORE_JAR_KEYS = ["NEC_55", "DIV_10", "PLP_10", "LIF_10", "EDU_10", "FER_5"];
+function calculateDeterministicJarOptimization(params) {
+  const {
+    incomeBase,
+    currentLimits = {},
+    historicalStats,
+    reserveShortfall = 1e4,
+    averageMonthlyExpense = 2e3
+  } = params;
+  const safeIncome = incomeBase > 0 ? incomeBase : 3652.31;
+  const currentPercents = {};
+  let totalCurrentLimit = 0;
+  CORE_JAR_KEYS.forEach((k) => {
+    const limit = currentLimits[k] !== void 0 && currentLimits[k] > 0 ? currentLimits[k] : Math.round(safeIncome * (STANDARD_JAR_PERCENTAGES[k] / 100));
+    totalCurrentLimit += limit;
+  });
+  CORE_JAR_KEYS.forEach((k) => {
+    const limit = currentLimits[k] !== void 0 && currentLimits[k] > 0 ? currentLimits[k] : Math.round(safeIncome * (STANDARD_JAR_PERCENTAGES[k] / 100));
+    currentPercents[k] = totalCurrentLimit > 0 ? Math.round(limit / totalCurrentLimit * 100) : STANDARD_JAR_PERCENTAGES[k];
+  });
+  let suggestedPercents = {
+    NEC_55: 50,
+    // -5% (ou ajustado conforme gasto real)
+    DIV_10: 8,
+    // -2%
+    PLP_10: 20,
+    // +10% (Foco Total na Reserva de Emergência)
+    LIF_10: 10,
+    // Mantém ou calibra
+    EDU_10: 8,
+    // -2%
+    FER_5: 4,
+    // -1%
+    PJ_EXCLUIDO: 0
+  };
+  if (historicalStats) {
+    const necSpentPct = historicalStats["NEC_55"]?.percentOfIncome || 50;
+    const divSpentPct = historicalStats["DIV_10"]?.percentOfIncome || 8;
+    const ferSpentPct = historicalStats["FER_5"]?.percentOfIncome || 2;
+    const eduSpentPct = historicalStats["EDU_10"]?.percentOfIncome || 5;
+    const necTarget = Math.max(45, Math.min(53, Math.ceil(necSpentPct + 3)));
+    const divTarget = Math.max(6, Math.min(9, Math.ceil(divSpentPct + 2)));
+    const ferTarget = Math.max(2, Math.min(4, Math.ceil(ferSpentPct + 1)));
+    const eduTarget = Math.max(6, Math.min(8, Math.ceil(eduSpentPct + 2)));
+    const lifTarget = 9;
+    const otherSum = necTarget + divTarget + ferTarget + eduTarget + lifTarget;
+    const plpTarget = Math.max(15, 100 - otherSum);
+    suggestedPercents = {
+      NEC_55: necTarget,
+      DIV_10: divTarget,
+      PLP_10: plpTarget,
+      LIF_10: lifTarget,
+      EDU_10: eduTarget,
+      FER_5: ferTarget,
+      PJ_EXCLUIDO: 0
+    };
+    const sum = CORE_JAR_KEYS.reduce((acc, k) => acc + suggestedPercents[k], 0);
+    if (sum !== 100) {
+      suggestedPercents.PLP_10 += 100 - sum;
+    }
+  }
+  let sumCheck = CORE_JAR_KEYS.reduce((acc, k) => acc + suggestedPercents[k], 0);
+  if (sumCheck !== 100) {
+    suggestedPercents.PLP_10 += 100 - sumCheck;
+  }
+  const optimizedJars = {};
+  const rationales = {
+    NEC_55: `Ajustado de ${currentPercents["NEC_55"]}% para ${suggestedPercents["NEC_55"]}%. Otimiza\xE7\xE3o de contas fixas e consumo dom\xE9stico para evitar desperd\xEDcios sem perder conforto.`,
+    DIV_10: `Calibrado de ${currentPercents["DIV_10"]}% para ${suggestedPercents["DIV_10"]}%. Preserva os momentos de lazer essenciais e transfere o excesso para o fundo de seguran\xE7a.`,
+    PLP_10: `Turbinado de ${currentPercents["PLP_10"]}% para ${suggestedPercents["PLP_10"]}%. Foco priorit\xE1rio: acelerar a Reserva de Emerg\xEAncia para blindar sua fam\xEDlia contra imprevistos.`,
+    LIF_10: `Definido em ${suggestedPercents["LIF_10"]}%. Mant\xE9m semente de investimentos para o futuro enquanto a reserva b\xE1sica se consolida.`,
+    EDU_10: `Ajustado em ${suggestedPercents["EDU_10"]}%. Foco em cursos e livros pr\xE1ticos de alto impacto no curto e m\xE9dio prazo.`,
+    FER_5: `Ajustado para ${suggestedPercents["FER_5"]}%. Mant\xE9m cota para descanso e generosidade com planejamento antecipado.`,
+    PJ_EXCLUIDO: "N\xE3o aplic\xE1vel na partilha PF."
+  };
+  CORE_JAR_KEYS.forEach((key) => {
+    const def = JAR_DEFINITIONS[key] || { name: key, shortName: key, colorHex: "#3b82f6" };
+    const curLimit = currentLimits[key] !== void 0 && currentLimits[key] > 0 ? currentLimits[key] : Math.round(safeIncome * (currentPercents[key] / 100));
+    const sugLimit = Math.round(safeIncome * (suggestedPercents[key] / 100));
+    const deltaPct = suggestedPercents[key] - currentPercents[key];
+    const deltaLim = sugLimit - curLimit;
+    const stat = historicalStats ? historicalStats[key] : null;
+    optimizedJars[key] = {
+      jarId: key,
+      jarName: def.name,
+      shortName: def.shortName,
+      colorHex: def.colorHex,
+      currentPercent: currentPercents[key],
+      suggestedPercent: suggestedPercents[key],
+      currentLimit: curLimit,
+      suggestedLimit: sugLimit,
+      deltaPercent: deltaPct,
+      deltaLimit: deltaLim,
+      historicalNetSpent: stat ? stat.netSpent : 0,
+      historicalPercentSpent: stat ? stat.percentOfIncome : 0,
+      rationale: rationales[key],
+      isReserveFocus: key === "PLP_10"
+    };
+  });
+  const curReserveLimit = optimizedJars["PLP_10"].currentLimit;
+  const sugReserveLimit = optimizedJars["PLP_10"].suggestedLimit;
+  const monthlyReserveBoost = Math.max(0, sugReserveLimit - curReserveLimit);
+  const curMonthlySavings = curReserveLimit > 0 ? curReserveLimit : Math.round(safeIncome * 0.1);
+  const newMonthlySavings = sugReserveLimit > 0 ? sugReserveLimit : Math.round(safeIncome * 0.2);
+  const curMonthsToGoal = curMonthlySavings > 0 ? reserveShortfall / curMonthlySavings : 24;
+  const newMonthsToGoal = newMonthlySavings > 0 ? reserveShortfall / newMonthlySavings : 12;
+  const monthsAccelerated = Math.max(1, Math.round(curMonthsToGoal - newMonthsToGoal));
+  return {
+    optimizedJars,
+    totalCurrentPercent: 100,
+    totalSuggestedPercent: 100,
+    monthlyReserveBoost,
+    monthsAccelerated,
+    strategyHeadline: `Potencialize sua Reserva com +R$ ${monthlyReserveBoost.toFixed(0)}/m\xEAs`,
+    strategySummary: `Redistribuindo pequenas margens ociosas de necessidades e lazer, aumentamos o Pote de Reserva & Sonhos (PLP) de ${currentPercents["PLP_10"]}% para ${suggestedPercents["PLP_10"]}%, antecipando sua meta de emerg\xEAncia em cerca de ${monthsAccelerated} meses.`,
+    keyInsights: [
+      `Aporte mensal na Reserva de Emerg\xEAncia salta de R$ ${curReserveLimit.toFixed(0)} para R$ ${sugReserveLimit.toFixed(0)} (+R$ ${monthlyReserveBoost.toFixed(0)}/m\xEAs).`,
+      `Sua blindagem de emerg\xEAncia (6 meses de despesas) ser\xE1 conclu\xEDda aproximadamente ${monthsAccelerated} meses mais cedo.`,
+      `Ajustes suaves em Divers\xE3o (-${Math.abs(optimizedJars["DIV_10"].deltaPercent)}%) e Necessidades (-${Math.abs(optimizedJars["NEC_55"].deltaPercent)}%) sem comprometer sua rotina.`,
+      `Equil\xEDbrio rigoroso: a soma de todos os potes permanece exatamente em 100% da sua renda.`
+    ],
+    source: "heuristic"
+  };
 }
 
 // server.ts
@@ -214,28 +436,68 @@ if (process.env.DISABLE_HMR === void 0) {
 var app = (0, import_express.default)();
 var port = 3e3;
 app.use(import_express.default.json());
+var geminiCircuitTrippedUntil = 0;
+var CIRCUIT_COOLDOWN_MS = 5 * 60 * 1e3;
+function isBillingOrQuotaError(err) {
+  if (!err) return false;
+  const msg = typeof err === "string" ? err : err.message || JSON.stringify(err);
+  return msg.includes("402") || msg.includes("prepayment credits are depleted") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429") || msg.includes("quota") || msg.includes("billing");
+}
+function isGeminiAvailable() {
+  return Boolean(process.env.GEMINI_API_KEY) && Date.now() >= geminiCircuitTrippedUntil;
+}
+function tripGeminiCircuit(reason) {
+  geminiCircuitTrippedUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
+  console.log(`[Yupee AI Service] Modo conting\xEAncia inteligente ativo por 5 min (${reason}).`);
+}
+function getDeterministicDailyTip(profile) {
+  if (profile?.chequeEspecialJuros > 0) {
+    return {
+      titulo: "Estanque a Sangria do Cheque Especial no Dia 25",
+      categoria: "Prote\xE7\xE3o de Fluxo",
+      impacto: "Economia de R$ 140,00/m\xEAs (R$ 1.680/ano)",
+      dica: "Sua conta Inter PF sofreu R$ 140 de juros porque o d\xE9bito do financiamento habitacional (R$ 1.290) cai antes de certas compensa\xE7\xF5es. Transferir R$ 1.000 de colch\xE3o do lucro PJ elimina essa cobran\xE7a para sempre.",
+      acaoRecomendada: "Ativar o Escudo Amortecedor na aba Controle Autom\xE1tico.",
+      citacaoEducativa: "Pequenos vazamentos afundam grandes navios. Cuide dos centavos e os reais cuidar\xE3o de si mesmos."
+    };
+  } else if (profile?.faturaC6Total > 2e3) {
+    return {
+      titulo: "Separe o Lazer das Contas Fixas no Cart\xE3o",
+      categoria: "6 Potes de Harv Eker",
+      impacto: "Maior clareza e controle emocional nos gastos",
+      dica: "Sua fatura C6 concentra R$ 2.000 em necessidades b\xE1sicas e R$ 600 em estilo de vida. Ao estabelecer limites visuais separados para cada um, voc\xEA aproveita o fim de semana sem culpa e sem comprometer as contas da casa.",
+      acaoRecomendada: "Conferir o teto de 10% no Pote de Lazer.",
+      citacaoEducativa: "Or\xE7amento n\xE3o serve para limitar sua vida, mas para dar permiss\xE3o consciente ao seu prazer."
+    };
+  } else {
+    return {
+      titulo: "Automatize seu Super\xE1vit no Pote de Reserva",
+      categoria: "Investimentos & Liberdade",
+      impacto: "Meta de Reserva Familiar adiantada em 3 meses",
+      dica: "Seu m\xEAs fechou no positivo (+R$ 2,31 livre consolidado). Programe um aporte recorrente para o primeiro dia ap\xF3s o sal\xE1rio cair para n\xE3o correr o risco de gastar o excedente ao longo do m\xEAs.",
+      acaoRecomendada: "Simular aporte mensal na aba Sonhos & Metas.",
+      citacaoEducativa: "Pague a si mesmo primeiro antes de pagar a qualquer outro credor."
+    };
+  }
+}
 app.post("/api/dica-do-dia", async (req, res) => {
-  try {
-    const { spendingProfile } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(503).json({
-        error: "API key n\xE3o encontrada",
-        message: "A chave da API Gemini n\xE3o est\xE1 configurada no servidor."
-      });
-    }
-    const ai = new import_genai.GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build"
-        }
+  const profile = req.body?.spendingProfile || {};
+  if (!isGeminiAvailable()) {
+    return res.json({ ...getDeterministicDailyTip(profile), fonte: "Mentor Yupee" });
+  }
+  const apiKey = process.env.GEMINI_API_KEY;
+  const ai = new import_genai.GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        "User-Agent": "aistudio-build"
       }
-    });
-    const prompt = `Voc\xEA \xE9 o mentor financeiro e educador do app Yupee Reborn, especialista na metodologia dos 6 Potes (T. Harv Eker) e finan\xE7as pessoais conscientes.
+    }
+  });
+  const prompt = `Voc\xEA \xE9 o mentor financeiro e educador do app Yupee Reborn, especialista na metodologia dos 6 Potes (T. Harv Eker) e finan\xE7as pessoais conscientes.
 Analise os dados financeiros reais do perfil do usu\xE1rio fornecidos abaixo:
 
-${JSON.stringify(spendingProfile, null, 2)}
+${JSON.stringify(profile, null, 2)}
 
 Com base nesses dados (ex: sal\xE1rios CLT, faturamento PJ, financiamento habitacional, fatura do cart\xE3o C6, juros de cheque especial evit\xE1veis, aportes em sonhos), forne\xE7a UMA Dica do Dia de educa\xE7\xE3o financeira personalizada.
 
@@ -250,6 +512,7 @@ A resposta DEVE ser um objeto JSON estrito com o seguinte esquema:
 }
 
 Responda SOMENTE o JSON puro, sem markdown backticks adicionais.`;
+  try {
     let response;
     try {
       response = await ai.models.generateContent({
@@ -260,7 +523,10 @@ Responda SOMENTE o JSON puro, sem markdown backticks adicionais.`;
         }
       });
     } catch (e) {
-      console.warn("Tentando modelo alternativo gemini-flash-latest ap\xF3s erro:", e?.message);
+      if (isBillingOrQuotaError(e)) {
+        tripGeminiCircuit("Cr\xE9ditos de pr\xE9-pagamento esgotados");
+        return res.json({ ...getDeterministicDailyTip(profile), fonte: "Mentor Yupee" });
+      }
       response = await ai.models.generateContent({
         model: "gemini-flash-latest",
         contents: prompt,
@@ -279,38 +545,10 @@ Responda SOMENTE o JSON puro, sem markdown backticks adicionais.`;
     }
     return res.json({ ...parsed, fonte: "Gemini AI" });
   } catch (error) {
-    console.warn("Gemini temporariamente indispon\xEDvel (503/timeout), ativando motor heur\xEDstico do Yupee:", error?.message);
-    const profile = req.body?.spendingProfile || {};
-    let fallbackTip;
-    if (profile.chequeEspecialJuros > 0) {
-      fallbackTip = {
-        titulo: "Estanque a Sangria do Cheque Especial no Dia 25",
-        categoria: "Prote\xE7\xE3o de Fluxo",
-        impacto: "Economia de R$ 140,00/m\xEAs (R$ 1.680/ano)",
-        dica: "Sua conta Inter PF sofreu R$ 140 de juros porque o d\xE9bito do financiamento habitacional (R$ 1.290) cai antes de certas compensa\xE7\xF5es. Transferir R$ 1.000 de colch\xE3o do lucro PJ elimina essa cobran\xE7a para sempre.",
-        acaoRecomendada: "Ativar o Escudo Amortecedor na aba Controle Autom\xE1tico.",
-        citacaoEducativa: "Pequenos vazamentos afundam grandes navios. Cuide dos centavos e os reais cuidar\xE3o de si mesmos."
-      };
-    } else if (profile.faturaC6Total > 2e3) {
-      fallbackTip = {
-        titulo: "Separe o Lazer das Contas Fixas no Cart\xE3o",
-        categoria: "6 Potes de Harv Eker",
-        impacto: "Maior clareza e controle emocional nos gastos",
-        dica: "Sua fatura C6 concentra R$ 2.000 em necessidades b\xE1sicas e R$ 600 em estilo de vida. Ao estabelecer limites visuais separados para cada um, voc\xEA aproveita o fim de semana sem culpa e sem comprometer as contas da casa.",
-        acaoRecomendada: "Conferir o teto de 10% no Pote de Lazer.",
-        citacaoEducativa: "Or\xE7amento n\xE3o serve para limitar sua vida, mas para dar permiss\xE3o consciente ao seu prazer."
-      };
-    } else {
-      fallbackTip = {
-        titulo: "Automatize seu Super\xE1vit no Pote de Reserva",
-        categoria: "Investimentos & Liberdade",
-        impacto: "Meta de Reserva Familiar adiantada em 3 meses",
-        dica: "Seu m\xEAs fechou no positivo (+R$ 2,31 livre consolidado). Programe um aporte recorrente para o primeiro dia ap\xF3s o sal\xE1rio cair para n\xE3o correr o risco de gastar o excedente ao longo do m\xEAs.",
-        acaoRecomendada: "Simular aporte mensal na aba Sonhos & Metas.",
-        citacaoEducativa: "Pague a si mesmo primeiro antes de pagar a qualquer outro credor."
-      };
+    if (isBillingOrQuotaError(error)) {
+      tripGeminiCircuit("Cr\xE9ditos de pr\xE9-pagamento esgotados");
     }
-    return res.json({ ...fallbackTip, fonte: "Mentor Yupee" });
+    return res.json({ ...getDeterministicDailyTip(profile), fonte: "Mentor Yupee" });
   }
 });
 app.post("/api/leitura-financas", async (req, res) => {
@@ -328,16 +566,15 @@ app.post("/api/leitura-financas", async (req, res) => {
     summaryTags: ["Fatura C6 Elevada", "Juros de Cheque Especial", "Financiamento Habitacional Ativo"],
     primaryFocus: "Elimina\xE7\xE3o de Juros e Prote\xE7\xE3o de Fluxo de Caixa"
   };
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!isGeminiAvailable()) {
     const fallbackArticles = getCuratedFallbackArticles(safeProfile);
     return res.json({
       artigos: fallbackArticles,
       queriesUsed: generateSearchQueriesForProfile(safeProfile),
-      fonte: "Acervo Yupee Educativo",
-      observacao: "Chave Gemini n\xE3o configurada no servidor, exibindo artigos curados."
+      fonte: "Acervo Yupee Educativo"
     });
   }
+  const apiKey = process.env.GEMINI_API_KEY;
   try {
     const ai = new import_genai.GoogleGenAI({
       apiKey,
@@ -395,14 +632,179 @@ Responda APENAS o JSON puro.`;
       groundingCount: groundingChunks.length
     });
   } catch (err) {
-    console.warn("Erro ao chamar Gemini com busca, acionando fallback curado:", err?.message);
+    if (isBillingOrQuotaError(err)) {
+      tripGeminiCircuit("Cr\xE9ditos de pr\xE9-pagamento esgotados");
+    }
     const fallbackArticles = getCuratedFallbackArticles(safeProfile);
     return res.json({
       artigos: fallbackArticles,
       queriesUsed: generateSearchQueriesForProfile(safeProfile),
-      fonte: "Acervo Yupee Educativo (Fallback)",
-      erroDetalhe: err?.message
+      fonte: "Acervo Yupee Educativo"
     });
+  }
+});
+app.post("/api/otimizar-potes", async (req, res) => {
+  const {
+    incomeBase = 3652.31,
+    currentLimits = {},
+    historicalSpending = {},
+    emergencyReserve = {}
+  } = req.body || {};
+  const safeIncome = Number(incomeBase) > 0 ? Number(incomeBase) : 3652.31;
+  const reserveShortfall = Number(emergencyReserve.shortfall) || 12e3;
+  const avgExpense = Number(emergencyReserve.averageMonthlyExpense) || 2e3;
+  const getDeterministicResult = () => calculateDeterministicJarOptimization({
+    incomeBase: safeIncome,
+    currentLimits,
+    historicalStats: historicalSpending,
+    reserveShortfall,
+    averageMonthlyExpense: avgExpense
+  });
+  if (!isGeminiAvailable()) {
+    return res.json(getDeterministicResult());
+  }
+  const apiKey = process.env.GEMINI_API_KEY;
+  try {
+    const ai = new import_genai.GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build"
+        }
+      }
+    });
+    const prompt = `Voc\xEA \xE9 o consultor de finan\xE7as especialista do Yupee Reborn, mestre na Metodologia dos 6 Potes (T. Harv Eker) e em acelera\xE7\xE3o de Reserva de Emerg\xEAncia.
+Analise os dados reais do usu\xE1rio abaixo:
+- Renda Base Mensal: R$ ${safeIncome.toFixed(2)}
+- Limites Atuais por Pote (R$): ${JSON.stringify(currentLimits)}
+- Comportamento de Gastos Hist\xF3ricos por Pote: ${JSON.stringify(historicalSpending)}
+- Situa\xE7\xE3o da Reserva de Emerg\xEAncia: Saldo atual R$ ${(emergencyReserve.currentReserve || 0).toFixed(2)}, Meta Ideal R$ ${(emergencyReserve.idealReserve || 0).toFixed(2)}, Falta para Meta: R$ ${reserveShortfall.toFixed(2)}, Despesa M\xE9dia: R$ ${avgExpense.toFixed(2)}/m\xEAs.
+
+MISS\xC3O CR\xCDTICA:
+Sugerir ajustes percentuais nos limites dos 6 potes com foco em MAXIMIZAR A RESERVA DE EMERG\xCANCIA (Pote PLP_10 - Poupan\xE7a a Longo Prazo / Reserva & Sonhos).
+Os 6 potes s\xE3o:
+1. NEC_55: Necessidades B\xE1sicas (padr\xE3o 55%)
+2. DIV_10: Divers\xE3o & Lazer (padr\xE3o 10%)
+3. PLP_10: Poupan\xE7a a Longo Prazo / Reserva de Emerg\xEAncia (padr\xE3o 10% - ELEVE ESTE POTE, tipicamente para 16% a 24%)
+4. LIF_10: Liberdade Financeira / Investimentos (padr\xE3o 10%)
+5. EDU_10: Instru\xE7\xE3o & Educa\xE7\xE3o (padr\xE3o 10%)
+6. FER_5: F\xE9rias & Doa\xE7\xF5es (padr\xE3o 5%)
+
+REGRAS MATEM\xC1TICAS R\xCDGIDAS:
+1. A SOMA DOS 6 PERCENTUAIS (NEC_55 + DIV_10 + PLP_10 + LIF_10 + EDU_10 + FER_5) DEVE SER EXATAMENTE 100.
+2. Cada percentual deve ser um n\xFAmero inteiro positivo (ex: 48, 8, 20, 10, 8, 6).
+3. Redirecione excedentes de potes que historicamente gastam pouco ou de lazer/necessidades flex\xEDveis para o Pote PLP_10.
+
+A resposta DEVE ser um JSON estrito com o seguinte esquema:
+{
+  "percentages": {
+    "NEC_55": 50,
+    "DIV_10": 8,
+    "PLP_10": 20,
+    "LIF_10": 10,
+    "EDU_10": 8,
+    "FER_5": 4
+  },
+  "rationales": {
+    "NEC_55": "Justificativa clara em 1-2 frases acolhedoras em portugu\xEAs",
+    "DIV_10": "Justificativa clara em 1-2 frases",
+    "PLP_10": "Justificativa do aumento da reserva em 1-2 frases destacando o benef\xEDcio",
+    "LIF_10": "Justificativa clara em 1-2 frases",
+    "EDU_10": "Justificativa clara em 1-2 frases",
+    "FER_5": "Justificativa clara em 1-2 frases"
+  },
+  "strategyHeadline": "Frase de impacto curta (ex: 'Potencialize sua Reserva com +R$ 365/m\xEAs')",
+  "strategySummary": "Vis\xE3o geral estrat\xE9gica da readequa\xE7\xE3o dos potes em 2 a 3 frases",
+  "keyInsights": [
+    "Insight 1 destacando o ganho de aporte na reserva",
+    "Insight 2 sobre o tempo economizado para blindagem financeira",
+    "Insight 3 sobre os ajustes suaves sem perda de conforto",
+    "Insight 4 confirmando a distribui\xE7\xE3o equilibrada em 100%"
+  ]
+}
+
+Responda SOMENTE o JSON puro, sem markdown tags adicionais.`;
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+    } catch (e) {
+      if (isBillingOrQuotaError(e)) {
+        tripGeminiCircuit("Cr\xE9ditos de pr\xE9-pagamento esgotados");
+        return res.json(getDeterministicResult());
+      }
+      response = await ai.models.generateContent({
+        model: "gemini-flash-latest",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+    }
+    const text = response.text || "{}";
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const clean = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      parsed = JSON.parse(clean);
+    }
+    const rawPct = parsed.percentages || {};
+    let sumPct = 0;
+    const finalPct = {};
+    CORE_JAR_KEYS.forEach((k) => {
+      finalPct[k] = typeof rawPct[k] === "number" && rawPct[k] > 0 ? Math.round(rawPct[k]) : 10;
+      sumPct += finalPct[k];
+    });
+    if (sumPct !== 100 && finalPct["PLP_10"] !== void 0) {
+      finalPct["PLP_10"] += 100 - sumPct;
+    }
+    const heuristic = calculateDeterministicJarOptimization({
+      incomeBase: safeIncome,
+      currentLimits,
+      historicalStats: historicalSpending,
+      reserveShortfall,
+      averageMonthlyExpense: avgExpense
+    });
+    CORE_JAR_KEYS.forEach((k) => {
+      const sugPct = finalPct[k] || heuristic.optimizedJars[k].suggestedPercent;
+      const sugLim = Math.round(safeIncome * (sugPct / 100));
+      const curLim = heuristic.optimizedJars[k].currentLimit;
+      const deltaLim = sugLim - curLim;
+      const deltaPct = sugPct - heuristic.optimizedJars[k].currentPercent;
+      heuristic.optimizedJars[k].suggestedPercent = sugPct;
+      heuristic.optimizedJars[k].suggestedLimit = sugLim;
+      heuristic.optimizedJars[k].deltaPercent = deltaPct;
+      heuristic.optimizedJars[k].deltaLimit = deltaLim;
+      if (parsed.rationales && parsed.rationales[k]) {
+        heuristic.optimizedJars[k].rationale = parsed.rationales[k];
+      }
+    });
+    const sugReserve = heuristic.optimizedJars["PLP_10"].suggestedLimit;
+    const curReserve = heuristic.optimizedJars["PLP_10"].currentLimit;
+    heuristic.monthlyReserveBoost = Math.max(0, sugReserve - curReserve);
+    const curMonthly = curReserve > 0 ? curReserve : safeIncome * 0.1;
+    const newMonthly = sugReserve > 0 ? sugReserve : safeIncome * 0.2;
+    const curMonths = reserveShortfall / curMonthly;
+    const newMonths = reserveShortfall / newMonthly;
+    heuristic.monthsAccelerated = Math.max(1, Math.round(curMonths - newMonths));
+    if (parsed.strategyHeadline) heuristic.strategyHeadline = parsed.strategyHeadline;
+    if (parsed.strategySummary) heuristic.strategySummary = parsed.strategySummary;
+    if (Array.isArray(parsed.keyInsights) && parsed.keyInsights.length > 0) {
+      heuristic.keyInsights = parsed.keyInsights;
+    }
+    heuristic.source = "gemini";
+    return res.json(heuristic);
+  } catch (error) {
+    if (isBillingOrQuotaError(error)) {
+      tripGeminiCircuit("Cr\xE9ditos de pr\xE9-pagamento esgotados");
+    }
+    return res.json(getDeterministicResult());
   }
 });
 async function startServer() {

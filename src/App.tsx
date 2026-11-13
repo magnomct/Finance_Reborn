@@ -326,7 +326,7 @@ export default function App() {
   // Add new transaction
   const handleAddTransaction = (newTxData: Partial<Transaction>) => {
     const newTx: Transaction = {
-      id: `tx-${Date.now()}`,
+      id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       date: newTxData.date || new Date().toISOString().slice(0, 10),
       description: newTxData.description || 'Sem descrição',
       amount: newTxData.amount ?? 0,
@@ -337,6 +337,7 @@ export default function App() {
       status: newTxData.status || 'liquidado',
       category: newTxData.category || 'Geral',
       isRecurring: newTxData.isRecurring,
+      dreamId: newTxData.dreamId,
     };
     setTransactions(prev => [newTx, ...prev]);
 
@@ -1146,6 +1147,11 @@ export default function App() {
               recurringList={recurringList}
               setRecurringList={setRecurringList}
               onNavigateToScreen={(scr) => setActiveScreen(scr as any)}
+              transactions={transactions}
+              jarSavingsTargets={jarSavingsTargets}
+              onSaveSavingsTargets={handleSaveJarSavingsTargets}
+              effectiveIncomeBase={financialMetrics.effectiveIncomeBase}
+              jarLimits={jarLimits}
             />
           </div>
         )}

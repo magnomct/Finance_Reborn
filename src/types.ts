@@ -64,9 +64,10 @@ export interface Transaction {
   notes?: string; // Observações / notas adicionais (ex: 'Nathan 60%')
   reminderDaysBefore?: number; // Dias de antecedência para lembrete visual de vencimento
   time?: string; // Horário da transação (ex: '21:30', '14:00')
+  dreamId?: string; // ID do sonho vinculado ao aporte
 }
 
-
+export type DreamMilestoneLevel = 50 | 75 | 100;
 export type DreamPriority = 'alta' | 'media' | 'baixa';
 export type DreamSortOption = 'urgency' | 'priority' | 'targetDate' | 'estimatedTime' | 'progress' | 'default';
 

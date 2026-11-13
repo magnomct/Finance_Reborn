@@ -1,6 +1,8 @@
 import { Transaction, JarType, JarInfo } from '../types';
 import { JAR_DEFINITIONS } from '../data/initialData';
-import { calculateJarExpense, DEFAULT_JAR_LIMITS, DEFAULT_JAR_SAVINGS_TARGETS } from './budgetAlerts';
+import { calculateJarExpense, DEFAULT_JAR_LIMITS, DEFAULT_JAR_SAVINGS_TARGETS, loadJarSavingsTargets, saveJarSavingsTargets } from './budgetAlerts';
+
+export { loadJarSavingsTargets, saveJarSavingsTargets };
 
 export interface JarSavingsGoalItem {
   jarId: JarType;
@@ -12,7 +14,8 @@ export interface JarSavingsGoalItem {
   iconName: string;
   budgetCap: number; // Teto orçado ou limite configurado
   spent: number; // Gasto líquido no mês (despesas - reembolsos)
-  currentSavings: number; // Saldo poupado = max(0, budgetCap - spent)
+  currentSavings: number; // Saldo poupado = max(0, budgetCap - spent) ou aporte real
+  realAporte?: number; // Aporte real realizado no mês
   savingsTarget: number; // Meta específica definida pelo usuário em R$
   targetProgressPct: number; // (currentSavings / savingsTarget) * 100 (% de alcance da meta do pote)
   isTargetReached: boolean;
@@ -95,7 +98,18 @@ export function calculateJarSavingsGoalsSummary(params: {
           : Math.round(effectiveIncomeBase * def.pct));
 
     const spent = calculateJarExpense(transactions, key);
-    const currentSavings = Math.max(0, budgetCap - spent);
+    
+    // Direct intentional deposits or contributions logged for this jar
+    const directAportes = transactions
+      .filter(t => t.jar === key && (
+        (t.category && (t.category.toLowerCase().includes('sonho') || t.category.toLowerCase().includes('poupança') || t.category.toLowerCase().includes('investimento'))) ||
+        (t.description && (t.description.toLowerCase().includes('aporte') || t.description.toLowerCase().includes('poupança') || t.description.toLowerCase().includes('sonho') || t.description.toLowerCase().includes('investimento')))
+      ))
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+    const budgetSavings = Math.max(0, budgetCap - spent);
+    const currentSavings = Math.max(budgetSavings, directAportes);
+    const realAporte = currentSavings;
     const savingsTarget = targets[key] !== undefined ? Math.max(0, targets[key]) : (DEFAULT_JAR_SAVINGS_TARGETS[key] || 0);
 
     const targetProgressPct = savingsTarget > 0
@@ -116,6 +130,7 @@ export function calculateJarSavingsGoalsSummary(params: {
       budgetCap,
       spent,
       currentSavings,
+      realAporte,
       savingsTarget,
       targetProgressPct,
       isTargetReached,

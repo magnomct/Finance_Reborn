@@ -1,17 +1,29 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Cloud, Plus, Zap, ShieldAlert, Plane, Wallet, PiggyBank, 
   BookOpen, Smile, TrendingUp, CheckCircle2, Calendar, Target,
   Sparkles, DollarSign, Clock, AlertTriangle, AlertOctagon, Flame,
   Hourglass, X, Filter
 } from 'lucide-react';
-import { DreamGoal, DreamPriority, Transaction, DreamSortOption, RecurringExpense } from '../types';
+import { DreamGoal, DreamPriority, Transaction, DreamSortOption, RecurringExpense, JarType } from '../types';
 import { formatBRL } from '../utils/finance';
 import { DreamDepositChecklist } from './DreamDepositChecklist';
 import { DreamsDonutChart } from './DreamsDonutChart';
 import { DeadlineSimulatorModal } from './DeadlineSimulatorModal';
 import { CompoundInterestCalculator } from './CompoundInterestCalculator';
 import { DreamMonthlySavingsPlanner } from './DreamMonthlySavingsPlanner';
+import { JarMonthlySavingsGoalsCard } from './JarMonthlySavingsGoalsCard';
+import { DreamMilestoneBanner } from './DreamMilestoneBanner';
+import {
+  DREAM_MILESTONE_THRESHOLDS,
+  DreamMonthlyMilestoneStatus,
+  getCurrentMonthKey,
+  evaluateDreamMonthlyMilestones,
+  getActiveDreamMilestoneAlerts,
+  detectNewlyUnlockedMilestones,
+  loadDismissedDreamMilestones,
+  saveDismissedDreamMilestones
+} from '../utils/dreamMilestones';
 import { 
   calculateSuggestedMonthlyDeposit, 
   calculateEstimatedTimeToGoal, 
@@ -39,6 +51,11 @@ interface SonhosViewProps {
   recurringList?: RecurringExpense[];
   setRecurringList?: React.Dispatch<React.SetStateAction<RecurringExpense[]>>;
   onNavigateToScreen?: (screen: string) => void;
+  transactions?: Transaction[];
+  jarSavingsTargets?: Record<JarType, number>;
+  onSaveSavingsTargets?: (targets: Record<JarType, number>) => void;
+  effectiveIncomeBase?: number;
+  jarLimits?: Record<JarType, number>;
 }
 
 export const SonhosView: React.FC<SonhosViewProps> = ({
@@ -47,7 +64,12 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   onAddTransaction,
   recurringList = [],
   setRecurringList,
-  onNavigateToScreen
+  onNavigateToScreen,
+  transactions = [],
+  jarSavingsTargets,
+  onSaveSavingsTargets,
+  effectiveIncomeBase = 3652.31,
+  jarLimits
 }) => {
   const [selectedDreamForDeposit, setSelectedDreamForDeposit] = useState<DreamGoal | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
@@ -67,6 +89,87 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   const [urgencyThreshold, setUrgencyThreshold] = useState<number>(DEFAULT_URGENCY_DAYS_THRESHOLD);
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | DreamPriority>('ALL');
   const [sortOption, setSortOption] = useState<DreamSortOption>('urgency');
+
+  // Monthly Dream Savings Milestone Tracking (50%, 75%, 100%)
+  const currentMonthKey = useMemo(() => getCurrentMonthKey(), []);
+  const [dismissedMilestoneKeys, setDismissedMilestoneKeys] = useState<string[]>(() => loadDismissedDreamMilestones());
+  const [milestoneToast, setMilestoneToast] = useState<DreamMonthlyMilestoneStatus | null>(null);
+  const seenMilestoneKeysRef = useRef<Set<string> | null>(null);
+
+  const milestoneStatuses = useMemo(
+    () => evaluateDreamMonthlyMilestones(dreams, transactions, currentMonthKey),
+    [dreams, transactions, currentMonthKey]
+  );
+
+  const milestoneStatusMap = useMemo(() => {
+    const map = new Map<string, DreamMonthlyMilestoneStatus>();
+    milestoneStatuses.forEach(s => map.set(s.dreamId, s));
+    return map;
+  }, [milestoneStatuses]);
+
+  const activeMilestoneAlerts = useMemo(
+    () => getActiveDreamMilestoneAlerts(milestoneStatuses, dismissedMilestoneKeys),
+    [milestoneStatuses, dismissedMilestoneKeys]
+  );
+
+  // Detect newly crossed 50%, 75%, 100% milestones during interactive session
+  useEffect(() => {
+    if (seenMilestoneKeysRef.current === null) {
+      const initialKeys = new Set<string>();
+      milestoneStatuses.forEach(s => {
+        if (s.dismissKey) initialKeys.add(s.dismissKey);
+      });
+      seenMilestoneKeysRef.current = initialKeys;
+      return;
+    }
+
+    const newlyUnlocked = detectNewlyUnlockedMilestones(milestoneStatuses, seenMilestoneKeysRef.current);
+    if (newlyUnlocked.length > 0) {
+      newlyUnlocked.forEach(s => {
+        if (s.dismissKey) seenMilestoneKeysRef.current!.add(s.dismissKey);
+      });
+      const sorted = [...newlyUnlocked].sort(
+        (a, b) => (b.highestMilestone || 0) - (a.highestMilestone || 0)
+      );
+      setMilestoneToast(sorted[0]);
+    }
+  }, [milestoneStatuses]);
+
+  useEffect(() => {
+    if (!milestoneToast) return;
+    const timer = setTimeout(() => {
+      setMilestoneToast(null);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [milestoneToast]);
+
+  const handleDismissMilestoneAlert = (dismissKey: string) => {
+    setDismissedMilestoneKeys(prev => {
+      if (prev.includes(dismissKey)) return prev;
+      const updated = [...prev, dismissKey];
+      saveDismissedDreamMilestones(updated);
+      return updated;
+    });
+  };
+
+  const handleDismissAllMilestoneAlerts = () => {
+    setDismissedMilestoneKeys(prev => {
+      const next = new Set(prev);
+      activeMilestoneAlerts.forEach(a => {
+        if (a.dismissKey) next.add(a.dismissKey);
+      });
+      const updated = Array.from(next);
+      saveDismissedDreamMilestones(updated);
+      return updated;
+    });
+  };
+
+  const handleQuickCompleteMonthFromBanner = (dreamId: string, remainingAmount: number) => {
+    const targetDream = dreams.find(d => d.id === dreamId);
+    if (!targetDream) return;
+    setSelectedDreamForDeposit(targetDream);
+    setDepositAmount(remainingAmount > 0 ? String(remainingAmount) : '');
+  };
 
   const criticalGoals = useMemo(() => getCriticalDreams(dreams), [dreams]);
 
@@ -162,6 +265,22 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
     setSimulatorDream(null);
   };
 
+  const handleJarDirectDeposit = (jarId: JarType, defaultAmount?: number) => {
+    const val = defaultAmount && defaultAmount > 0 ? defaultAmount : 100;
+    onAddTransaction({
+      description: `Aporte Poupança: Pote ${jarId}`,
+      amount: -Math.abs(val),
+      type: 'despesa',
+      jar: jarId,
+      account: 'Inter PF',
+      costCenter: 'Magno',
+      status: 'liquidado',
+      category: 'Sonhos & Poupança'
+    });
+    setNotification(`Aporte de ${formatBRL(val)} registrado com sucesso no pote ${jarId}!`);
+    setTimeout(() => setNotification(null), 4500);
+  };
+
   // Dynamic suggested monthly deposit for new dream modal
   const newDreamCalc = useMemo(() => {
     const t = parseFloat(target) || 0;
@@ -185,7 +304,8 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
       account: 'Inter PF',
       costCenter: 'Magno',
       status: 'liquidado',
-      category: 'Sonhos & Poupança'
+      category: 'Sonhos & Poupança',
+      dreamId: dream.id
     });
   };
 
@@ -213,7 +333,8 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
       account: 'Inter PF',
       costCenter: 'Magno',
       status: 'liquidado',
-      category: 'Sonhos & Poupança'
+      category: 'Sonhos & Poupança',
+      dreamId: selectedDreamForDeposit.id
     });
 
     setDepositAmount('');
@@ -314,6 +435,16 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
         </div>
       )}
 
+      {/* Banner & Toast de Marcos de Poupança Mensal (50%, 75%, 100%) */}
+      <DreamMilestoneBanner
+        activeAlerts={activeMilestoneAlerts}
+        toastAlert={milestoneToast}
+        onDismissAlert={handleDismissMilestoneAlert}
+        onDismissAll={handleDismissAllMilestoneAlerts}
+        onDismissToast={() => setMilestoneToast(null)}
+        onQuickCompleteMonth={handleQuickCompleteMonthFromBanner}
+      />
+
       {/* Banner de Metas Críticas com Alerta de Urgência */}
       {criticalGoals.length > 0 && (
         <div 
@@ -401,6 +532,16 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Metas Mensais de Poupança para os 6 Potes com Barra de Progresso Comparativa */}
+      <JarMonthlySavingsGoalsCard
+        transactions={transactions}
+        effectiveIncomeBase={effectiveIncomeBase}
+        jarLimits={jarLimits}
+        jarSavingsTargets={jarSavingsTargets}
+        onSaveSavingsTargets={onSaveSavingsTargets}
+        onAddDepositTransaction={handleJarDirectDeposit}
+      />
 
       {/* Planejador de Metas Mensais de Economia com Barra de Progresso Visual */}
       <DreamMonthlySavingsPlanner
@@ -715,6 +856,71 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                         </span>
                       </div>
                     </div>
+
+                    {/* Progresso da Meta de Poupança Mensal com Marcos 50% / 75% / 100% */}
+                    {(() => {
+                      const mStatus = milestoneStatusMap.get(dream.id);
+                      if (!mStatus || mStatus.monthlyTarget <= 0) return null;
+
+                      return (
+                        <div
+                          className="p-2.5 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-900/60 space-y-1.5 text-xs"
+                          data-testid={`dream-monthly-milestone-strip-${dream.id}`}
+                        >
+                          <div className="flex items-center justify-between gap-2 text-[11px]">
+                            <span className="font-bold text-indigo-900 dark:text-indigo-200">
+                              Aporte no Mês:
+                            </span>
+                            <span className="font-black text-indigo-700 dark:text-indigo-300">
+                              {formatBRL(mStatus.monthlyDeposited)} / {formatBRL(mStatus.monthlyTarget)} ({mStatus.progressPct.toFixed(0)}%)
+                            </span>
+                          </div>
+
+                          <div className="relative w-full h-2 bg-white dark:bg-slate-800 rounded-full overflow-hidden border border-indigo-100 dark:border-indigo-900">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                mStatus.progressPct >= 100
+                                  ? 'bg-emerald-500'
+                                  : mStatus.progressPct >= 75
+                                  ? 'bg-amber-500'
+                                  : 'bg-sky-500'
+                              }`}
+                              style={{ width: `${mStatus.clampedProgressPct}%` }}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1 pt-0.5">
+                            <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                              Marcos mensais:
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {DREAM_MILESTONE_THRESHOLDS.map(level => {
+                                const reached = mStatus.achievedMilestones.includes(level);
+                                const pillColor = level === 100
+                                  ? 'bg-emerald-600 text-white border-emerald-600'
+                                  : level === 75
+                                  ? 'bg-amber-500 text-white border-amber-500'
+                                  : 'bg-sky-600 text-white border-sky-600';
+                                return (
+                                  <span
+                                    key={level}
+                                    data-testid={`card-milestone-pill-${dream.id}-${level}`}
+                                    data-reached={reached ? 'true' : 'false'}
+                                    className={`text-[9px] font-black px-1.5 py-0.5 rounded-full border transition ${
+                                      reached
+                                        ? pillColor
+                                        : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
+                                    }`}
+                                  >
+                                    {level}%{reached ? ' ✓' : ''}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Campo de Prazo (Data Estimada) & Bloco de Contagem Regressiva */}
@@ -1113,7 +1319,12 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                   </div>
 
                   <button
-                    onClick={() => setSelectedDreamForDeposit(dream)}
+                    type="button"
+                    onClick={() => {
+                      setDepositAmount('');
+                      setSelectedDreamForDeposit(dream);
+                    }}
+                    data-testid={`btn-open-deposit-${dream.id}`}
                     className="px-3.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 font-bold text-xs transition active:scale-95 border border-blue-200 dark:border-blue-900 cursor-pointer shrink-0"
                   >
                     + Fazer Aporte
@@ -1138,14 +1349,18 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
 
             <form onSubmit={handleDeposit} className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Valor do Aporte (R$)</label>
+                <label htmlFor="dream-deposit-amount-input" className="text-xs font-bold text-slate-500 block mb-1">
+                  Valor do Aporte (R$)
+                </label>
                 <input
+                  id="dream-deposit-amount-input"
                   type="number"
                   step="0.01"
                   placeholder="Ex: 100,00"
                   value={depositAmount}
                   onChange={e => setDepositAmount(e.target.value)}
                   autoFocus
+                  data-testid="input-dream-deposit-amount"
                   className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-black text-sm text-slate-900 dark:text-white"
                 />
               </div>
@@ -1154,13 +1369,14 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setSelectedDreamForDeposit(null)}
-                  className="px-4 py-2 rounded-xl text-slate-500 text-xs font-bold"
+                  className="px-4 py-2 rounded-xl text-slate-500 text-xs font-bold cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold shadow-md transition"
+                  data-testid="btn-confirm-dream-deposit"
+                  className="px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold shadow-md transition cursor-pointer"
                 >
                   Confirmar Aporte
                 </button>
