@@ -3,7 +3,7 @@ import {
   Cloud, Plus, Zap, ShieldAlert, Plane, Wallet, PiggyBank, 
   BookOpen, Smile, TrendingUp, CheckCircle2, Calendar, Target,
   Sparkles, DollarSign, Clock, AlertTriangle, AlertOctagon, Flame,
-  Hourglass, X, Filter
+  Hourglass, X, Filter, Wand2
 } from 'lucide-react';
 import { DreamGoal, DreamPriority, Transaction, DreamSortOption, RecurringExpense, JarType } from '../types';
 import { formatBRL } from '../utils/finance';
@@ -44,7 +44,17 @@ import {
   getPriorityConfig 
 } from '../utils/dreamCountdown';
 import { recordGoalContribution } from '../utils/goalTrajectory';
+import {
+  calculateSingleGoalQuickFill,
+  calculateIdealMonthlyContribution,
+  diffInMonths,
+  DEFAULT_COMPOUND_YIELD_MONTHLY_PCT,
+} from '../utils/smartGoalAutoFill';
 import { GoalDetailModal } from './GoalDetailModal';
+import {
+  SmartGoalAutoFillModal,
+  SmartGoalAutoFillApplyPayload,
+} from './SmartGoalAutoFillModal';
 
 interface SonhosViewProps {
   dreams: DreamGoal[];
@@ -80,6 +90,8 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   const [simulatorDream, setSimulatorDream] = useState<DreamGoal | null>(null);
   const [activeCalculatorDream, setActiveCalculatorDream] = useState<DreamGoal | null>(null);
   const [detailModalDreamId, setDetailModalDreamId] = useState<string | null>(null);
+  const [isAutoFillModalOpen, setIsAutoFillModalOpen] = useState(false);
+  const [autoFillFocusDreamId, setAutoFillFocusDreamId] = useState<string | null>(null);
 
   const detailModalDream = useMemo(
     () => (detailModalDreamId ? dreams.find(d => d.id === detailModalDreamId) || null : null),
@@ -217,6 +229,68 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
       }
       return d;
     }));
+  };
+
+  const handleQuickAutoFillDream = (dream: DreamGoal) => {
+    const quick = calculateSingleGoalQuickFill(dream);
+    if (quick.isCompleted) return;
+    setDreams(prev =>
+      prev.map(d =>
+        d.id === dream.id
+          ? { ...d, monthlyDeposit: quick.idealMonthlyContribution }
+          : d
+      )
+    );
+    const yieldSuffix =
+      dream.yieldRateMonthlyPct && dream.yieldRateMonthlyPct > 0
+        ? ` com rendimento de ${dream.yieldRateMonthlyPct.toFixed(2).replace('.', ',')}% a.m.`
+        : '';
+    setNotification(
+      `Aporte de "${dream.title}" preenchido para ${formatBRL(quick.idealMonthlyContribution)}/mês (${quick.remainingMonths} ${quick.remainingMonths === 1 ? 'mês' : 'meses'}${yieldSuffix}).`
+    );
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  const handleApplySmartAutoFill = (payload: SmartGoalAutoFillApplyPayload) => {
+    const updateMap = new Map(payload.updates.map(u => [u.dreamId, u]));
+    setDreams(prev =>
+      prev.map(d => {
+        const upd = updateMap.get(d.id);
+        if (!upd) return d;
+        return {
+          ...d,
+          monthlyDeposit: upd.monthlyDeposit,
+          yieldRateMonthlyPct: payload.useCompoundYield
+            ? DEFAULT_COMPOUND_YIELD_MONTHLY_PCT
+            : 0,
+        };
+      })
+    );
+
+    if (setRecurringList) {
+      setRecurringList(prev =>
+        prev.map(rec => {
+          const matchedUpdate = payload.updates.find(
+            u => rec.id === `rec-dream-${u.dreamId}`
+          );
+          if (!matchedUpdate) return rec;
+          return {
+            ...rec,
+            amount: -Math.abs(matchedUpdate.monthlyDeposit),
+            amountPlanned: matchedUpdate.monthlyDeposit,
+          };
+        })
+      );
+    }
+
+    const modeLabel =
+      payload.mode === 'fit_budget' ? 'Modo Caber no Bolso' : 'Modo Prazo Rígido';
+    setNotification(
+      `Autopreenchimento (${modeLabel}) aplicado em ${payload.updates.length} ${
+        payload.updates.length === 1 ? 'pote' : 'potes'
+      }! Total planejado: ${formatBRL(payload.totalAppliedMonthly)}/mês.`
+    );
+    setTimeout(() => setNotification(null), 6000);
   };
 
   /**
@@ -450,13 +524,29 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => setIsNewDreamModalOpen(true)}
-          className="w-full sm:w-auto justify-center flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs shadow-md transition cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo Sonho</span>
-        </button>
+        <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setAutoFillFocusDreamId(null);
+              setIsAutoFillModalOpen(true);
+            }}
+            data-testid="btn-open-smart-autofill"
+            className="justify-center flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition cursor-pointer active:scale-95"
+          >
+            <Wand2 className="w-4 h-4" />
+            <span>Autopreenchimento Inteligente</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsNewDreamModalOpen(true)}
+            className="justify-center flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs shadow-md transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Novo Sonho</span>
+          </button>
+        </div>
       </div>
 
       {/* Notificação de Integração com 6 Potes */}
@@ -1373,6 +1463,18 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                         data-testid={`input-monthly-deposit-${dream.id}`}
                       />
                       <span className="text-[10px] text-slate-400">/mês</span>
+                      {pct < 100 && (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickAutoFillDream(dream)}
+                          className="p-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 transition cursor-pointer"
+                          title="Autopreencher aporte ideal pelo prazo e saldo restante"
+                          aria-label={`Autopreencher aporte de ${dream.title}`}
+                          data-testid={`btn-quick-autofill-card-${dream.id}`}
+                        >
+                          <Wand2 className="w-3 h-3" />
+                        </button>
+                      )}
                       {contributionSuggestion.hasTargetDate && !contributionSuggestion.isCompleted && contributionSuggestion.suggestedMonthlyDeposit > 0 && dream.monthlyDeposit !== contributionSuggestion.suggestedMonthlyDeposit && (
                         <button
                           type="button"
@@ -1617,14 +1719,33 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
 
               <div>
                 <label className="text-[11px] font-bold text-slate-500 block mb-1">Aporte Mensal Previsto</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="0,00"
-                  value={monthlyDeposit}
-                  onChange={e => setMonthlyDeposit(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={monthlyDeposit}
+                    onChange={e => setMonthlyDeposit(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetVal = parseFloat(target) || 0;
+                      if (targetVal <= 0) return;
+                      const { remainingMonths } = diffInMonths(undefined, targetDate || undefined);
+                      const ideal = calculateIdealMonthlyContribution(targetVal, 0, remainingMonths, 0);
+                      setMonthlyDeposit(String(ideal));
+                    }}
+                    disabled={(parseFloat(target) || 0) <= 0}
+                    title="Autopreencher aporte mensal ideal pelo valor alvo e prazo"
+                    aria-label="Autopreencher aporte mensal do novo sonho"
+                    data-testid="btn-quick-autofill-new-dream"
+                    className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white transition cursor-pointer shrink-0"
+                  >
+                    <Wand2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -1674,6 +1795,16 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
         onClose={() => setDetailModalDreamId(null)}
         onRecordContribution={handleRecordTrajectoryContribution}
         onOpenSimulator={(dream) => setSimulatorDream(dream)}
+      />
+
+      {/* Modal de Autopreenchimento Inteligente de Aportes */}
+      <SmartGoalAutoFillModal
+        isOpen={isAutoFillModalOpen}
+        onClose={() => setIsAutoFillModalOpen(false)}
+        dreams={dreams}
+        transactions={transactions}
+        onApply={handleApplySmartAutoFill}
+        initialFocusDreamId={autoFillFocusDreamId}
       />
 
     </div>

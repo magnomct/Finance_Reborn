@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   PiggyBank, Target, TrendingUp, Sparkles, Plus, Minus, 
   CheckCircle2, Clock, Calendar, Zap, ArrowRight, ShieldCheck,
-  ChevronRight, Award, AlertCircle, Hourglass
+  ChevronRight, Award, AlertCircle, Hourglass, Wand2
 } from 'lucide-react';
 import { DreamGoal, RecurringExpense, Transaction } from '../types';
 import { formatBRL } from '../utils/finance';
@@ -12,6 +12,7 @@ import {
 } from '../utils/dreamSavingsPlanner';
 import { mapDreamTo6Jar } from '../utils/dreamCalculations';
 import { calculateDreamCountdown } from '../utils/dreamCountdown';
+import { calculateSingleGoalQuickFill } from '../utils/smartGoalAutoFill';
 import { GoalTrajectoryChart } from './GoalTrajectoryChart';
 
 interface DreamMonthlySavingsPlannerProps {
@@ -460,6 +461,24 @@ export const DreamMonthlySavingsPlanner: React.FC<DreamMonthlySavingsPlannerProp
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
+
+                  {!activeItem.isCompleted && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = dreams.find(x => x.id === activeItem.dreamId);
+                        if (!d) return;
+                        const quick = calculateSingleGoalQuickFill(d);
+                        handleUpdateGoal(activeItem.dreamId, quick.idealMonthlyContribution);
+                      }}
+                      className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition cursor-pointer shadow-2xs"
+                      title="Autopreencher aporte mensal ideal pelo saldo e prazo restante"
+                      aria-label={`Autopreencher aporte de ${activeItem.title}`}
+                      data-testid={`btn-quick-autofill-planner-${activeItem.dreamId}`}
+                    >
+                      <Wand2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -486,9 +505,8 @@ export const DreamMonthlySavingsPlanner: React.FC<DreamMonthlySavingsPlannerProp
                     onClick={() => {
                       const d = dreams.find(x => x.id === activeItem.dreamId);
                       if (d && activeItem.remainingAmount > 0) {
-                        // Calcula valor sugerido aproximado baseado em 12 meses ou prazo
-                        const suggested = Math.max(50, Math.ceil(activeItem.remainingAmount / 12));
-                        handleUpdateGoal(activeItem.dreamId, suggested);
+                        const quick = calculateSingleGoalQuickFill(d);
+                        handleUpdateGoal(activeItem.dreamId, quick.idealMonthlyContribution);
                       }
                     }}
                     className="px-2.5 py-1 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 font-bold text-xs transition cursor-pointer shadow-2xs ml-auto"
