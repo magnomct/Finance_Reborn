@@ -1,15 +1,31 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Search, Download, Trash2, CheckCircle2, Clock, 
-  ArrowUpDown, Filter, DollarSign, Upload, FileSpreadsheet, 
-  FileText, Calendar, X, Sparkles, Edit3
+import {
+  Search,
+  Trash2,
+  CheckCircle2,
+  Clock,
+  Upload,
+  FileText,
+  Calendar,
+  X,
+  Edit3,
 } from 'lucide-react';
-import { Transaction, JarType, AccountType, AutoCategoryRule } from '../types';
+import {
+  Transaction,
+  AutoCategoryRule,
+  ParentCategoryItem,
+} from '../types';
 import { formatBRL } from '../utils/finance';
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { BankImportModal } from './BankImportModal';
 import { ExportPdfModal } from './ExportPdfModal';
-import { downloadTransactionsCSV } from '../utils/csvExport';
+import { StatementExporter } from './StatementExporter';
+import {
+  ExportExecutionResult,
+  isPJTransaction,
+  resolveTransactionExportMetadata,
+} from '../utils/exportTransactionsService';
+import { loadCategoryHierarchy } from '../utils/categoryHierarchy';
 import { getAllAvailableAccounts } from '../utils/customAccounts';
 
 interface ExtratosViewProps {
@@ -20,6 +36,7 @@ interface ExtratosViewProps {
   onImportTransactions?: (newTransactions: Transaction[]) => void;
   autoRules?: AutoCategoryRule[];
   scope?: 'PF' | 'PJ' | 'CONSOLIDADO';
+  hierarchy?: ParentCategoryItem[];
 }
 
 type DatePreset = 'ALL' | 'THIS_MONTH' | 'LAST_30_DAYS' | 'YEAR_CURRENT' | 'CUSTOM';
@@ -31,7 +48,8 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
   onEditTransaction,
   onImportTransactions,
   autoRules = [],
-  scope
+  scope,
+  hierarchy,
 }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
@@ -42,12 +60,21 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
     return 'ALL';
   });
   const [jarFilter, setJarFilter] = useState<string>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [accountFilter, setAccountFilter] = useState<string>('ALL');
   const [datePreset, setDatePreset] = useState<DatePreset>('ALL');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  const [exportNotification, setExportNotification] = useState<string | null>(null);
+  const [exportToast, setExportToast] = useState<{
+    message: string;
+    detail: string;
+  } | null>(null);
+
+  const resolvedHierarchy = useMemo(
+    () => hierarchy ?? loadCategoryHierarchy(),
+    [hierarchy]
+  );
 
   // Sync when parent scope changes
   useEffect(() => {
@@ -55,6 +82,15 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
     else if (scope === 'PJ') setScopeFilter('PJ');
     else if (scope === 'CONSOLIDADO') setScopeFilter('ALL');
   }, [scope]);
+
+  // Auto-dismiss export success toast
+  useEffect(() => {
+    if (!exportToast) return;
+    const timer = setTimeout(() => {
+      setExportToast(null);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [exportToast]);
 
   // Handle Preset changes
   const handleSelectPreset = (preset: DatePreset) => {
@@ -69,7 +105,6 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
       const year = today.getFullYear();
       const month = String(today.getMonth() + 1).padStart(2, '0');
       const start = `${year}-${month}-01`;
-      // Last day of month
       const lastDay = new Date(year, today.getMonth() + 1, 0).getDate();
       const end = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
       setStartDate(start);
@@ -102,81 +137,104 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
     if (endDate) {
       return `Até ${endDate.split('-').reverse().join('/')}`;
     }
-    return 'Todo o Histórico (Todos os lançamentos)';
+    return 'Todo o Histórico';
   }, [datePreset, startDate, endDate]);
 
+  // Available categories combining hierarchy parents and transaction categories
+  const availableCategories = useMemo(() => {
+    const catSet = new Set<string>();
+    resolvedHierarchy.forEach(p => {
+      if (p.name) catSet.add(p.name);
+    });
+    transactions.forEach(t => {
+      const meta = resolveTransactionExportMetadata(t, resolvedHierarchy);
+      if (meta.parentCategory) catSet.add(meta.parentCategory);
+    });
+    return Array.from(catSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [transactions, resolvedHierarchy]);
+
   const filtered = useMemo(() => {
-    return transactions.filter(t => {
-      // Scope filtering (PF vs PJ vs Consolidado)
-      if (scopeFilter === 'PF') {
-        const isPJ = t.costCenter === 'PJ' || t.account === 'Inter PJ' || t.jar === 'PJ_EXCLUIDO';
-        if (isPJ) return false;
-      } else if (scopeFilter === 'PJ') {
-        const isPJ = t.costCenter === 'PJ' || t.account === 'Inter PJ' || t.jar === 'PJ_EXCLUIDO';
-        if (!isPJ) return false;
-      }
+    return transactions
+      .filter(t => {
+        // Scope filtering (PF vs PJ vs Consolidado)
+        if (scopeFilter === 'PF' && isPJTransaction(t)) return false;
+        if (scopeFilter === 'PJ' && !isPJTransaction(t)) return false;
 
-      if (jarFilter !== 'ALL' && t.jar !== jarFilter) return false;
-      if (typeFilter !== 'ALL' && t.type !== typeFilter) return false;
-      if (accountFilter !== 'ALL' && t.account !== accountFilter) return false;
+        if (jarFilter !== 'ALL' && t.jar !== jarFilter) return false;
+        if (typeFilter !== 'ALL' && t.type !== typeFilter) return false;
+        if (accountFilter !== 'ALL' && t.account !== accountFilter) return false;
 
-      // Date filtering
-      if (startDate && t.date < startDate) return false;
-      if (endDate && t.date > endDate) return false;
+        // Category filtering (matches parent category or raw category)
+        if (categoryFilter !== 'ALL') {
+          const meta = resolveTransactionExportMetadata(t, resolvedHierarchy);
+          const matchesCategory =
+            meta.parentCategory === categoryFilter ||
+            t.parentCategory === categoryFilter ||
+            t.category === categoryFilter;
+          if (!matchesCategory) return false;
+        }
 
-      // Search query filtering
-      if (search.trim()) {
-        const q = search.toLowerCase();
-        return (
-          t.description.toLowerCase().includes(q) ||
-          t.account.toLowerCase().includes(q) ||
-          t.costCenter.toLowerCase().includes(q) ||
-          (t.category && t.category.toLowerCase().includes(q)) ||
-          (t.notes && t.notes.toLowerCase().includes(q))
-        );
-      }
-      return true;
-    }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [transactions, search, scopeFilter, jarFilter, typeFilter, accountFilter, startDate, endDate]);
+        // Date filtering
+        if (startDate && t.date < startDate) return false;
+        if (endDate && t.date > endDate) return false;
+
+        // Search query filtering
+        if (search.trim()) {
+          const q = search.toLowerCase();
+          return (
+            t.description.toLowerCase().includes(q) ||
+            t.account.toLowerCase().includes(q) ||
+            t.costCenter.toLowerCase().includes(q) ||
+            (t.category && t.category.toLowerCase().includes(q)) ||
+            (t.parentCategory && t.parentCategory.toLowerCase().includes(q)) ||
+            (t.subcategory && t.subcategory.toLowerCase().includes(q)) ||
+            (t.notes && t.notes.toLowerCase().includes(q))
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [
+    transactions,
+    search,
+    scopeFilter,
+    jarFilter,
+    categoryFilter,
+    typeFilter,
+    accountFilter,
+    startDate,
+    endDate,
+    resolvedHierarchy,
+  ]);
 
   const totalFilteredReceipts = filtered
     .filter(t => t.type === 'receita' || t.type === 'reembolso')
-    .reduce((acc, t) => acc + t.amount, 0);
+    .reduce((acc, t) => acc + Math.abs(t.amount), 0);
 
   const totalFilteredPayments = filtered
     .filter(t => t.type === 'despesa')
     .reduce((acc, t) => acc + Math.abs(t.amount), 0);
 
-  const handleExportCSV = () => {
-    if (filtered.length === 0) return;
-    const dateTag = new Date().toISOString().slice(0, 10);
-    const scopeTag = scopeFilter !== 'ALL' ? `${scopeFilter.toLowerCase()}_` : '';
-    const filterTag = datePreset !== 'ALL' ? `${datePreset.toLowerCase()}_` : '';
-    const filename = `extrato_yupee_${scopeTag}${filterTag}${dateTag}.csv`;
-    const success = downloadTransactionsCSV(filtered, filename);
-    if (success) {
-      setExportNotification(`Extrato CSV exportado com sucesso! (${filtered.length} lançamentos filtrados)`);
-      setTimeout(() => {
-        setExportNotification(null);
-      }, 4000);
-    }
+  const handleExportSuccess = (result: ExportExecutionResult) => {
+    const countText =
+      result.count === 1 ? '1 transação' : `${result.count} transações`;
+    setExportToast({
+      message: 'Arquivo exportado com sucesso!',
+      detail: `${result.filename} · ${countText} (${result.format.toUpperCase()})`,
+    });
   };
 
   return (
     <div className="space-y-4">
-      
       {/* Banner de Importação de Arquivos OFX e CSV */}
       <div className="bg-gradient-to-r from-teal-500/10 via-blue-500/10 to-transparent p-4 sm:p-5 rounded-3xl border border-teal-200/80 dark:border-teal-900/60 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="p-1 rounded-lg bg-teal-600 text-white">
-              <Upload className="w-3.5 h-3.5" />
-            </span>
-            <span className="text-[11px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-400">
-              Importação Bancária Automatizada
-            </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300">
-              .OFX & .CSV
+          <div className="flex items-center gap-2 text-xs text-teal-700 dark:text-teal-400 font-bold">
+            <Upload className="w-3.5 h-3.5" />
+            <span>Importação Bancária Automatizada</span>
+            <span aria-hidden="true">·</span>
+            <span className="text-slate-500 dark:text-slate-400 font-semibold">
+              .OFX &amp; .CSV
             </span>
           </div>
           <h3 className="text-base font-black text-slate-900 dark:text-white">
@@ -188,8 +246,9 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
         </div>
 
         <button
+          type="button"
           onClick={() => setIsImportModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-black shadow-sm hover:shadow transition shrink-0 cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-sm hover:shadow transition shrink-0 whitespace-nowrap cursor-pointer"
         >
           <Upload className="w-4 h-4" />
           <span>Importar Arquivo (.OFX / .CSV)</span>
@@ -198,29 +257,33 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
 
       {/* Top Filter Bar & Actions */}
       <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-        
-        {/* Header row with Title, Search and Export Actions */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
+        {/* Header row with Title, Scope Toggle & Export Actions */}
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-base text-slate-900 dark:text-white">
-                Extrato Geral de Lançamentos
-              </h3>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                {filtered.length} itens
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">
+              Extrato Geral de Lançamentos
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-1.5 mt-0.5">
+              <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
+                {filtered.length} {filtered.length === 1 ? 'item' : 'itens'}
               </span>
-            </div>
-            <p className="text-xs text-slate-500">
-              Período ativo: <span className="font-semibold text-teal-600 dark:text-teal-400">{currentPeriodLabel}</span>
+              <span aria-hidden="true">·</span>
+              <span>
+                Período ativo:{' '}
+                <span className="font-semibold text-teal-600 dark:text-teal-400">
+                  {currentPeriodLabel}
+                </span>
+              </span>
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
             {/* Search Input */}
-            <div className="relative flex-1 sm:w-64 min-w-0">
+            <div className="relative flex-1 sm:w-56 min-w-[180px]">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
+                aria-label="Buscar lançamentos no extrato"
                 placeholder="Buscar por descrição, centro..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -228,46 +291,96 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
               />
             </div>
 
-            {/* Exportar PDF Contábil Button (Primary Action for Accountant) */}
-            <button
-              onClick={() => setIsPdfModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-700 hover:to-rose-800 text-white text-xs font-bold transition shrink-0 shadow-sm hover:shadow cursor-pointer"
-              title="Gerar relatório formal em PDF para contador ou prestação de contas"
+            {/* Segmented Scope Filter (PF | PJ/MEI | Consolidado) next to Exportar */}
+            <div
+              role="group"
+              aria-label="Filtro de escopo do extrato"
+              data-testid="scope-segmented-filter"
+              className="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shrink-0"
             >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Exportar PDF Contábil</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setScopeFilter('PF')}
+                data-testid="scope-btn-pf"
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  scopeFilter === 'PF'
+                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                PF
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeFilter('PJ')}
+                data-testid="scope-btn-pj"
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  scopeFilter === 'PJ'
+                    ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                PJ/MEI
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeFilter('ALL')}
+                data-testid="scope-btn-consolidado"
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  scopeFilter === 'ALL'
+                    ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Consolidado
+              </button>
+            </div>
 
-            {/* Exportar Extrato CSV (com filtros ativos de busca, período e escopo PF/PJ) */}
+            {/* Smart StatementExporter (CSV Excel PT-BR & OFX) */}
+            <StatementExporter
+              filteredTransactions={filtered}
+              activeScope={scopeFilter}
+              periodLabel={currentPeriodLabel}
+              categoryLabel={categoryFilter}
+              hierarchy={resolvedHierarchy}
+              onExportSuccess={handleExportSuccess}
+            />
+
+            {/* Exportar PDF Contábil (Secondary action) */}
             <button
               type="button"
-              onClick={handleExportCSV}
-              disabled={filtered.length === 0}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition shrink-0 shadow-sm hover:shadow cursor-pointer active:scale-95"
-              title={`Baixar ${filtered.length} lançamentos filtrados em formato CSV considerando o escopo ${scopeFilter} (compatível com Excel, Numbers e Google Sheets)`}
-              data-testid="btn-export-csv"
+              onClick={() => setIsPdfModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition shrink-0 whitespace-nowrap cursor-pointer"
+              title="Gerar relatório formal em PDF para contador ou prestação de contas"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Exportar CSV</span>
-              <span className="opacity-80 text-[10px] font-semibold">
-                ({filtered.length})
-              </span>
+              <FileText className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+              <span>PDF Contábil</span>
             </button>
           </div>
         </div>
 
-        {/* Feedback visual de exportação CSV com sucesso */}
-        {exportNotification && (
-          <div className="flex items-center justify-between gap-2 p-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-medium">
-            <div className="flex items-center gap-2">
+        {/* Toast / Badge de feedback visual de exportação */}
+        {exportToast && (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="toast-export-success"
+            className="flex items-center justify-between gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>{exportNotification}</span>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
+                <span className="font-bold">{exportToast.message}</span>
+                <span className="text-emerald-700/80 dark:text-emerald-300/80 font-mono text-[11px] truncate">
+                  {exportToast.detail}
+                </span>
+              </div>
             </div>
             <button
               type="button"
-              onClick={() => setExportNotification(null)}
-              className="p-1 text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-100 cursor-pointer"
-              title="Fechar aviso"
+              onClick={() => setExportToast(null)}
+              aria-label="Fechar aviso de exportação"
+              className="p-1 rounded-lg text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-100 cursor-pointer shrink-0"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -277,13 +390,14 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
         {/* Date Filter Bar with Presets & Date Pickers */}
         <div className="p-3 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-slate-400 font-bold uppercase text-[10px] mr-1 flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
+            <span className="text-slate-500 dark:text-slate-400 font-bold text-[11px] mr-1 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5" />
               Período:
             </span>
             <button
+              type="button"
               onClick={() => handleSelectPreset('ALL')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-[11px] ${
+              className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-[11px] whitespace-nowrap ${
                 datePreset === 'ALL'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -292,8 +406,9 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
               Todos
             </button>
             <button
+              type="button"
               onClick={() => handleSelectPreset('THIS_MONTH')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-[11px] ${
+              className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-[11px] whitespace-nowrap ${
                 datePreset === 'THIS_MONTH'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -302,8 +417,9 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
               Mês Atual
             </button>
             <button
+              type="button"
               onClick={() => handleSelectPreset('LAST_30_DAYS')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-[11px] ${
+              className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-[11px] whitespace-nowrap ${
                 datePreset === 'LAST_30_DAYS'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -312,8 +428,9 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
               Últimos 30 Dias
             </button>
             <button
+              type="button"
               onClick={() => handleSelectPreset('YEAR_CURRENT')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-[11px] ${
+              className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer text-[11px] whitespace-nowrap ${
                 datePreset === 'YEAR_CURRENT'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -325,8 +442,14 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
 
           {/* Custom Date Inputs */}
           <div className="flex items-center gap-2 w-full md:w-auto">
-            <span className="text-[10px] uppercase font-bold text-slate-400">De:</span>
-            <input 
+            <label
+              htmlFor="extrato-date-start"
+              className="text-[11px] font-bold text-slate-500 dark:text-slate-400"
+            >
+              De:
+            </label>
+            <input
+              id="extrato-date-start"
               type="date"
               value={startDate}
               onChange={e => {
@@ -335,8 +458,14 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
               }}
               className="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs focus:ring-1 focus:ring-teal-500"
             />
-            <span className="text-[10px] uppercase font-bold text-slate-400">Até:</span>
-            <input 
+            <label
+              htmlFor="extrato-date-end"
+              className="text-[11px] font-bold text-slate-500 dark:text-slate-400"
+            >
+              Até:
+            </label>
+            <input
+              id="extrato-date-end"
               type="date"
               value={endDate}
               onChange={e => {
@@ -347,8 +476,10 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
             />
             {(startDate || endDate) && (
               <button
+                type="button"
                 onClick={() => handleSelectPreset('ALL')}
-                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                aria-label="Limpar filtro de data"
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                 title="Limpar filtro de data"
               >
                 <X className="w-3.5 h-3.5" />
@@ -357,20 +488,25 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
           </div>
         </div>
 
-        {/* Dimension Selectors (Escopo, Pote, Tipo, Conta) */}
+        {/* Dimension Selectors (Categoria, Pote, Tipo, Conta) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1 text-xs">
           <select
-            value={scopeFilter}
-            onChange={e => setScopeFilter(e.target.value as 'ALL' | 'PF' | 'PJ')}
-            className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 font-medium"
-            data-testid="select-scope-filter"
+            aria-label="Filtrar por categoria"
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            data-testid="select-category-filter"
           >
-            <option value="ALL">Todos os Escopos (Consolidado)</option>
-            <option value="PF">Pessoa Física (PF)</option>
-            <option value="PJ">Pessoa Jurídica (PJ)</option>
+            <option value="ALL">Todas as Categorias</option>
+            {availableCategories.map(cat => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
           </select>
 
           <select
+            aria-label="Filtrar por pote"
             value={jarFilter}
             onChange={e => setJarFilter(e.target.value)}
             className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -386,27 +522,36 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
           </select>
 
           <select
+            aria-label="Filtrar por tipo de lançamento"
             value={typeFilter}
             onChange={e => setTypeFilter(e.target.value)}
             className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
           >
-            <option value="ALL">Todos os Tipos (Receitas & Despesas)</option>
+            <option value="ALL">Todos os Tipos (Entradas &amp; Saídas)</option>
             <option value="despesa">Despesas (-)</option>
             <option value="receita">Receitas (+)</option>
             <option value="reembolso">Reembolsos</option>
           </select>
 
           <select
+            aria-label="Filtrar por conta bancária"
             value={accountFilter}
             onChange={e => setAccountFilter(e.target.value)}
             className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
           >
             <option value="ALL">Todas as Contas</option>
-            {Array.from(new Set([...transactions.map(t => t.account), ...getAllAvailableAccounts()])).filter(Boolean).map(acc => (
-              <option key={acc} value={acc}>
-                {acc}
-              </option>
-            ))}
+            {Array.from(
+              new Set([
+                ...transactions.map(t => t.account),
+                ...getAllAvailableAccounts(),
+              ])
+            )
+              .filter(Boolean)
+              .map(acc => (
+                <option key={acc} value={acc}>
+                  {acc}
+                </option>
+              ))}
           </select>
         </div>
       </div>
@@ -416,7 +561,7 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 uppercase text-[10px] font-bold">
+              <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 text-[11px] font-bold">
                 <th className="py-3 px-4">Data</th>
                 <th className="py-3 px-4">Descrição</th>
                 <th className="py-3 px-4">Pote</th>
@@ -436,19 +581,28 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
                 </tr>
               ) : (
                 filtered.map(tx => {
-                  const isPositive = tx.type === 'receita' || tx.type === 'reembolso';
-                  const jarDef = JAR_DEFINITIONS[tx.jar] || JAR_DEFINITIONS.NEC_55;
+                  const isPositive =
+                    tx.type === 'receita' || tx.type === 'reembolso';
+                  const jarDef =
+                    JAR_DEFINITIONS[tx.jar] || JAR_DEFINITIONS.NEC_55;
 
                   return (
-                    <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
-                      <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">{tx.date}</td>
+                    <tr
+                      key={tx.id}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition"
+                    >
+                      <td className="py-3 px-4 font-mono tabular-nums text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                        {tx.date}
+                      </td>
                       <td className="py-3 px-4 font-bold text-slate-900 dark:text-white whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <span>{tx.description}</span>
                           {tx.notes && (
                             <button
                               type="button"
-                              onClick={() => onEditTransaction && onEditTransaction(tx)}
+                              onClick={() =>
+                                onEditTransaction && onEditTransaction(tx)
+                              }
                               className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-950 dark:hover:bg-blue-900 dark:text-blue-300 font-semibold flex items-center gap-1 cursor-pointer transition border border-blue-200/60 dark:border-blue-800"
                               title="Clique para editar este lançamento / observação"
                             >
@@ -459,17 +613,25 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
                         </div>
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <span 
+                        <span
                           className="px-2 py-0.5 rounded text-[10px] font-bold"
-                          style={{ backgroundColor: `${jarDef.colorHex}15`, color: jarDef.colorHex }}
+                          style={{
+                            backgroundColor: `${jarDef.colorHex}15`,
+                            color: jarDef.colorHex,
+                          }}
                         >
                           {jarDef.shortName}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-500 whitespace-nowrap">{tx.account}</td>
-                      <td className="py-3 px-4 text-slate-500 whitespace-nowrap">{tx.costCenter}</td>
+                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                        {tx.account}
+                      </td>
+                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                        {tx.costCenter}
+                      </td>
                       <td className="py-3 px-4 text-center whitespace-nowrap">
                         <button
+                          type="button"
                           onClick={() => onToggleStatus(tx.id)}
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition cursor-pointer ${
                             tx.status === 'liquidado'
@@ -477,20 +639,33 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
                               : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
                           }`}
                         >
-                          {tx.status === 'liquidado' ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                          <span>{tx.status === 'liquidado' ? 'Liquidado' : 'Agendado'}</span>
+                          {tx.status === 'liquidado' ? (
+                            <CheckCircle2 className="w-3 h-3" />
+                          ) : (
+                            <Clock className="w-3 h-3" />
+                          )}
+                          <span>
+                            {tx.status === 'liquidado' ? 'Liquidado' : 'Agendado'}
+                          </span>
                         </button>
                       </td>
-                      <td className={`py-3 px-4 text-right font-black whitespace-nowrap ${
-                        isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-100'
-                      }`}>
-                        {isPositive ? '+' : '-'} {formatBRL(Math.abs(tx.amount))}
+                      <td
+                        className={`py-3 px-4 text-right font-black font-mono tabular-nums whitespace-nowrap ${
+                          isPositive
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-slate-800 dark:text-slate-100'
+                        }`}
+                      >
+                        {isPositive ? '+' : '-'}{' '}
+                        {formatBRL(Math.abs(tx.amount))}
                       </td>
                       <td className="py-3 px-4 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           {onEditTransaction && (
                             <button
+                              type="button"
                               onClick={() => onEditTransaction(tx)}
+                              aria-label={`Editar lançamento ${tx.description}`}
                               className="p-1 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
                               title="Editar lançamento"
                               data-testid={`edit-extrato-${tx.id}`}
@@ -499,7 +674,9 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
                             </button>
                           )}
                           <button
+                            type="button"
                             onClick={() => onDeleteTransaction(tx.id)}
+                            aria-label={`Remover lançamento ${tx.description}`}
                             className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
                             title="Remover lançamento"
                           >
@@ -518,31 +695,31 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
         {/* Footer Subtotals */}
         <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-4">
-            <span className="text-slate-500">
-              Recebimentos: <strong className="text-emerald-600 dark:text-emerald-400">+{formatBRL(totalFilteredReceipts)}</strong>
+            <span className="text-slate-500 dark:text-slate-400">
+              Recebimentos:{' '}
+              <strong className="text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">
+                +{formatBRL(totalFilteredReceipts)}
+              </strong>
             </span>
-            <span className="text-slate-500">
-              Pagamentos: <strong className="text-rose-600 dark:text-rose-400">-{formatBRL(totalFilteredPayments)}</strong>
+            <span className="text-slate-500 dark:text-slate-400">
+              Pagamentos:{' '}
+              <strong className="text-rose-600 dark:text-rose-400 font-mono tabular-nums">
+                -{formatBRL(totalFilteredPayments)}
+              </strong>
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleExportCSV}
-              disabled={filtered.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold transition cursor-pointer disabled:opacity-50 shadow-2xs active:scale-95"
-              title={`Baixar ${filtered.length} lançamentos filtrados em formato CSV`}
-              data-testid="btn-export-extrato"
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 text-[11px] font-bold">
+              Saldo Filtrado:
+            </span>
+            <strong
+              className={`text-sm font-black font-mono tabular-nums ${
+                totalFilteredReceipts - totalFilteredPayments >= 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-rose-600 dark:text-rose-400'
+              }`}
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Exportar Extrato ({filtered.length})</span>
-            </button>
-
-            <span className="text-slate-400 text-[11px] uppercase font-bold">Saldo Filtrado:</span>
-            <strong className={`text-sm font-black ${
-              totalFilteredReceipts - totalFilteredPayments >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600'
-            }`}>
               {formatBRL(totalFilteredReceipts - totalFilteredPayments)}
             </strong>
           </div>
@@ -567,7 +744,6 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
         filteredTransactions={filtered}
         currentPeriodLabel={currentPeriodLabel}
       />
-
     </div>
   );
 };

@@ -2,15 +2,17 @@ import React, { useState, useMemo } from 'react';
 import { 
   PiggyBank, Target, TrendingUp, Sparkles, Plus, Minus, 
   CheckCircle2, Clock, Calendar, Zap, ArrowRight, ShieldCheck,
-  ChevronRight, Award, AlertCircle
+  ChevronRight, Award, AlertCircle, Hourglass
 } from 'lucide-react';
-import { DreamGoal, RecurringExpense } from '../types';
+import { DreamGoal, RecurringExpense, Transaction } from '../types';
 import { formatBRL } from '../utils/finance';
 import { 
   calculateDreamSavingsPlannerSummary, 
   updateDreamMonthlySavingsGoal 
 } from '../utils/dreamSavingsPlanner';
 import { mapDreamTo6Jar } from '../utils/dreamCalculations';
+import { calculateDreamCountdown } from '../utils/dreamCountdown';
+import { GoalTrajectoryChart } from './GoalTrajectoryChart';
 
 interface DreamMonthlySavingsPlannerProps {
   dreams: DreamGoal[];
@@ -19,6 +21,8 @@ interface DreamMonthlySavingsPlannerProps {
   setRecurringList?: React.Dispatch<React.SetStateAction<RecurringExpense[]>>;
   onDepositCustom?: (dream: DreamGoal) => void;
   onNavigateToScreen?: (screen: string) => void;
+  transactions?: Transaction[];
+  onRecordContribution?: (dreamId: string, amount: number, date: string, note?: string) => void;
 }
 
 export const DreamMonthlySavingsPlanner: React.FC<DreamMonthlySavingsPlannerProps> = ({
@@ -27,7 +31,9 @@ export const DreamMonthlySavingsPlanner: React.FC<DreamMonthlySavingsPlannerProp
   recurringList = [],
   setRecurringList,
   onDepositCustom,
-  onNavigateToScreen
+  onNavigateToScreen,
+  transactions = [],
+  onRecordContribution
 }) => {
   const [selectedDreamId, setSelectedDreamId] = useState<string>(dreams[0]?.id || '');
   const [viewMode, setViewMode] = useState<'individual' | 'grid'>('individual');
@@ -346,30 +352,46 @@ export const DreamMonthlySavingsPlanner: React.FC<DreamMonthlySavingsPlannerProp
                 </div>
               </div>
 
-              {/* Barra Visual Gradiente com Marcadores 25%, 50%, 75%, 100% */}
-              <div className="relative pt-1">
-                <div className="w-full bg-slate-100 dark:bg-slate-700 h-4 rounded-full overflow-hidden shadow-inner relative">
-                  {/* Marcadores de Etapas */}
-                  <div className="absolute top-0 bottom-0 left-[25%] w-[1px] bg-slate-300 dark:bg-slate-600 z-10 opacity-70" title="25% da meta" />
-                  <div className="absolute top-0 bottom-0 left-[50%] w-[1px] bg-slate-300 dark:bg-slate-600 z-10 opacity-70" title="50% da meta" />
-                  <div className="absolute top-0 bottom-0 left-[75%] w-[1px] bg-slate-300 dark:bg-slate-600 z-10 opacity-70" title="75% da meta" />
+              {/* Barra Visual Gradiente com Marcadores 25%, 50%, 75%, 100% + Contagem Regressiva ao Lado */}
+              {(() => {
+                const activeCountdown = calculateDreamCountdown(activeItem.targetDate);
+                return (
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-3 pt-1">
+                    <div className="relative flex-1 min-w-0">
+                      <div className="w-full bg-slate-100 dark:bg-slate-700 h-4 rounded-full overflow-hidden shadow-inner relative">
+                        {/* Marcadores de Etapas */}
+                        <div className="absolute top-0 bottom-0 left-[25%] w-[1px] bg-slate-300 dark:bg-slate-600 z-10 opacity-70" title="25% da meta" />
+                        <div className="absolute top-0 bottom-0 left-[50%] w-[1px] bg-slate-300 dark:bg-slate-600 z-10 opacity-70" title="50% da meta" />
+                        <div className="absolute top-0 bottom-0 left-[75%] w-[1px] bg-slate-300 dark:bg-slate-600 z-10 opacity-70" title="75% da meta" />
 
-                  {/* Preenchimento Dinâmico */}
-                  <div 
-                    className={`h-full bg-gradient-to-r ${activeItem.gradient} transition-all duration-700 rounded-full shadow-sm`}
-                    style={{ width: `${Math.min(100, Math.max(activeItem.progressPct, 2))}%` }}
-                    data-testid={`progress-bar-fill-${activeItem.dreamId}`}
-                  />
-                </div>
+                        {/* Preenchimento Dinâmico */}
+                        <div 
+                          className={`h-full bg-gradient-to-r ${activeItem.gradient} transition-all duration-700 rounded-full shadow-sm`}
+                          style={{ width: `${Math.min(100, Math.max(activeItem.progressPct, 2))}%` }}
+                          data-testid={`progress-bar-fill-${activeItem.dreamId}`}
+                        />
+                      </div>
 
-                <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 mt-1.5 px-0.5 select-none">
-                  <span>Início (0%)</span>
-                  <span className={activeItem.progressPct >= 25 ? 'text-indigo-600 dark:text-indigo-400' : ''}>25%</span>
-                  <span className={activeItem.progressPct >= 50 ? 'text-indigo-600 dark:text-indigo-400' : ''}>50%</span>
-                  <span className={activeItem.progressPct >= 75 ? 'text-indigo-600 dark:text-indigo-400' : ''}>75%</span>
-                  <span className={activeItem.progressPct >= 100 ? 'text-emerald-600 dark:text-emerald-400 font-black' : ''}>100% ({formatBRL(activeItem.target)})</span>
-                </div>
-              </div>
+                      <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 mt-1.5 px-0.5 select-none">
+                        <span>Início (0%)</span>
+                        <span className={activeItem.progressPct >= 25 ? 'text-indigo-600 dark:text-indigo-400' : ''}>25%</span>
+                        <span className={activeItem.progressPct >= 50 ? 'text-indigo-600 dark:text-indigo-400' : ''}>50%</span>
+                        <span className={activeItem.progressPct >= 75 ? 'text-indigo-600 dark:text-indigo-400' : ''}>75%</span>
+                        <span className={activeItem.progressPct >= 100 ? 'text-emerald-600 dark:text-emerald-400 font-black' : ''}>100% ({formatBRL(activeItem.target)})</span>
+                      </div>
+                    </div>
+
+                    <div
+                      data-testid={`planner-progress-countdown-${activeItem.dreamId}`}
+                      className={`shrink-0 px-2.5 py-1 rounded-xl border flex items-center gap-1.5 text-[11px] font-black self-start whitespace-nowrap ${activeCountdown.badgeColorClass}`}
+                      title={activeCountdown.hasDeadline ? `Prazo Final: ${activeCountdown.formattedTargetDate}` : 'Sem prazo final definido'}
+                    >
+                      <Hourglass className="w-3.5 h-3.5 shrink-0" />
+                      <span>{activeCountdown.hasDeadline ? activeCountdown.countdownLabel : 'Sem prazo'}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Informações de Saldo Restante */}
               <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-700">
@@ -529,6 +551,20 @@ export const DreamMonthlySavingsPlanner: React.FC<DreamMonthlySavingsPlannerProp
                 </div>
               </div>
             </div>
+
+            {/* Evolução de Aportes & Trajetória da Meta do Sonho Selecionado */}
+            {(() => {
+              const activeDream = dreams.find(d => d.id === activeItem.dreamId);
+              if (!activeDream) return null;
+              return (
+                <GoalTrajectoryChart
+                  dream={activeDream}
+                  transactions={transactions}
+                  onRecordContribution={onRecordContribution}
+                  compact
+                />
+              );
+            })()}
           </div>
         </div>
       )}
@@ -557,13 +593,27 @@ export const DreamMonthlySavingsPlanner: React.FC<DreamMonthlySavingsPlannerProp
                   </span>
                 </div>
 
-                {/* Barra de Progresso do Sonho */}
-                <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden relative shadow-inner my-2">
-                  <div 
-                    className={`h-full bg-gradient-to-r ${item.gradient} transition-all duration-500 rounded-full`}
-                    style={{ width: `${Math.min(100, Math.max(item.progressPct, 2))}%` }}
-                  />
-                </div>
+                {/* Barra de Progresso do Sonho + Contagem Regressiva ao Lado */}
+                {(() => {
+                  const itemCountdown = calculateDreamCountdown(item.targetDate);
+                  return (
+                    <div className="flex items-center gap-2 my-2">
+                      <div className="flex-1 min-w-0 bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden relative shadow-inner">
+                        <div 
+                          className={`h-full bg-gradient-to-r ${item.gradient} transition-all duration-500 rounded-full`}
+                          style={{ width: `${Math.min(100, Math.max(item.progressPct, 2))}%` }}
+                        />
+                      </div>
+                      <span
+                        className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-black whitespace-nowrap ${itemCountdown.badgeColorClass}`}
+                        title={itemCountdown.hasDeadline ? `Prazo Final: ${itemCountdown.formattedTargetDate}` : 'Sem prazo final definido'}
+                      >
+                        <Hourglass className="w-2.5 h-2.5 shrink-0" />
+                        <span>{itemCountdown.hasDeadline ? itemCountdown.countdownLabel : 'Sem prazo'}</span>
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Atual: <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{formatBRL(item.current)}</strong></span>

@@ -71,6 +71,13 @@ export type DreamMilestoneLevel = 50 | 75 | 100;
 export type DreamPriority = 'alta' | 'media' | 'baixa';
 export type DreamSortOption = 'urgency' | 'priority' | 'targetDate' | 'estimatedTime' | 'progress' | 'default';
 
+export interface GoalContribution {
+  id: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  note?: string;
+}
+
 export interface DreamGoal {
   id: string;
   title: string;
@@ -79,7 +86,10 @@ export interface DreamGoal {
   monthlyDeposit: number;
   category: string;
   impact: string;
+  startDate?: string;
   targetDate?: string;
+  yieldRateMonthlyPct?: number;
+  contributionsHistory?: GoalContribution[];
   urgencyDaysThreshold?: number; // Prazo de urgência em dias de antecedência para aviso de meta crítica (ex: 30, 60, 90)
   priority?: DreamPriority; // Prioridade do sonho: Alta, Média ou Baixa
   iconName: string;

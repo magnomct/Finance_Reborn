@@ -43,6 +43,8 @@ import {
   updateDreamTargetDate,
   getPriorityConfig 
 } from '../utils/dreamCountdown';
+import { recordGoalContribution } from '../utils/goalTrajectory';
+import { GoalDetailModal } from './GoalDetailModal';
 
 interface SonhosViewProps {
   dreams: DreamGoal[];
@@ -77,6 +79,12 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   const [isNewDreamModalOpen, setIsNewDreamModalOpen] = useState(false);
   const [simulatorDream, setSimulatorDream] = useState<DreamGoal | null>(null);
   const [activeCalculatorDream, setActiveCalculatorDream] = useState<DreamGoal | null>(null);
+  const [detailModalDreamId, setDetailModalDreamId] = useState<string | null>(null);
+
+  const detailModalDream = useMemo(
+    () => (detailModalDreamId ? dreams.find(d => d.id === detailModalDreamId) || null : null),
+    [dreams, detailModalDreamId]
+  );
 
   // New dream fields
   const [title, setTitle] = useState('');
@@ -287,14 +295,49 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
     return calculateSuggestedMonthlyDeposit(t, 0, targetDate);
   }, [target, targetDate]);
 
+  const handleRecordTrajectoryContribution = (
+    dreamId: string,
+    val: number,
+    dateStr?: string,
+    note?: string
+  ) => {
+    if (val <= 0) return;
+    const targetDream = dreams.find(d => d.id === dreamId);
+    if (!targetDream) return;
+
+    const jarInfo = mapDreamTo6Jar(targetDream.category, targetDream.title);
+
+    setDreams(prev =>
+      prev.map(d =>
+        d.id === dreamId
+          ? recordGoalContribution(d, val, dateStr, note, transactions)
+          : d
+      )
+    );
+
+    onAddTransaction({
+      date: dateStr,
+      description: note?.trim() ? `${note.trim()} (${targetDream.title})` : `Aporte Sonho: ${targetDream.title}`,
+      amount: -Math.abs(val),
+      type: 'despesa',
+      jar: jarInfo.jar,
+      account: 'Inter PF',
+      costCenter: 'Magno',
+      status: 'liquidado',
+      category: 'Sonhos & Poupança',
+      dreamId: targetDream.id
+    });
+  };
+
   const handleDirectDeposit = (dream: DreamGoal, val: number) => {
     if (val <= 0) return;
-    setDreams(prev => prev.map(d => {
-      if (d.id === dream.id) {
-        return { ...d, current: d.current + val };
-      }
-      return d;
-    }));
+    setDreams(prev =>
+      prev.map(d =>
+        d.id === dream.id
+          ? recordGoalContribution(d, val, undefined, `Aporte Mensal: ${dream.title}`, transactions)
+          : d
+      )
+    );
 
     onAddTransaction({
       description: `Aporte Mensal: ${dream.title}`,
@@ -316,13 +359,14 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
     const val = parseFloat(depositAmount);
     if (isNaN(val) || val <= 0) return;
 
-    // 1. Update dream state
-    setDreams(prev => prev.map(d => {
-      if (d.id === selectedDreamForDeposit.id) {
-        return { ...d, current: d.current + val };
-      }
-      return d;
-    }));
+    // 1. Update dream state and trajectory contribution history
+    setDreams(prev =>
+      prev.map(d =>
+        d.id === selectedDreamForDeposit.id
+          ? recordGoalContribution(d, val, undefined, `Aporte Sonho: ${selectedDreamForDeposit.title}`, transactions)
+          : d
+      )
+    );
 
     // 2. Also record a transaction in PLP_10
     onAddTransaction({
@@ -551,6 +595,8 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
         setRecurringList={setRecurringList}
         onDepositCustom={(dream) => setSelectedDreamForDeposit(dream)}
         onNavigateToScreen={onNavigateToScreen}
+        transactions={transactions}
+        onRecordContribution={handleRecordTrajectoryContribution}
       />
 
       {/* Gráfico de Rosca de Conclusão dos Sonhos */}
@@ -803,29 +849,41 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                       </span>
                     </div>
 
-                    {/* Gráfico de Barra Visual com Marcadores de Meta (25%, 50%, 75%) */}
-                    <div className="relative pt-1">
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden relative shadow-inner">
-                        {/* Marcadores de Etapa no Trilho */}
-                        <div className="absolute top-0 bottom-0 left-[25%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="25% da meta" />
-                        <div className="absolute top-0 bottom-0 left-[50%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="50% da meta" />
-                        <div className="absolute top-0 bottom-0 left-[75%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="75% da meta" />
+                    {/* Gráfico de Barra Visual com Marcadores de Meta (25%, 50%, 75%) + Contagem Regressiva ao Lado */}
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-2.5 pt-1">
+                      <div className="relative flex-1 min-w-0">
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden relative shadow-inner">
+                          {/* Marcadores de Etapa no Trilho */}
+                          <div className="absolute top-0 bottom-0 left-[25%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="25% da meta" />
+                          <div className="absolute top-0 bottom-0 left-[50%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="50% da meta" />
+                          <div className="absolute top-0 bottom-0 left-[75%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="75% da meta" />
 
-                        {/* Barra Gradiente de Preenchimento do Saldo Atual */}
-                        <div 
-                          className={`h-full bg-gradient-to-r ${dream.gradient} transition-all duration-700 rounded-full shadow-sm relative`}
-                          style={{ width: `${Math.min(100, Math.max(pct, 2))}%` }}
-                          data-testid={`dream-progress-bar-${dream.id}`}
-                        />
+                          {/* Barra Gradiente de Preenchimento do Saldo Atual */}
+                          <div 
+                            className={`h-full bg-gradient-to-r ${dream.gradient} transition-all duration-700 rounded-full shadow-sm relative`}
+                            style={{ width: `${Math.min(100, Math.max(pct, 2))}%` }}
+                            data-testid={`dream-progress-bar-${dream.id}`}
+                          />
+                        </div>
+
+                        {/* Ticks e Legendas dos Marcos da Barra de Progresso */}
+                        <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 mt-1 px-0.5 select-none">
+                          <span>0%</span>
+                          <span className={pct >= 25 ? 'text-indigo-600 dark:text-indigo-400' : ''}>25%</span>
+                          <span className={pct >= 50 ? 'text-indigo-600 dark:text-indigo-400' : ''}>50%</span>
+                          <span className={pct >= 75 ? 'text-indigo-600 dark:text-indigo-400' : ''}>75%</span>
+                          <span className={pct >= 100 ? 'text-emerald-600 dark:text-emerald-400 font-black' : ''}>100%</span>
+                        </div>
                       </div>
 
-                      {/* Ticks e Legendas dos Marcos da Barra de Progresso */}
-                      <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 mt-1 px-0.5 select-none">
-                        <span>0%</span>
-                        <span className={pct >= 25 ? 'text-indigo-600 dark:text-indigo-400' : ''}>25%</span>
-                        <span className={pct >= 50 ? 'text-indigo-600 dark:text-indigo-400' : ''}>50%</span>
-                        <span className={pct >= 75 ? 'text-indigo-600 dark:text-indigo-400' : ''}>75%</span>
-                        <span className={pct >= 100 ? 'text-emerald-600 dark:text-emerald-400 font-black' : ''}>100%</span>
+                      {/* Contagem Regressiva de Dias Restantes ao Lado da Barra */}
+                      <div
+                        data-testid={`dream-progress-countdown-${dream.id}`}
+                        className={`shrink-0 px-2.5 py-1 rounded-xl border flex items-center gap-1.5 text-[10px] font-black self-start whitespace-nowrap ${countdown.badgeColorClass}`}
+                        title={countdown.hasDeadline ? `Prazo Final: ${countdown.formattedTargetDate} (${countdown.countdownSubtext})` : 'Defina um Prazo Final abaixo'}
+                      >
+                        <Hourglass className="w-3 h-3 shrink-0" />
+                        <span>{countdown.hasDeadline ? countdown.countdownLabel : 'Sem prazo'}</span>
                       </div>
                     </div>
 
@@ -923,30 +981,36 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                     })()}
                   </div>
 
-                  {/* Campo de Prazo (Data Estimada) & Bloco de Contagem Regressiva */}
+                  {/* Campo de Prazo Final (Data Prevista) & Bloco de Contagem Regressiva */}
                   <div className="mt-3.5 p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 space-y-2.5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                      <label
+                        htmlFor={`input-prazo-final-${dream.id}`}
+                        className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5"
+                      >
                         <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                        <span>Prazo (Data Alvo Estimada):</span>
+                        <span>Prazo Final (Data Prevista):</span>
                       </label>
 
-                      {/* Input de Data Estimada com Edição Direta no Cartão */}
+                      {/* Input de Data Prevista com Edição Direta no Cartão */}
                       <div className="flex items-center gap-1.5 w-full sm:w-auto">
                         <input
+                          id={`input-prazo-final-${dream.id}`}
                           type="date"
                           value={dream.targetDate || ''}
                           onChange={e => handleUpdateTargetDate(dream.id, e.target.value)}
+                          aria-label={`Prazo Final de ${dream.title}`}
                           className="w-full sm:w-auto px-2.5 py-1 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          title="Alterar ou definir data limite estimada"
+                          title="Alterar ou definir o Prazo Final previsto"
                           data-testid={`input-prazo-${dream.id}`}
                         />
                         {dream.targetDate && (
                           <button
                             type="button"
                             onClick={() => handleUpdateTargetDate(dream.id, '')}
+                            aria-label={`Remover prazo final de ${dream.title}`}
                             className="p-1 text-slate-400 hover:text-rose-500 rounded-lg transition cursor-pointer shrink-0"
-                            title="Remover prazo estimado"
+                            title="Remover prazo final previsto"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -1202,9 +1266,20 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
 
                   {/* Ações de Simulação de Juros e Sugestão de Aporte */}
                   <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center justify-between text-xs gap-2 flex-wrap">
                       <span className="text-[11px] text-slate-400 font-medium">Cálculos Avançados:</span>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setDetailModalDreamId(dream.id)}
+                          className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                          title="Abrir detalhes da meta e gráfico de trajetória de aportes"
+                          data-testid={`btn-goal-details-${dream.id}`}
+                        >
+                          <TrendingUp className="w-3 h-3" />
+                          <span>Detalhes &amp; Trajetória</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => {
@@ -1223,7 +1298,7 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setSimulatorDream(dream)}
-                          className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                          className="flex items-center gap-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline cursor-pointer"
                           title="Simular aporte mensal necessário para atingir o objetivo no prazo"
                         >
                           <Clock className="w-3 h-3" />
@@ -1462,8 +1537,11 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">Prazo (Data Estimada)</label>
+                  <label htmlFor="new-dream-target-date" className="text-[11px] font-bold text-slate-500 block mb-1">
+                    Prazo Final (Data Prevista)
+                  </label>
                   <input
+                    id="new-dream-target-date"
                     type="date"
                     value={targetDate}
                     onChange={e => setTargetDate(e.target.value)}
@@ -1586,6 +1664,16 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
         onClose={() => setSimulatorDream(null)}
         dream={simulatorDream}
         onSave={handleSaveSimulatedDream}
+      />
+
+      {/* Modal de Detalhes da Meta com Gráfico de Trajetória */}
+      <GoalDetailModal
+        isOpen={!!detailModalDream}
+        dream={detailModalDream}
+        transactions={transactions}
+        onClose={() => setDetailModalDreamId(null)}
+        onRecordContribution={handleRecordTrajectoryContribution}
+        onOpenSimulator={(dream) => setSimulatorDream(dream)}
       />
 
     </div>

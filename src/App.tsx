@@ -521,8 +521,12 @@ export default function App() {
 
   // Dark / Clean theme styles
   const isDark = themeMode === 'dark';
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
+
   const theme = {
-    bg: isDark ? 'bg-slate-950 text-slate-100' : 'bg-[#F4F6F9] text-slate-800',
+    bg: isDark ? 'dark bg-slate-950 text-slate-100' : 'bg-[#F4F6F9] text-slate-800',
     card: isDark ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-md' : 'bg-white border-slate-200 text-slate-800 shadow-sm hover:shadow-md transition-shadow',
     cardSubtle: isDark ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200/80',
     headerBg: isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm',
@@ -1206,6 +1210,7 @@ export default function App() {
               onImportTransactions={handleImportTransactions}
               autoRules={autoRules}
               scope={viewScope}
+              hierarchy={categoryHierarchy}
             />
           </div>
         )}
