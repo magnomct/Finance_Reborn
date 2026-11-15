@@ -128,6 +128,7 @@ export interface RecurringExpense {
   isActive: boolean;
   category?: string;
   notes?: string;
+  goalId?: string;
 }
 
 export interface AutoCategoryRule {

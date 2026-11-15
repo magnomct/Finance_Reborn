@@ -3,7 +3,7 @@ import {
   Cloud, Plus, Zap, ShieldAlert, Plane, Wallet, PiggyBank, 
   BookOpen, Smile, TrendingUp, CheckCircle2, Calendar, Target,
   Sparkles, DollarSign, Clock, AlertTriangle, AlertOctagon, Flame,
-  Hourglass, X, Filter, Wand2
+  Hourglass, X, Filter, Wand2, CalendarCheck
 } from 'lucide-react';
 import { DreamGoal, DreamPriority, Transaction, DreamSortOption, RecurringExpense, JarType } from '../types';
 import { formatBRL } from '../utils/finance';
@@ -55,6 +55,14 @@ import {
   SmartGoalAutoFillModal,
   SmartGoalAutoFillApplyPayload,
 } from './SmartGoalAutoFillModal';
+import { CumulativeGoalsEvolutionChart } from './CumulativeGoalsEvolutionChart';
+import { GoalContributionSuggester } from './GoalContributionSuggester';
+import {
+  applyAllGoalsToBudget,
+  applyGoalToBudget,
+  calculateRequiredGoalContribution,
+  resolveMonthlyCashFlowContext,
+} from '../utils/goalContributionSuggester';
 
 interface SonhosViewProps {
   dreams: DreamGoal[];
@@ -293,53 +301,91 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
     setTimeout(() => setNotification(null), 6000);
   };
 
+  const cashFlowContext = useMemo(
+    () =>
+      resolveMonthlyCashFlowContext({
+        transactions,
+        recurringList,
+        effectiveIncomeBase,
+      }),
+    [transactions, recurringList, effectiveIncomeBase]
+  );
+
+  const unsyncedGoalsCount = useMemo(() => {
+    return dreams.filter(d => {
+      const sug = calculateRequiredGoalContribution(d, {
+        recurringList,
+        transactions,
+        availableMonthlySurplus: cashFlowContext.availableMonthlySurplus,
+        effectiveIncomeBase: cashFlowContext.effectiveIncomeBase,
+      });
+      return !sug.isCompleted && !sug.isSyncedWithBudget;
+    }).length;
+  }, [dreams, recurringList, transactions, cashFlowContext]);
+
+  const handleApplyGoalToBudget = (dreamId: string, overrideAmount?: number) => {
+    const targetDream = dreams.find(d => d.id === dreamId);
+    if (!targetDream) return;
+
+    const result = applyGoalToBudget({
+      dream: targetDream,
+      dreams,
+      recurringList,
+      overrideAmount,
+      availableMonthlySurplus: cashFlowContext.availableMonthlySurplus,
+      effectiveIncomeBase: cashFlowContext.effectiveIncomeBase,
+      transactions,
+    });
+
+    setDreams(result.updatedDreams);
+    if (setRecurringList) {
+      setRecurringList(result.updatedRecurringList);
+    }
+
+    const impactText =
+      result.suggestion.availableMonthlySurplus > 0 && result.cashFlowImpactPct <= 999
+        ? `${result.cashFlowImpactPct.toFixed(1).replace('.', ',')}%`
+        : `${result.suggestion.incomeSharePct.toFixed(1).replace('.', ',')}% da renda líquida`;
+
+    const actionWord = result.actionType === 'created' ? 'criada' : 'atualizada';
+    setNotification(
+      `Orçamento sincronizado! Recorrência mensal de ${formatBRL(result.appliedAmount)}/mês ${actionWord} para "${targetDream.title}" (${result.suggestion.jarShortName}) · Comprometimento da Sobra Mensal: ${impactText}.`
+    );
+    setTimeout(() => setNotification(null), 6000);
+  };
+
+  const handleApplyAllGoalsToBudget = () => {
+    const result = applyAllGoalsToBudget({
+      dreams,
+      recurringList,
+      availableMonthlySurplus: cashFlowContext.availableMonthlySurplus,
+      effectiveIncomeBase: cashFlowContext.effectiveIncomeBase,
+      transactions,
+    });
+
+    if (result.syncedCount === 0) {
+      setNotification('Todas as metas ativas já estão concluídas.');
+      setTimeout(() => setNotification(null), 4000);
+      return;
+    }
+
+    setDreams(result.updatedDreams);
+    if (setRecurringList) {
+      setRecurringList(result.updatedRecurringList);
+    }
+
+    setNotification(
+      `${result.syncedCount} ${result.syncedCount === 1 ? 'meta aplicada' : 'metas aplicadas'} ao orçamento (${result.createdCount} ${result.createdCount === 1 ? 'nova recorrência' : 'novas recorrências'}, ${result.updatedCount} ${result.updatedCount === 1 ? 'atualizada' : 'atualizadas'}). Total mensal comprometido: ${formatBRL(result.totalMonthlyCommitted)}/mês.`
+    );
+    setTimeout(() => setNotification(null), 6000);
+  };
+
   /**
    * Integrates the dream's suggested monthly contribution as a recurring item in the 6 Potes system.
    */
   const handleIntegrateWith6Jars = (dream: DreamGoal, suggestedAmount: number) => {
     if (suggestedAmount <= 0) return;
-    const jarInfo = mapDreamTo6Jar(dream.category, dream.title);
-
-    // 1. Update dream's monthlyDeposit
-    setDreams(prev => prev.map(d => d.id === dream.id ? { ...d, monthlyDeposit: suggestedAmount } : d));
-
-    // 2. Add or update recurring item in recurringList if setter is provided
-    if (setRecurringList) {
-      setRecurringList(prev => {
-        const existingIdx = prev.findIndex(r => r.id === `rec-dream-${dream.id}` || r.description.includes(dream.title));
-        if (existingIdx >= 0) {
-          const updated = [...prev];
-          updated[existingIdx] = {
-            ...updated[existingIdx],
-            amount: -Math.abs(suggestedAmount),
-            amountPlanned: suggestedAmount,
-            jar: jarInfo.jar,
-            isActive: true,
-          };
-          return updated;
-        } else {
-          const newRecurring: RecurringExpense = {
-            id: `rec-dream-${dream.id}`,
-            description: `Aporte Recorrente: ${dream.title}`,
-            amount: -Math.abs(suggestedAmount),
-            amountPlanned: suggestedAmount,
-            type: 'despesa',
-            frequency: 'mensal',
-            dayOfMonth: 10,
-            jar: jarInfo.jar,
-            account: 'Inter PF',
-            costCenter: 'Magno',
-            isActive: true,
-            category: dream.category || 'Sonhos & Poupança',
-            notes: `Integrado aos 6 Potes (${jarInfo.jarShortName})`
-          };
-          return [...prev, newRecurring];
-        }
-      });
-    }
-
-    setNotification(`Aporte de ${formatBRL(suggestedAmount)}/mês integrado com sucesso ao ${jarInfo.jarName}!`);
-    setTimeout(() => setNotification(null), 5000);
+    handleApplyGoalToBudget(dream.id, suggestedAmount);
   };
 
   const handleSaveSimulatedDream = (updatedDream: DreamGoal) => {
@@ -524,7 +570,26 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
           </p>
         </div>
 
-        <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleApplyAllGoalsToBudget}
+            data-testid="btn-apply-all-goals-to-budget"
+            className={`justify-center flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-bold text-xs shadow-sm transition cursor-pointer active:scale-95 border ${
+              unsyncedGoalsCount === 0 && dreams.some(d => d.target > d.current)
+                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400'
+            }`}
+            title="Sincronizar todos os aportes necessários das metas ativas com as recorrências mensais do orçamento"
+          >
+            <CalendarCheck className="w-4 h-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
+            <span>
+              {unsyncedGoalsCount === 0 && dreams.some(d => d.target > d.current)
+                ? 'Todos Sincronizados ✓'
+                : `Aplicar Todos ao Orçamento${unsyncedGoalsCount > 0 ? ` (${unsyncedGoalsCount})` : ''}`}
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -687,6 +752,12 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
         onNavigateToScreen={onNavigateToScreen}
         transactions={transactions}
         onRecordContribution={handleRecordTrajectoryContribution}
+      />
+
+      {/* Evolução do Saldo Acumulado vs. Linha de Meta Ideal */}
+      <CumulativeGoalsEvolutionChart
+        dreams={dreams}
+        transactions={transactions}
       />
 
       {/* Gráfico de Rosca de Conclusão dos Sonhos */}
@@ -1176,118 +1247,15 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                     </div>
                   </div>
 
-                  {/* ============================================================== */}
-                  {/* CAMPO DE SUGESTÃO DE APORTE BASEADO NO PRAZO RESTANTE            */}
-                  {/* ============================================================== */}
-                  <div 
-                    className="mt-3.5 p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-300/70 dark:border-emerald-800/80 space-y-2.5 text-xs relative overflow-hidden"
-                    data-testid={`campo-sugestao-aporte-${dream.id}`}
-                  >
-                    {/* Header: Label 'Sugestão de Aporte' + Ícone + Valor Sugerido */}
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 rounded-xl bg-emerald-500 text-white shadow-2xs shrink-0">
-                          <Sparkles className="w-3.5 h-3.5" />
-                        </div>
-                        <div>
-                          <span className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-[11px] block">
-                            Sugestão de Aporte
-                          </span>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                            Baseada no prazo restante da meta
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Valor do Aporte Sugerido em Destaque */}
-                      <div className="text-right">
-                        <div 
-                          className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 leading-tight"
-                          data-testid={`valor-sugestao-aporte-${dream.id}`}
-                        >
-                          {contributionSuggestion.hasTargetDate && !contributionSuggestion.isCompleted
-                            ? `${formatBRL(contributionSuggestion.suggestedMonthlyDeposit)}/mês`
-                            : contributionSuggestion.isCompleted
-                            ? 'Meta Concluída 🎉'
-                            : 'Defina o Prazo'}
-                        </div>
-                        {contributionSuggestion.hasTargetDate && !contributionSuggestion.isCompleted && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">
-                            valor mensal sugerido
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Linha com Detalhamento do Prazo Restante e Saldo Necessário */}
-                    <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-900/70 border border-emerald-200/60 dark:border-emerald-900/50 flex items-center justify-between gap-2 text-[11px] flex-wrap">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <span className="text-slate-700 dark:text-slate-300">
-                          {contributionSuggestion.hasTargetDate ? (
-                            <>
-                              Prazo restante: <strong className="text-slate-900 dark:text-white font-bold">{contributionSuggestion.remainingMonths} {contributionSuggestion.remainingMonths === 1 ? 'mês' : 'meses'}</strong> ({contributionSuggestion.remainingDays} dias)
-                            </>
-                          ) : (
-                            <span className="text-slate-500">Defina uma data alvo no campo acima para gerar a sugestão automática de aporte.</span>
-                          )}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                          {contributionSuggestion.jarShortName}
-                        </span>
-                        <div className="text-slate-500 dark:text-slate-400 text-[10px]">
-                          Falta: <strong className="text-slate-800 dark:text-slate-200 font-bold">{formatBRL(contributionSuggestion.remainingAmount)}</strong>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Recomendação de Ação & Botão de 1 Clique para Adotar e Integrar aos 6 Potes */}
-                    <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap">
-                      <p className="text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-1 min-w-0 flex-1">
-                        <span>💡 {contributionSuggestion.recommendationMessage}</span>
-                      </p>
-
-                      {contributionSuggestion.hasTargetDate && !contributionSuggestion.isCompleted && contributionSuggestion.suggestedMonthlyDeposit > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {/* Botão de Integração Direta aos 6 Potes */}
-                          <button
-                            type="button"
-                            onClick={() => handleIntegrateWith6Jars(dream, contributionSuggestion.suggestedMonthlyDeposit)}
-                            className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-[11px] shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
-                            title={`Integrar aporte recorrente de ${formatBRL(contributionSuggestion.suggestedMonthlyDeposit)} aos 6 Potes (${contributionSuggestion.jarName})`}
-                            data-testid={`btn-integrar-6potes-${dream.id}`}
-                          >
-                            <Zap className="w-3 h-3 text-amber-300" />
-                            <span>Integrar aos 6 Potes ({formatBRL(contributionSuggestion.suggestedMonthlyDeposit)}/mês)</span>
-                          </button>
-
-                          {dream.monthlyDeposit === contributionSuggestion.suggestedMonthlyDeposit ? (
-                            <span 
-                              className="px-2 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 text-[10px] font-bold flex items-center gap-1 shrink-0"
-                              data-testid={`badge-aporte-alinhado-${dream.id}`}
-                            >
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              Alinhado
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleApplySuggestedDeposit(dream.id, contributionSuggestion.suggestedMonthlyDeposit)}
-                              className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[11px] shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
-                              title="Adotar sugestão de aporte como economia mensal na meta"
-                              data-testid={`btn-adotar-sugestao-${dream.id}`}
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              <span>Adotar</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  {/* Sugestão de Aporte Ideal & Sincronização 1-Clique com o Orçamento */}
+                  <GoalContributionSuggester
+                    dream={dream}
+                    recurringList={recurringList}
+                    transactions={transactions}
+                    availableMonthlySurplus={cashFlowContext.availableMonthlySurplus}
+                    effectiveIncomeBase={cashFlowContext.effectiveIncomeBase}
+                    onApplyToBudget={handleApplyGoalToBudget}
+                  />
 
                   {/* Previsão de Conclusão baseada na Economia Mensal */}
                   {(() => {
@@ -1792,8 +1760,11 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
         isOpen={!!detailModalDream}
         dream={detailModalDream}
         transactions={transactions}
+        recurringList={recurringList}
+        effectiveIncomeBase={cashFlowContext.effectiveIncomeBase}
         onClose={() => setDetailModalDreamId(null)}
         onRecordContribution={handleRecordTrajectoryContribution}
+        onApplyToBudget={handleApplyGoalToBudget}
         onOpenSimulator={(dream) => setSimulatorDream(dream)}
       />
 

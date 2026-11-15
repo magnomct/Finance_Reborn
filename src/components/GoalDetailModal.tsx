@@ -1,16 +1,20 @@
 import React, { useEffect } from 'react';
 import { X, Clock, Target, Hourglass } from 'lucide-react';
-import { DreamGoal, Transaction } from '../types';
+import { DreamGoal, RecurringExpense, Transaction } from '../types';
 import { formatBRL } from '../utils/finance';
 import { calculateDreamCountdown, getPriorityConfig } from '../utils/dreamCountdown';
 import { GoalTrajectoryChart } from './GoalTrajectoryChart';
+import { GoalContributionSuggester } from './GoalContributionSuggester';
 
 interface GoalDetailModalProps {
   isOpen: boolean;
   dream: DreamGoal | null;
   transactions?: Transaction[];
+  recurringList?: RecurringExpense[];
+  effectiveIncomeBase?: number;
   onClose: () => void;
   onRecordContribution: (dreamId: string, amount: number, date: string, note?: string) => void;
+  onApplyToBudget?: (dreamId: string, overrideAmount?: number) => void;
   onOpenSimulator?: (dream: DreamGoal) => void;
 }
 
@@ -18,8 +22,11 @@ export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
   isOpen,
   dream,
   transactions = [],
+  recurringList = [],
+  effectiveIncomeBase,
   onClose,
   onRecordContribution,
+  onApplyToBudget,
   onOpenSimulator,
 }) => {
   useEffect(() => {
@@ -136,6 +143,18 @@ export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
             onRecordContribution={onRecordContribution}
             compact
           />
+
+          {/* Goal Contribution Suggester with 1-Click Budget Sync */}
+          {onApplyToBudget && (
+            <GoalContributionSuggester
+              dream={dream}
+              recurringList={recurringList}
+              transactions={transactions}
+              effectiveIncomeBase={effectiveIncomeBase}
+              onApplyToBudget={onApplyToBudget}
+              compact
+            />
+          )}
         </div>
 
         {/* Footer */}

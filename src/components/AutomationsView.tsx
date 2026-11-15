@@ -629,6 +629,14 @@ export const AutomationsView: React.FC<AutomationsViewProps> = ({
                               ? 'Diário (x30)'
                               : `Dia ${item.dayOfMonth ?? 10}`}
                           </span>
+                          {item.goalId && (
+                            <span
+                              data-testid={`badge-linked-goal-${item.goalId}`}
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                            >
+                              Meta Sincronizada
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1">
