@@ -39,6 +39,7 @@ export interface FutureBalanceProjectionChartProps {
   dreams?: DreamGoal[];
   jarPercentages?: Partial<Record<JarType, number>>;
   usePjProfitInPf?: boolean;
+  customIncomeBase?: number;
   onNavigateToScreen?: (screen: string) => void;
   className?: string;
 }
@@ -267,6 +268,7 @@ export const FutureBalanceProjectionChart: React.FC<
   dreams = [],
   jarPercentages,
   usePjProfitInPf = true,
+  customIncomeBase,
   onNavigateToScreen,
   className = '',
 }) => {
@@ -281,6 +283,7 @@ export const FutureBalanceProjectionChart: React.FC<
       jarPercentages,
       usePjProfitInPf,
       includeVariableAvg,
+      customIncomeBase,
     });
   }, [
     transactions,
@@ -289,6 +292,7 @@ export const FutureBalanceProjectionChart: React.FC<
     jarPercentages,
     usePjProfitInPf,
     includeVariableAvg,
+    customIncomeBase,
   ]);
 
   const chartData: ChartDatum[] = useMemo(() => {

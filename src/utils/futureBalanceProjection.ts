@@ -86,6 +86,7 @@ export interface CalculateFutureProjectionOptions {
   usePjProfitInPf?: boolean;
   includeVariableAvg?: boolean;
   referenceMonthKey?: string;
+  customIncomeBase?: number;
 }
 
 const PT_BR_MONTHS_SHORT = [
@@ -216,6 +217,7 @@ export function calculateFutureProjection({
   usePjProfitInPf = true,
   includeVariableAvg = false,
   referenceMonthKey,
+  customIncomeBase,
 }: CalculateFutureProjectionOptions): FutureProjectionResult {
   const startMonthKey = resolveActiveSixJarsMonth(transactions, referenceMonthKey);
 
@@ -247,9 +249,16 @@ export function calculateFutureProjection({
     .reduce((acc, t) => acc + Math.abs(t.amount), 0);
 
   const m0PjNet = Math.max(0, m0PjIncome - m0PjExpenses);
-  const m0EffectiveIncome = round2(
+  const realizedM0EffectiveIncome = round2(
     m0PfIncome + (usePjProfitInPf ? m0PjNet : 0)
   );
+  const hasCustomIncomeOverride =
+    typeof customIncomeBase === 'number' &&
+    Number.isFinite(customIncomeBase) &&
+    customIncomeBase > 0;
+  const m0EffectiveIncome = hasCustomIncomeOverride
+    ? round2(customIncomeBase)
+    : realizedM0EffectiveIncome;
 
   const m0JarBalances = createZeroJarRecord();
   const m0JarInflows = createZeroJarRecord();
@@ -330,7 +339,9 @@ export function calculateFutureProjection({
   });
 
   const hasRecurringIncome = recPfIncome > 0 || recPjIncome > 0;
-  const projectedMonthlyNetIncome = hasRecurringIncome
+  const projectedMonthlyNetIncome = hasCustomIncomeOverride
+    ? round2(customIncomeBase)
+    : hasRecurringIncome
     ? round2(
         recPfIncome +
           (usePjProfitInPf ? Math.max(0, recPjIncome - recPjExpenses) : 0)

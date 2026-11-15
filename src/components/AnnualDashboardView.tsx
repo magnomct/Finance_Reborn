@@ -17,6 +17,9 @@ import { SavingsVsNecessitiesCard } from './SavingsVsNecessitiesCard';
 import { DreamsProgressCard } from './DreamsProgressCard';
 import { AnnualSavingsGoalsAccumulator } from './AnnualSavingsGoalsAccumulator';
 import { FutureBalanceProjectionChart } from './FutureBalanceProjectionChart';
+import { BaseIncomeConfigCard } from './BaseIncomeConfigCard';
+import { BaseIncomeConfig, RealizedIncomeBreakdown } from '../utils/baseIncomeConfig';
+import { SaveManualIncomePayload } from '../hooks/useBaseIncome';
 import { Transaction, JarType, DreamGoal, RecurringExpense } from '../types';
 
 interface AnnualDashboardViewProps {
@@ -31,6 +34,13 @@ interface AnnualDashboardViewProps {
   onUpdateDreamBalance?: (dreamId: string, newBalance: number) => void;
   onNavigateToDreams?: () => void;
   onNavigateToScreen?: (screen: string) => void;
+  baseIncomeConfig?: BaseIncomeConfig;
+  effectiveBaseIncome?: number;
+  realizedIncome?: RealizedIncomeBreakdown;
+  customJarPercentages?: Partial<Record<JarType, number>>;
+  onSaveManualIncome?: (payload: SaveManualIncomePayload) => void;
+  onSwitchToAutoIncome?: () => void;
+  onUseRealizedIncome?: () => void;
 }
 
 export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({ 
@@ -44,7 +54,14 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
   selectedMonthIndex = 2,
   onUpdateDreamBalance,
   onNavigateToDreams,
-  onNavigateToScreen
+  onNavigateToScreen,
+  baseIncomeConfig,
+  effectiveBaseIncome,
+  realizedIncome,
+  customJarPercentages,
+  onSaveManualIncome,
+  onSwitchToAutoIncome,
+  onUseRealizedIncome,
 }) => {
   const { isMobile } = useMobileLayout();
   const [viewMode, setViewMode] = useState<'resumo' | 'fluxo' | 'detalhada' | 'graficos' | 'metas'>('resumo');
@@ -383,6 +400,28 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
         </div>
       </div>
 
+      {/* Card Configurar Renda Base Consolidada (Atualiza os 6 Potes e Projeções em Tempo Real) */}
+      {baseIncomeConfig &&
+        realizedIncome &&
+        effectiveBaseIncome !== undefined &&
+        onSaveManualIncome &&
+        onSwitchToAutoIncome &&
+        onUseRealizedIncome && (
+          <BaseIncomeConfigCard
+            config={baseIncomeConfig}
+            effectiveBaseIncome={effectiveBaseIncome}
+            realizedIncome={realizedIncome}
+            customPercentages={customJarPercentages}
+            usePjProfitInPf={usePjProfitInPf}
+            onSaveManualIncome={onSaveManualIncome}
+            onSwitchToAuto={onSwitchToAutoIncome}
+            onUseRealizedIncome={onUseRealizedIncome}
+            onNavigateToSixJars={
+              onNavigateToScreen ? () => onNavigateToScreen('potes') : undefined
+            }
+          />
+        )}
+
       {/* Card Resumo de Conclusão Acumulada de Sonhos & Metas Ativos */}
       <DreamsProgressCard
         dreams={dreams}
@@ -403,7 +442,9 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
           transactions={transactions}
           recurringList={recurringList}
           dreams={dreams}
+          jarPercentages={customJarPercentages}
           usePjProfitInPf={usePjProfitInPf}
+          customIncomeBase={effectiveBaseIncome}
           onNavigateToScreen={onNavigateToScreen}
         />
       )}

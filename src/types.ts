@@ -84,6 +84,8 @@ export interface DreamGoal {
   target: number;
   current: number;
   monthlyDeposit: number;
+  monthlyTargetBRL?: number;
+  preferredDepositDay?: number;
   category: string;
   impact: string;
   startDate?: string;

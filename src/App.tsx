@@ -83,6 +83,13 @@ import {
   OfflineQueueItem
 } from './utils/offlineSync';
 import { Wifi, WifiOff } from 'lucide-react';
+import { useBaseIncome } from './hooks/useBaseIncome';
+import {
+  calculateSixJarsCascadeLimits,
+  loadJarPercentages,
+  saveJarPercentages,
+} from './utils/baseIncomeConfig';
+import { DEFAULT_SIX_JAR_PERCENTAGES } from './utils/sixJarsMetrics';
 
 export default function App() {
   // Screens & Navigation - Default to the complete Dashboard with Resumo dos Dados
@@ -158,6 +165,9 @@ export default function App() {
   const [resetNotification, setResetNotification] = useState<string | null>(null);
   const [jarLimits, setJarLimits] = useState<Record<JarType, number>>(() => loadJarLimits());
   const [jarSavingsTargets, setJarSavingsTargets] = useState<Record<JarType, number>>(() => loadJarSavingsTargets());
+  const [customJarPercentages, setCustomJarPercentages] = useState<Record<string, number>>(() =>
+    loadJarPercentages()
+  );
 
   const handleSaveJarLimits = (newLimits: Record<JarType, number>) => {
     setJarLimits(newLimits);
@@ -168,6 +178,56 @@ export default function App() {
     setJarSavingsTargets(newTargets);
     saveJarSavingsTargets(newTargets);
   };
+
+  const {
+    config: baseIncomeConfig,
+    realizedIncome: realizedIncomeBreakdown,
+    effectiveBaseIncome,
+    saveManualIncome: handleSaveManualIncome,
+    switchToAutoConsolidated: handleSwitchToAutoIncome,
+    useRealizedMonthIncome: handleUseRealizedIncome,
+    resetBaseIncome,
+  } = useBaseIncome({
+    transactions,
+    usePjProfitInPf,
+    customPercentages: customJarPercentages as Partial<Record<JarType, number>>,
+    existingPjExcludedLimit: jarLimits.PJ_EXCLUIDO,
+    onCascadeJarLimits: handleSaveJarLimits,
+  });
+
+  const handleUpdateCustomJarPercentages = (next: Record<string, number>) => {
+    const saved = saveJarPercentages(next as Partial<Record<JarType, number>>);
+    setCustomJarPercentages(saved);
+    const cascaded = calculateSixJarsCascadeLimits(
+      effectiveBaseIncome,
+      saved as Partial<Record<JarType, number>>,
+      jarLimits.PJ_EXCLUIDO
+    );
+    handleSaveJarLimits(cascaded);
+  };
+
+  // Auto-sync jar limits whenever realized consolidated income changes in auto_consolidated mode
+  const prevAutoRealizedRef = React.useRef<number>(realizedIncomeBreakdown.consolidatedIncomeBRL);
+  useEffect(() => {
+    if (baseIncomeConfig.mode !== 'auto_consolidated') {
+      prevAutoRealizedRef.current = realizedIncomeBreakdown.consolidatedIncomeBRL;
+      return;
+    }
+    if (Math.abs(realizedIncomeBreakdown.consolidatedIncomeBRL - prevAutoRealizedRef.current) > 0.005) {
+      prevAutoRealizedRef.current = realizedIncomeBreakdown.consolidatedIncomeBRL;
+      const cascaded = calculateSixJarsCascadeLimits(
+        realizedIncomeBreakdown.consolidatedIncomeBRL,
+        customJarPercentages as Partial<Record<JarType, number>>,
+        jarLimits.PJ_EXCLUIDO
+      );
+      handleSaveJarLimits(cascaded);
+    }
+  }, [
+    baseIncomeConfig.mode,
+    realizedIncomeBreakdown.consolidatedIncomeBRL,
+    customJarPercentages,
+    jarLimits.PJ_EXCLUIDO,
+  ]);
 
   // PWA Offline Queue & Connectivity State
   const isOnline = useOnlineStatus();
@@ -226,10 +286,15 @@ export default function App() {
     }
   }, [recurringList, dreams, autoRules]);
 
-  // Financial Metrics Calculation
+  // Financial Metrics Calculation (synced with configured Base Monthly Income)
   const financialMetrics = useMemo(() => {
-    return calculateFinancialMetrics(transactions, usePjProfitInPf);
-  }, [transactions, usePjProfitInPf]);
+    return calculateFinancialMetrics(
+      transactions,
+      usePjProfitInPf,
+      effectiveBaseIncome,
+      customJarPercentages as Partial<Record<JarType, number>>
+    );
+  }, [transactions, usePjProfitInPf, effectiveBaseIncome, customJarPercentages]);
 
   // Budget Alerts Calculation (80% threshold trigger)
   const budgetAlerts = useMemo(() => {
@@ -471,6 +536,9 @@ export default function App() {
   const handleResetData = () => {
     if (confirm('Deseja restaurar os lançamentos e configurações padrão do Yupee?')) {
       purgeAllApplicationStorage();
+      resetBaseIncome();
+      setCustomJarPercentages({ ...DEFAULT_SIX_JAR_PERCENTAGES });
+      setJarLimits(loadJarLimits());
       setTransactions(INITIAL_TRANSACTIONS);
       setRecurringList(INITIAL_RECURRING);
       setDreams(INITIAL_DREAMS);
@@ -483,6 +551,8 @@ export default function App() {
   // Apply fresh custom environment configured by the user
   const handleApplyFreshEnvironment = (newEnv: EnvironmentSetupOutput, feedbackMessage: string) => {
     purgeAllApplicationStorage();
+    resetBaseIncome();
+    setCustomJarPercentages({ ...DEFAULT_SIX_JAR_PERCENTAGES });
     persistFreshEnvironment(newEnv);
     setTransactions(newEnv.transactions);
     setRecurringList(newEnv.recurringList);
@@ -1075,6 +1145,13 @@ export default function App() {
               }}
               onNavigateToDreams={() => setActiveScreen('sonhos')}
               onNavigateToScreen={(scr) => setActiveScreen(scr as any)}
+              baseIncomeConfig={baseIncomeConfig}
+              effectiveBaseIncome={effectiveBaseIncome}
+              realizedIncome={realizedIncomeBreakdown}
+              customJarPercentages={customJarPercentages as Partial<Record<JarType, number>>}
+              onSaveManualIncome={handleSaveManualIncome}
+              onSwitchToAutoIncome={handleSwitchToAutoIncome}
+              onUseRealizedIncome={() => handleUseRealizedIncome(false)}
             />
           </div>
         )}
@@ -1132,6 +1209,11 @@ export default function App() {
                 setSelectedJarFilter(jar);
                 setActiveScreen('agenda');
               }}
+              effectiveIncomeBase={effectiveBaseIncome}
+              baseIncomeConfig={baseIncomeConfig}
+              customJarPercentages={customJarPercentages}
+              onUpdateCustomJarPercentages={handleUpdateCustomJarPercentages}
+              onNavigateToDashboard={() => setActiveScreen('dashboard')}
               jarLimits={jarLimits}
               jarSavingsTargets={jarSavingsTargets}
               onOpenLimitsModal={() => setIsLimitsModalOpen(true)}

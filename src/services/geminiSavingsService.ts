@@ -40,7 +40,14 @@ const APPLIED_KEY_PREFIX = '@finance_app:ai_jars_applied_';
 
 const inFlightRequests = new Map<string, Promise<CachedSavingsAnalysis>>();
 
-export function getSavingsAdvisorCacheKey(monthKey: string, txCount: number): string {
+export function getSavingsAdvisorCacheKey(
+  monthKey: string,
+  txCount: number,
+  incomeKey?: number
+): string {
+  if (typeof incomeKey === 'number' && Number.isFinite(incomeKey)) {
+    return `${CACHE_KEY_PREFIX}${monthKey}_${txCount}_${Math.round(incomeKey)}`;
+  }
   return `${CACHE_KEY_PREFIX}${monthKey}_${txCount}`;
 }
 
@@ -50,11 +57,12 @@ export function getAppliedStepsStorageKey(monthKey: string): string {
 
 export function getCachedSavingsAnalysis(
   monthKey: string,
-  txCount: number
+  txCount: number,
+  incomeKey?: number
 ): CachedSavingsAnalysis | null {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   try {
-    const key = getSavingsAdvisorCacheKey(monthKey, txCount);
+    const key = getSavingsAdvisorCacheKey(monthKey, txCount, incomeKey);
     const raw = window.localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedSavingsAnalysis;
@@ -122,10 +130,11 @@ export async function fetchSmartSavingsAnalysis(
   options: FetchSmartSavingsOptions = {}
 ): Promise<CachedSavingsAnalysis> {
   const { forceRefresh = false } = options;
-  const cacheKey = getSavingsAdvisorCacheKey(snapshot.monthKey, snapshot.txCount);
+  const incomeKey = Math.round(snapshot.rendaLiquidaMensal);
+  const cacheKey = getSavingsAdvisorCacheKey(snapshot.monthKey, snapshot.txCount, incomeKey);
 
   if (!forceRefresh) {
-    const cached = getCachedSavingsAnalysis(snapshot.monthKey, snapshot.txCount);
+    const cached = getCachedSavingsAnalysis(snapshot.monthKey, snapshot.txCount, incomeKey);
     if (cached) {
       return cached;
     }

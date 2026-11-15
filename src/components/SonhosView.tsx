@@ -3,7 +3,7 @@ import {
   Cloud, Plus, Zap, ShieldAlert, Plane, Wallet, PiggyBank, 
   BookOpen, Smile, TrendingUp, CheckCircle2, Calendar, Target,
   Sparkles, DollarSign, Clock, AlertTriangle, AlertOctagon, Flame,
-  Hourglass, X, Filter, Wand2, CalendarCheck
+  Hourglass, X, Filter, Wand2, CalendarCheck, BellRing, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { DreamGoal, DreamPriority, Transaction, DreamSortOption, RecurringExpense, JarType } from '../types';
 import { formatBRL } from '../utils/finance';
@@ -15,7 +15,6 @@ import { DreamMonthlySavingsPlanner } from './DreamMonthlySavingsPlanner';
 import { JarMonthlySavingsGoalsCard } from './JarMonthlySavingsGoalsCard';
 import { DreamMilestoneBanner } from './DreamMilestoneBanner';
 import {
-  DREAM_MILESTONE_THRESHOLDS,
   DreamMonthlyMilestoneStatus,
   getCurrentMonthKey,
   evaluateDreamMonthlyMilestones,
@@ -63,6 +62,8 @@ import {
   calculateRequiredGoalContribution,
   resolveMonthlyCashFlowContext,
 } from '../utils/goalContributionSuggester';
+import { MonthlyContributionTargetTracker } from './MonthlyContributionTargetTracker';
+import { evaluateAllMonthlyGoalsProgress } from '../utils/monthlyGoalProgress';
 
 interface SonhosViewProps {
   dreams: DreamGoal[];
@@ -117,6 +118,20 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   const [urgencyThreshold, setUrgencyThreshold] = useState<number>(DEFAULT_URGENCY_DAYS_THRESHOLD);
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | DreamPriority>('ALL');
   const [sortOption, setSortOption] = useState<DreamSortOption>('urgency');
+  const [onlyPendingMonthlyFilter, setOnlyPendingMonthlyFilter] = useState(false);
+  const [isPendingBannerExpanded, setIsPendingBannerExpanded] = useState(false);
+  const goalsGridRef = useRef<HTMLDivElement | null>(null);
+
+  const monthlyGoalsSummary = useMemo(
+    () => evaluateAllMonthlyGoalsProgress(dreams, transactions),
+    [dreams, transactions]
+  );
+
+  useEffect(() => {
+    if (monthlyGoalsSummary.pendingCount === 0 && onlyPendingMonthlyFilter) {
+      setOnlyPendingMonthlyFilter(false);
+    }
+  }, [monthlyGoalsSummary.pendingCount, onlyPendingMonthlyFilter]);
 
   // Monthly Dream Savings Milestone Tracking (50%, 75%, 100%)
   const currentMonthKey = useMemo(() => getCurrentMonthKey(), []);
@@ -128,12 +143,6 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
     () => evaluateDreamMonthlyMilestones(dreams, transactions, currentMonthKey),
     [dreams, transactions, currentMonthKey]
   );
-
-  const milestoneStatusMap = useMemo(() => {
-    const map = new Map<string, DreamMonthlyMilestoneStatus>();
-    milestoneStatuses.forEach(s => map.set(s.dreamId, s));
-    return map;
-  }, [milestoneStatuses]);
 
   const activeMilestoneAlerts = useMemo(
     () => getActiveDreamMilestoneAlerts(milestoneStatuses, dismissedMilestoneKeys),
@@ -202,11 +211,14 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   const criticalGoals = useMemo(() => getCriticalDreams(dreams), [dreams]);
 
   const displayedDreams = useMemo(() => {
-    const filtered = priorityFilter === 'ALL'
+    const byPriority = priorityFilter === 'ALL'
       ? dreams
       : dreams.filter(d => (d.priority || 'media') === priorityFilter);
+    const filtered = onlyPendingMonthlyFilter
+      ? byPriority.filter(d => monthlyGoalsSummary.byDreamId[d.id]?.requiresAttention)
+      : byPriority;
     return sortDreams(filtered, sortOption);
-  }, [dreams, priorityFilter, sortOption]);
+  }, [dreams, priorityFilter, onlyPendingMonthlyFilter, monthlyGoalsSummary, sortOption]);
 
   const handleUpdatePriority = (dreamId: string, newPriority: DreamPriority) => {
     setDreams(prev => updateDreamPriority(prev, dreamId, newPriority));
@@ -217,14 +229,88 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   };
 
   const handleUpdateMonthlyDeposit = (dreamId: string, newDeposit: number) => {
-    setDreams(prev => prev.map(d => d.id === dreamId ? { ...d, monthlyDeposit: Math.max(0, newDeposit) } : d));
+    const safeDeposit = Math.max(0, newDeposit);
+    setDreams(prev =>
+      prev.map(d =>
+        d.id === dreamId
+          ? { ...d, monthlyDeposit: safeDeposit, monthlyTargetBRL: safeDeposit }
+          : d
+      )
+    );
+  };
+
+  const handleUpdateMonthlyGoalTarget = (
+    dreamId: string,
+    monthlyTargetBRL: number,
+    preferredDepositDay: number
+  ) => {
+    const targetDream = dreams.find(d => d.id === dreamId);
+    setDreams(prev =>
+      prev.map(d =>
+        d.id === dreamId
+          ? {
+              ...d,
+              monthlyTargetBRL: Math.max(0, monthlyTargetBRL),
+              monthlyDeposit: Math.max(0, monthlyTargetBRL),
+              preferredDepositDay,
+            }
+          : d
+      )
+    );
+    if (targetDream) {
+      setNotification(
+        `Meta do mês de "${targetDream.title}" atualizada para ${formatBRL(monthlyTargetBRL)} (dia preferencial ${String(preferredDepositDay).padStart(2, '0')}).`
+      );
+      setTimeout(() => setNotification(null), 4500);
+    }
+  };
+
+  const handleCompleteMonthlyGoal = (dream: DreamGoal, shortfallBRL: number) => {
+    const amountToRecord = Math.round(Math.max(0, shortfallBRL) * 100) / 100;
+    if (amountToRecord <= 0) return;
+
+    const jarInfo = mapDreamTo6Jar(dream.category, dream.title);
+    setDreams(prev =>
+      prev.map(d =>
+        d.id === dream.id
+          ? recordGoalContribution(
+              d,
+              amountToRecord,
+              undefined,
+              `Completar Aporte do Mês: ${dream.title}`,
+              transactions
+            )
+          : d
+      )
+    );
+
+    onAddTransaction({
+      description: `Completar Aporte do Mês: ${dream.title}`,
+      amount: -Math.abs(amountToRecord),
+      type: 'despesa',
+      jar: jarInfo.jar,
+      account: 'Inter PF',
+      costCenter: 'Magno',
+      status: 'liquidado',
+      category: 'Sonhos & Poupança',
+      dreamId: dream.id,
+    });
+
+    setNotification(
+      `Aporte complementar de ${formatBRL(amountToRecord)} registrado para "${dream.title}". Meta do mês batida!`
+    );
+    setTimeout(() => setNotification(null), 5000);
   };
 
   const handleApplyAllCriticalDeposits = () => {
     setDreams(prev => prev.map(d => {
       const urg = calculateDreamUrgency(d);
       if (urg.isCritical && urg.requiredMonthlyDeposit > 0) {
-        return { ...d, monthlyDeposit: urg.requiredMonthlyDeposit };
+        return {
+          ...d,
+          monthlyDeposit: urg.requiredMonthlyDeposit,
+          monthlyTargetBRL: urg.requiredMonthlyDeposit,
+        };
       }
       return d;
     }));
@@ -233,7 +319,11 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   const handleApplySuggestedDeposit = (dreamId: string, suggestedAmount: number) => {
     setDreams(prev => prev.map(d => {
       if (d.id === dreamId) {
-        return { ...d, monthlyDeposit: suggestedAmount };
+        return {
+          ...d,
+          monthlyDeposit: suggestedAmount,
+          monthlyTargetBRL: suggestedAmount,
+        };
       }
       return d;
     }));
@@ -245,7 +335,11 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
     setDreams(prev =>
       prev.map(d =>
         d.id === dream.id
-          ? { ...d, monthlyDeposit: quick.idealMonthlyContribution }
+          ? {
+              ...d,
+              monthlyDeposit: quick.idealMonthlyContribution,
+              monthlyTargetBRL: quick.idealMonthlyContribution,
+            }
           : d
       )
     );
@@ -518,6 +612,8 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
       target: targetVal,
       current: 0,
       monthlyDeposit: depositVal,
+      monthlyTargetBRL: depositVal,
+      preferredDepositDay: 10,
       category,
       impact: impact || 'Meta financeira planejada',
       targetDate: targetDate || undefined,
@@ -643,6 +739,116 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
         onDismissToast={() => setMilestoneToast(null)}
         onQuickCompleteMonth={handleQuickCompleteMonthFromBanner}
       />
+
+      {/* Banner Global Recolhível de Alertas de Ritmo de Aporte Mensal */}
+      {monthlyGoalsSummary.pendingCount > 0 && (
+        <div
+          className="p-4 rounded-3xl bg-amber-50/90 dark:bg-amber-950/35 border border-amber-300 dark:border-amber-800/80 shadow-xs space-y-3"
+          data-testid="banner-pending-monthly-goals"
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start md:items-center gap-3 min-w-0">
+              <span className="p-2.5 rounded-2xl bg-amber-500 text-white shrink-0 shadow-xs">
+                <BellRing className="w-4 h-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-bold text-amber-950 dark:text-amber-100 leading-snug">
+                  Você tem{' '}
+                  <strong className="font-black tabular-nums">
+                    {monthlyGoalsSummary.pendingCount}{' '}
+                    {monthlyGoalsSummary.pendingCount === 1 ? 'sonho' : 'sonhos'}
+                  </strong>{' '}
+                  com aporte mensal abaixo do planejado neste mês (Total pendente:{' '}
+                  <strong className="font-black text-rose-700 dark:text-rose-300 tabular-nums">
+                    {formatBRL(monthlyGoalsSummary.totalShortfallBRL)}
+                  </strong>
+                  ).
+                </p>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
+                  {monthlyGoalsSummary.behindCount > 0
+                    ? `${monthlyGoalsSummary.behindCount} em alerta crítico de ritmo e ${monthlyGoalsSummary.warningCount} aguardando aporte.`
+                    : 'Mantenha a consistência dos seus aportes para atingir os prazos finais.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  const nextFilter = !onlyPendingMonthlyFilter;
+                  setOnlyPendingMonthlyFilter(nextFilter);
+                  if (nextFilter && goalsGridRef.current) {
+                    goalsGridRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
+                data-testid="btn-filter-pending-monthly"
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                  onlyPendingMonthlyFilter
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                }`}
+              >
+                <Filter className="w-3.5 h-3.5 shrink-0" />
+                <span>{onlyPendingMonthlyFilter ? 'Mostrar Todos' : 'Ver Pendentes'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPendingBannerExpanded(prev => !prev)}
+                data-testid="btn-toggle-pending-banner"
+                aria-expanded={isPendingBannerExpanded}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:bg-amber-100/70 dark:hover:bg-amber-900/40 transition cursor-pointer flex items-center gap-1"
+              >
+                <span>{isPendingBannerExpanded ? 'Recolher' : 'Detalhes'}</span>
+                {isPendingBannerExpanded ? (
+                  <ChevronUp className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {isPendingBannerExpanded && (
+            <div
+              className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2.5 border-t border-amber-200/80 dark:border-amber-800/60"
+              data-testid="banner-pending-monthly-details"
+            >
+              {monthlyGoalsSummary.pendingItems.map(item => {
+                const targetDream = dreams.find(d => d.id === item.dreamId);
+                return (
+                  <div
+                    key={item.dreamId}
+                    className="p-2.5 rounded-2xl bg-white/95 dark:bg-slate-900/90 border border-amber-200 dark:border-amber-800/70 flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                        {item.dreamTitle}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                        {formatBRL(item.currentMonthDepositedBRL)} / {formatBRL(item.monthlyTargetBRL)} • Faltam{' '}
+                        <strong className="text-rose-600 dark:text-rose-400">
+                          {formatBRL(item.shortfallBRL)}
+                        </strong>
+                      </p>
+                    </div>
+                    {targetDream && (
+                      <button
+                        type="button"
+                        onClick={() => handleCompleteMonthlyGoal(targetDream, item.shortfallBRL)}
+                        className="px-2.5 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] shrink-0 transition cursor-pointer tabular-nums"
+                      >
+                        + Completar
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Banner de Metas Críticas com Alerta de Urgência */}
       {criticalGoals.length > 0 && (
@@ -782,14 +988,25 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
       />
 
       {/* Grid de Sonhos com Filtro e Controles de Prioridade */}
-      <div className="space-y-4">
+      <div className="space-y-4" ref={goalsGridRef} id="goals-grid-section">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
           <div>
-            <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+            <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
               <span>Metas & Objetivos Planejados</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                 {displayedDreams.length} {displayedDreams.length === 1 ? 'meta' : 'metas'}
               </span>
+              {onlyPendingMonthlyFilter && (
+                <button
+                  type="button"
+                  onClick={() => setOnlyPendingMonthlyFilter(false)}
+                  data-testid="chip-clear-pending-filter"
+                  className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800 flex items-center gap-1 cursor-pointer hover:bg-amber-200/70 transition"
+                >
+                  <span>Filtro: Pendentes no Mês</span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </h3>
             <p className="text-xs text-slate-500">
               Gerencie prazos estimados, prioridades e acompanhe a contagem regressiva em tempo real.
@@ -899,10 +1116,19 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
               dream.title
             );
 
+            const monthlyProgress = monthlyGoalsSummary.byDreamId[dream.id];
+            const cardBorderClass =
+              monthlyProgress?.status === 'behind'
+                ? 'border-2 border-rose-300 dark:border-rose-800/80'
+                : monthlyProgress?.status === 'warning'
+                ? 'border-2 border-amber-300 dark:border-amber-800/80'
+                : 'border border-slate-200 dark:border-slate-800';
+
             return (
               <div 
                 key={dream.id}
-                className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden"
+                data-testid={`dream-card-${dream.id}`}
+                className={`bg-white dark:bg-slate-900 p-5 rounded-3xl ${cardBorderClass} shadow-sm flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden`}
               >
                 <div>
                   {/* Top Row: Icon + Priority Selector + Badges */}
@@ -1076,70 +1302,19 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Progresso da Meta de Poupança Mensal com Marcos 50% / 75% / 100% */}
-                    {(() => {
-                      const mStatus = milestoneStatusMap.get(dream.id);
-                      if (!mStatus || mStatus.monthlyTarget <= 0) return null;
-
-                      return (
-                        <div
-                          className="p-2.5 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-900/60 space-y-1.5 text-xs"
-                          data-testid={`dream-monthly-milestone-strip-${dream.id}`}
-                        >
-                          <div className="flex items-center justify-between gap-2 text-[11px]">
-                            <span className="font-bold text-indigo-900 dark:text-indigo-200">
-                              Aporte no Mês:
-                            </span>
-                            <span className="font-black text-indigo-700 dark:text-indigo-300">
-                              {formatBRL(mStatus.monthlyDeposited)} / {formatBRL(mStatus.monthlyTarget)} ({mStatus.progressPct.toFixed(0)}%)
-                            </span>
-                          </div>
-
-                          <div className="relative w-full h-2 bg-white dark:bg-slate-800 rounded-full overflow-hidden border border-indigo-100 dark:border-indigo-900">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${
-                                mStatus.progressPct >= 100
-                                  ? 'bg-emerald-500'
-                                  : mStatus.progressPct >= 75
-                                  ? 'bg-amber-500'
-                                  : 'bg-sky-500'
-                              }`}
-                              style={{ width: `${mStatus.clampedProgressPct}%` }}
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-between gap-1 pt-0.5">
-                            <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                              Marcos mensais:
-                            </span>
-                            <div className="flex items-center gap-1">
-                              {DREAM_MILESTONE_THRESHOLDS.map(level => {
-                                const reached = mStatus.achievedMilestones.includes(level);
-                                const pillColor = level === 100
-                                  ? 'bg-emerald-600 text-white border-emerald-600'
-                                  : level === 75
-                                  ? 'bg-amber-500 text-white border-amber-500'
-                                  : 'bg-sky-600 text-white border-sky-600';
-                                return (
-                                  <span
-                                    key={level}
-                                    data-testid={`card-milestone-pill-${dream.id}-${level}`}
-                                    data-reached={reached ? 'true' : 'false'}
-                                    className={`text-[9px] font-black px-1.5 py-0.5 rounded-full border transition ${
-                                      reached
-                                        ? pillColor
-                                        : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
-                                    }`}
-                                  >
-                                    {level}%{reached ? ' ✓' : ''}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    {/* Meta de Aporte Mensal & Alerta de Ritmo */}
+                    {monthlyProgress && (
+                      <MonthlyContributionTargetTracker
+                        dream={dream}
+                        progress={monthlyProgress}
+                        onUpdateTarget={handleUpdateMonthlyGoalTarget}
+                        onCompleteMonthlyGoal={handleCompleteMonthlyGoal}
+                        onRegisterContribution={(targetDream) => {
+                          setDepositAmount('');
+                          setSelectedDreamForDeposit(targetDream);
+                        }}
+                      />
+                    )}
                   </div>
 
                   {/* Campo de Prazo Final (Data Prevista) & Bloco de Contagem Regressiva */}

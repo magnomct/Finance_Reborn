@@ -48,7 +48,9 @@ export function formatNumber(val: number): string {
 
 export function calculateFinancialMetrics(
   transactions: Transaction[],
-  usePjProfitInPf: boolean = true
+  usePjProfitInPf: boolean = true,
+  customIncomeBase?: number,
+  customPercentages?: Partial<Record<JarType, number>>
 ) {
   // 1. Entradas PF
   const cltIncome = transactions
@@ -90,9 +92,13 @@ export function calculateFinancialMetrics(
     .reduce((acc, t) => acc + Math.abs(t.amount), 0);
 
   // 6. Base Orçamentária dos Potes
-  const effectiveIncomeBase = usePjProfitInPf && pjNetProfit > 0 
+  const realizedIncomeBase = usePjProfitInPf && pjNetProfit > 0 
     ? cltIncome + pjNetProfit 
     : cltIncome;
+  const effectiveIncomeBase =
+    typeof customIncomeBase === 'number' && Number.isFinite(customIncomeBase) && customIncomeBase >= 0
+      ? customIncomeBase
+      : realizedIncomeBase;
 
   // 7. Gastos Líquidos por Pote
   const calcExpenseForJar = (jarId: JarType): number => {
@@ -115,7 +121,12 @@ export function calculateFinancialMetrics(
   jarKeys.forEach(key => {
     const def = JAR_DEFINITIONS[key];
     const spent = calcExpenseForJar(key);
-    const budget = effectiveIncomeBase * def.pct;
+    const customPct = customPercentages?.[key];
+    const effectivePct =
+      typeof customPct === 'number' && Number.isFinite(customPct) && customPct >= 0
+        ? customPct / 100
+        : def.pct;
+    const budget = effectiveIncomeBase * effectivePct;
     const remaining = budget - spent;
     const usageRatio = budget > 0 ? (spent / budget) * 100 : 0;
     const isOver = spent > budget;
@@ -127,7 +138,7 @@ export function calculateFinancialMetrics(
       name: def.name,
       shortName: def.shortName,
       desc: def.desc,
-      pct: def.pct,
+      pct: effectivePct,
       budget,
       spent,
       remaining,

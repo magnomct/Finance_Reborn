@@ -33,6 +33,9 @@ import {
 export interface SixJarsAllocationDonutProps {
   transactions: Transaction[];
   usePjProfitInPf: boolean;
+  externalIncomeBase?: number;
+  externalPercentages?: Record<string, number>;
+  onExternalPercentagesChange?: (next: Record<string, number>) => void;
   selectedJarKey: JarType | null;
   onSelectJar: (jarId: JarType) => void;
   onFilterJarInAgenda?: (jarId: JarType) => void;
@@ -98,6 +101,9 @@ const SixJarsTooltipContent: React.FC<CustomTooltipProps> = ({ active, payload }
 export const SixJarsAllocationDonut: React.FC<SixJarsAllocationDonutProps> = ({
   transactions,
   usePjProfitInPf,
+  externalIncomeBase,
+  externalPercentages,
+  onExternalPercentagesChange,
   selectedJarKey,
   onSelectJar,
   onFilterJarInAgenda,
@@ -106,12 +112,26 @@ export const SixJarsAllocationDonut: React.FC<SixJarsAllocationDonutProps> = ({
     resolveActiveSixJarsMonth(transactions)
   );
   const [customIncomeInput, setCustomIncomeInput] = useState<string>('');
-  const [customPercentages, setCustomPercentages] = useState<Record<string, number>>(() => ({
+  const [localPercentages, setLocalPercentages] = useState<Record<string, number>>(() => ({
     ...DEFAULT_SIX_JAR_PERCENTAGES,
   }));
   const [isPctEditorOpen, setIsPctEditorOpen] = useState<boolean>(false);
   const [hoveredRingId, setHoveredRingId] = useState<JarType | 'SALDO_LIVRE' | null>(null);
   const [clickedCenterJarId, setClickedCenterJarId] = useState<JarType | 'SALDO_LIVRE' | null>(null);
+
+  const customPercentages = externalPercentages ?? localPercentages;
+  const updatePercentages = (
+    updater:
+      | Record<string, number>
+      | ((prev: Record<string, number>) => Record<string, number>)
+  ) => {
+    const next = typeof updater === 'function' ? updater(customPercentages) : updater;
+    if (onExternalPercentagesChange) {
+      onExternalPercentagesChange(next);
+    } else {
+      setLocalPercentages(next);
+    }
+  };
 
   const parsedCustomIncome = useMemo(() => {
     const clean = customIncomeInput.replace(',', '.').trim();
@@ -120,15 +140,27 @@ export const SixJarsAllocationDonut: React.FC<SixJarsAllocationDonutProps> = ({
     return Number.isFinite(num) && num > 0 ? num : undefined;
   }, [customIncomeInput]);
 
+  const effectiveCustomIncomeBase = useMemo(() => {
+    if (parsedCustomIncome !== undefined) return parsedCustomIncome;
+    if (
+      typeof externalIncomeBase === 'number' &&
+      Number.isFinite(externalIncomeBase) &&
+      externalIncomeBase > 0
+    ) {
+      return externalIncomeBase;
+    }
+    return undefined;
+  }, [parsedCustomIncome, externalIncomeBase]);
+
   const metrics = useMemo(
     () =>
       calculateSixJarsMetrics(transactions, {
         monthKey: selectedMonth,
         usePjProfitInPf,
-        customIncomeBase: parsedCustomIncome,
+        customIncomeBase: effectiveCustomIncomeBase,
         customPercentages: customPercentages as Partial<Record<JarType, number>>,
       }),
-    [transactions, selectedMonth, usePjProfitInPf, parsedCustomIncome, customPercentages]
+    [transactions, selectedMonth, usePjProfitInPf, effectiveCustomIncomeBase, customPercentages]
   );
 
   const totalConfiguredPct = useMemo(
@@ -186,7 +218,7 @@ export const SixJarsAllocationDonut: React.FC<SixJarsAllocationDonutProps> = ({
   };
 
   const handleResetPercentages = () => {
-    setCustomPercentages({ ...DEFAULT_SIX_JAR_PERCENTAGES });
+    updatePercentages({ ...DEFAULT_SIX_JAR_PERCENTAGES });
   };
 
   return (
@@ -253,9 +285,9 @@ export const SixJarsAllocationDonut: React.FC<SixJarsAllocationDonutProps> = ({
               className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mb-1"
             >
               <span>Renda Líquida Base (100%)</span>
-              {metrics.isUsingCustomIncomeBase && (
+              {parsedCustomIncome !== undefined && (
                 <span className="text-[9px] font-black text-indigo-600 dark:text-indigo-400">
-                  • Editada
+                  • Simulada
                 </span>
               )}
             </label>
@@ -271,8 +303,13 @@ export const SixJarsAllocationDonut: React.FC<SixJarsAllocationDonutProps> = ({
                   min="0"
                   step="50"
                   placeholder={
-                    metrics.computedRendaLiquidaMensal > 0
-                      ? metrics.computedRendaLiquidaMensal.toFixed(2)
+                    (externalIncomeBase && externalIncomeBase > 0
+                      ? externalIncomeBase
+                      : metrics.computedRendaLiquidaMensal) > 0
+                      ? (externalIncomeBase && externalIncomeBase > 0
+                          ? externalIncomeBase
+                          : metrics.computedRendaLiquidaMensal
+                        ).toFixed(2)
                       : 'Ex: 4000'
                   }
                   value={customIncomeInput}
@@ -280,11 +317,15 @@ export const SixJarsAllocationDonut: React.FC<SixJarsAllocationDonutProps> = ({
                   className="w-36 pl-8 pr-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-black text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
-              {metrics.isUsingCustomIncomeBase && (
+              {parsedCustomIncome !== undefined && (
                 <button
                   type="button"
                   onClick={() => setCustomIncomeInput('')}
-                  title={`Voltar para renda automática (${formatBRL(metrics.computedRendaLiquidaMensal)})`}
+                  title={`Voltar para base configurada (${formatBRL(
+                    externalIncomeBase && externalIncomeBase > 0
+                      ? externalIncomeBase
+                      : metrics.computedRendaLiquidaMensal
+                  )})`}
                   aria-label="Restaurar renda líquida automática"
                   data-testid="btn-reset-sixjars-income"
                   className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 transition cursor-pointer"
@@ -369,7 +410,7 @@ export const SixJarsAllocationDonut: React.FC<SixJarsAllocationDonutProps> = ({
                     value={customPercentages[jar.id] ?? jar.limiteMetaPct}
                     onChange={e => {
                       const val = parseFloat(e.target.value);
-                      setCustomPercentages(prev => ({
+                      updatePercentages(prev => ({
                         ...prev,
                         [jar.id]: Number.isFinite(val) && val >= 0 ? Math.min(100, val) : 0,
                       }));

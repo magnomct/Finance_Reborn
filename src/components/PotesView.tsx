@@ -19,12 +19,18 @@ import {
 } from '../utils/budgetAlerts';
 import { JarOptimizationModal } from './JarOptimizationModal';
 import { JarSavingsGoalsManager } from './JarSavingsGoalsManager';
+import { BaseIncomeConfig } from '../utils/baseIncomeConfig';
 
 interface PotesViewProps {
   transactions: Transaction[];
   usePjProfitInPf: boolean;
   setUsePjProfitInPf: (val: boolean) => void;
   onFilterJarInAgenda: (jar: JarType) => void;
+  effectiveIncomeBase?: number;
+  baseIncomeConfig?: BaseIncomeConfig;
+  customJarPercentages?: Record<string, number>;
+  onUpdateCustomJarPercentages?: (next: Record<string, number>) => void;
+  onNavigateToDashboard?: () => void;
   jarLimits?: Record<JarType, number>;
   jarSavingsTargets?: Record<JarType, number>;
   onOpenLimitsModal?: () => void;
@@ -37,6 +43,11 @@ export const PotesView: React.FC<PotesViewProps> = ({
   usePjProfitInPf,
   setUsePjProfitInPf,
   onFilterJarInAgenda,
+  effectiveIncomeBase,
+  baseIncomeConfig,
+  customJarPercentages,
+  onUpdateCustomJarPercentages,
+  onNavigateToDashboard,
   jarLimits,
   jarSavingsTargets,
   onOpenLimitsModal,
@@ -46,8 +57,12 @@ export const PotesView: React.FC<PotesViewProps> = ({
   const [selectedJarKey, setSelectedJarKey] = useState<JarType | null>('NEC_55');
   const [isOptimizationModalOpen, setIsOptimizationModalOpen] = useState(false);
 
-
-  const metrics = calculateFinancialMetrics(transactions, usePjProfitInPf);
+  const metrics = calculateFinancialMetrics(
+    transactions,
+    usePjProfitInPf,
+    effectiveIncomeBase,
+    customJarPercentages as Partial<Record<JarType, number>> | undefined
+  );
 
   const getIcon = (name: string) => {
     switch (name) {
@@ -105,14 +120,33 @@ export const PotesView: React.FC<PotesViewProps> = ({
           <h2 className="text-xl font-black text-slate-900 dark:text-white">
             Divisão Inteligente de Gastos
           </h2>
-          <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+          <div className="text-xs text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5">
             <span>Base Orçamentária Atual:</span>
-            <AnimatedCurrencyCounter
-              value={metrics.effectiveIncomeBase}
-              showDirectionBadge={true}
-              className="font-black text-slate-900 dark:text-white"
-            />
-          </p>
+            <span data-testid="potes-effective-income-base">
+              <AnimatedCurrencyCounter
+                value={metrics.effectiveIncomeBase}
+                showDirectionBadge={true}
+                className="font-black text-slate-900 dark:text-white"
+              />
+            </span>
+            {baseIncomeConfig?.mode === 'manual' && (
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300"
+                data-testid="potes-manual-income-badge"
+              >
+                Renda Base Manual
+              </span>
+            )}
+            {onNavigateToDashboard && (
+              <button
+                type="button"
+                onClick={onNavigateToDashboard}
+                className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+              >
+                Editar no Dashboard
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -194,6 +228,9 @@ export const PotesView: React.FC<PotesViewProps> = ({
       <SixJarsAllocationDonut
         transactions={transactions}
         usePjProfitInPf={usePjProfitInPf}
+        externalIncomeBase={metrics.effectiveIncomeBase}
+        externalPercentages={customJarPercentages}
+        onExternalPercentagesChange={onUpdateCustomJarPercentages}
         selectedJarKey={selectedJarKey}
         onSelectJar={setSelectedJarKey}
         onFilterJarInAgenda={onFilterJarInAgenda}
@@ -203,6 +240,7 @@ export const PotesView: React.FC<PotesViewProps> = ({
       <SmartSavingsAdvisorCard
         transactions={transactions}
         usePjProfitInPf={usePjProfitInPf}
+        customIncomeBase={metrics.effectiveIncomeBase}
         jarLimits={jarLimits}
         onFilterJarInAgenda={onFilterJarInAgenda}
         onOpenLimitsModal={onOpenLimitsModal}

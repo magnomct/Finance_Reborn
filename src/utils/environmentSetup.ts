@@ -257,6 +257,8 @@ export const ALL_YUPPEE_STORAGE_KEYS = [
   'yupee_bookmarked_article_ids',
   'yupee_last_tip_v2',
   'yupee_offline_sync_queue_v1',
+  '@finance_app:base_income_v1',
+  '@finance_app:jar_percentages_v1',
 ];
 
 /**

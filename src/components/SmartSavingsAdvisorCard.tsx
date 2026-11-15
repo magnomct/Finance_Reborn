@@ -27,6 +27,7 @@ import {
 export interface SmartSavingsAdvisorCardProps {
   transactions: Transaction[];
   usePjProfitInPf: boolean;
+  customIncomeBase?: number;
   jarLimits?: Partial<Record<JarType, number>>;
   onFilterJarInAgenda?: (jarId: JarType) => void;
   onOpenLimitsModal?: () => void;
@@ -52,6 +53,7 @@ function formatUpdatedTimestampPtBr(isoString: string): string {
 export const SmartSavingsAdvisorCard: React.FC<SmartSavingsAdvisorCardProps> = ({
   transactions,
   usePjProfitInPf,
+  customIncomeBase,
   jarLimits,
   onFilterJarInAgenda,
   onOpenLimitsModal,
@@ -67,13 +69,16 @@ export const SmartSavingsAdvisorCard: React.FC<SmartSavingsAdvisorCardProps> = (
       extractSixJarsSavingsSnapshot(transactions, {
         monthKey: activeMonthKey,
         usePjProfitInPf,
+        customIncomeBase,
         jarLimits,
       }),
-    [transactions, activeMonthKey, usePjProfitInPf, jarLimits]
+    [transactions, activeMonthKey, usePjProfitInPf, customIncomeBase, jarLimits]
   );
 
+  const incomeCacheKey = Math.round(snapshot.rendaLiquidaMensal);
+
   const [analysis, setAnalysis] = useState<CachedSavingsAnalysis | null>(() =>
-    getCachedSavingsAnalysis(snapshot.monthKey, snapshot.txCount)
+    getCachedSavingsAnalysis(snapshot.monthKey, snapshot.txCount, incomeCacheKey)
   );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [appliedState, setAppliedState] = useState<AppliedSavingsStepsState>(() =>
@@ -91,7 +96,11 @@ export const SmartSavingsAdvisorCard: React.FC<SmartSavingsAdvisorCardProps> = (
   const runAnalysis = useCallback(
     async (forceRefresh: boolean) => {
       if (!forceRefresh) {
-        const cached = getCachedSavingsAnalysis(snapshot.monthKey, snapshot.txCount);
+        const cached = getCachedSavingsAnalysis(
+          snapshot.monthKey,
+          snapshot.txCount,
+          incomeCacheKey
+        );
         if (cached) {
           setAnalysis(cached);
           return;
@@ -106,13 +115,17 @@ export const SmartSavingsAdvisorCard: React.FC<SmartSavingsAdvisorCardProps> = (
         setIsLoading(false);
       }
     },
-    [snapshot]
+    [snapshot, incomeCacheKey]
   );
 
-  // Trigger once per uncached (monthKey, txCount) pair; never spams on re-renders
+  // Trigger once per uncached (monthKey, txCount, incomeCacheKey) tuple; never spams on re-renders
   useEffect(() => {
-    const key = `${snapshot.monthKey}_${snapshot.txCount}`;
-    const cached = getCachedSavingsAnalysis(snapshot.monthKey, snapshot.txCount);
+    const key = `${snapshot.monthKey}_${snapshot.txCount}_${incomeCacheKey}`;
+    const cached = getCachedSavingsAnalysis(
+      snapshot.monthKey,
+      snapshot.txCount,
+      incomeCacheKey
+    );
     if (cached) {
       setAnalysis(cached);
       lastAutoTriggeredKeyRef.current = key;
@@ -122,7 +135,7 @@ export const SmartSavingsAdvisorCard: React.FC<SmartSavingsAdvisorCardProps> = (
     if (lastAutoTriggeredKeyRef.current === key) return;
     lastAutoTriggeredKeyRef.current = key;
     void runAnalysis(false);
-  }, [snapshot.monthKey, snapshot.txCount, runAnalysis]);
+  }, [snapshot.monthKey, snapshot.txCount, incomeCacheKey, runAnalysis]);
 
   useEffect(() => {
     if (!goalActionFeedback) return;
