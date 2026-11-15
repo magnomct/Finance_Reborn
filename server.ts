@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import { 
   getCuratedFallbackArticles, 
@@ -11,6 +11,12 @@ import {
   calculateDeterministicJarOptimization,
   CORE_JAR_KEYS
 } from './src/utils/jarOptimization';
+import {
+  SixJarsSavingsSnapshot,
+  buildDeterministicSavingsPlan,
+  buildSavingsAdvisorPrompt,
+  sanitizeSavingsAdvisorPlan,
+} from './src/utils/savingsAdvisor';
 
 dotenv.config();
 
@@ -452,6 +458,146 @@ Responda SOMENTE o JSON puro, sem markdown tags adicionais.`;
       tripGeminiCircuit('Créditos de pré-pagamento esgotados');
     }
     return res.json(getDeterministicResult());
+  }
+});
+
+// Endpoint para Consultor de Economia IA dos 6 Potes (Gemini 2.5 Flash + Structured JSON)
+app.post('/api/consultor-economia-potes', async (req, res) => {
+  const snapshot = req.body?.snapshot as SixJarsSavingsSnapshot | undefined;
+  if (!snapshot || !snapshot.primaryOffenderJar) {
+    return res.status(400).json({ error: 'Snapshot dos 6 Potes inválido.' });
+  }
+
+  const generatedAt = new Date().toISOString();
+
+  if (!isGeminiAvailable()) {
+    return res.json({
+      plan: buildDeterministicSavingsPlan(snapshot),
+      source: 'heuristic',
+      modelUsed: 'local-heuristic',
+      generatedAt,
+    });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY!;
+  const ai = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+
+  const prompt = buildSavingsAdvisorPrompt(snapshot);
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      headline: {
+        type: Type.STRING,
+        description: 'Título direto e diagnóstico com o principal desvio e categoria.',
+      },
+      offenderCategoryPath: {
+        type: Type.STRING,
+        description: 'Caminho da categoria ofensora, ex: Necessidades > Alimentação > Delivery.',
+      },
+      estimatedMonthlySavingsBRL: {
+        type: Type.NUMBER,
+        description: 'Meta realista de economia mensal em Reais (R$).',
+      },
+      diagnosis: {
+        type: Type.STRING,
+        description: 'Análise objetiva em 2 frases citando números reais e padrões de gastos.',
+      },
+      actionableSteps: {
+        type: Type.ARRAY,
+        description: 'Lista com exatamente 3 micro-ações práticas para reduzir custos.',
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING, description: 'Título curto da micro-ação.' },
+            description: { type: Type.STRING, description: 'Passos práticos e específicos.' },
+            potentialSavingBRL: { type: Type.NUMBER, description: 'Economia estimada em R$.' },
+          },
+          required: ['title', 'description', 'potentialSavingBRL'],
+        },
+      },
+      rebalanceSuggestion: {
+        type: Type.STRING,
+        description:
+          'Sugestão de qual pote com folga pode absorver o excesso ou quanto redirecionar para Liberdade Financeira.',
+      },
+    },
+    required: [
+      'headline',
+      'offenderCategoryPath',
+      'estimatedMonthlySavingsBRL',
+      'diagnosis',
+      'actionableSteps',
+      'rebalanceSuggestion',
+    ],
+  };
+
+  try {
+    let modelUsed = 'gemini-2.5-flash';
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: modelUsed,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema,
+        },
+      });
+    } catch (firstErr: any) {
+      if (isBillingOrQuotaError(firstErr)) {
+        tripGeminiCircuit('Créditos de pré-pagamento esgotados');
+        return res.json({
+          plan: buildDeterministicSavingsPlan(snapshot),
+          source: 'heuristic',
+          modelUsed: 'local-heuristic',
+          generatedAt,
+        });
+      }
+      // Fallback to active standard text model on 404/model error
+      modelUsed = 'gemini-4-hydrogen';
+      response = await ai.models.generateContent({
+        model: modelUsed,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema,
+        },
+      });
+    }
+
+    const rawText = (response.text || '{}').trim();
+    let parsedJson: unknown = {};
+    try {
+      parsedJson = JSON.parse(rawText);
+    } catch {
+      const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+      parsedJson = JSON.parse(cleaned);
+    }
+
+    const plan = sanitizeSavingsAdvisorPlan(parsedJson, snapshot);
+    return res.json({
+      plan,
+      source: 'gemini',
+      modelUsed,
+      generatedAt,
+    });
+  } catch (err: any) {
+    if (isBillingOrQuotaError(err)) {
+      tripGeminiCircuit('Créditos de pré-pagamento esgotados');
+    }
+    return res.json({
+      plan: buildDeterministicSavingsPlan(snapshot),
+      source: 'heuristic',
+      modelUsed: 'local-heuristic',
+      generatedAt,
+    });
   }
 });
 

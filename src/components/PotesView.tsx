@@ -7,13 +7,15 @@ import {
 import { Transaction, JarType } from '../types';
 import { calculateFinancialMetrics, formatBRL } from '../utils/finance';
 import { Sliders, AlertOctagon } from 'lucide-react';
-import { PotesDonutChart } from './PotesDonutChart';
+import { SixJarsAllocationDonut } from './SixJarsAllocationDonut';
+import { SmartSavingsAdvisorCard } from './SmartSavingsAdvisorCard';
 import { AnimatedCurrencyCounter } from './AnimatedCurrencyCounter';
 import { 
   DEFAULT_JAR_SAVINGS_TARGETS, 
   DEFAULT_JAR_LIMITS,
   calculateJarSavingsProgress,
-  saveJarLimits 
+  saveJarLimits,
+  saveJarSavingsTargets
 } from '../utils/budgetAlerts';
 import { JarOptimizationModal } from './JarOptimizationModal';
 import { JarSavingsGoalsManager } from './JarSavingsGoalsManager';
@@ -64,6 +66,27 @@ export const PotesView: React.FC<PotesViewProps> = ({
   const selectedJarTransactions = selectedJarKey
     ? transactions.filter(t => t.jar === selectedJarKey)
     : [];
+
+  const handleCreateReductionGoal = (
+    jarId: JarType,
+    suggestedMonthlySavingBRL: number
+  ) => {
+    const baseTargets: Record<JarType, number> = {
+      ...DEFAULT_JAR_SAVINGS_TARGETS,
+      ...(jarSavingsTargets || {}),
+    };
+    const roundedTarget = Math.max(50, Math.round(suggestedMonthlySavingBRL));
+    const updatedTargets: Record<JarType, number> = {
+      ...baseTargets,
+      [jarId]: Math.max(baseTargets[jarId] || 0, roundedTarget),
+    };
+    if (onSaveSavingsTargets) {
+      onSaveSavingsTargets(updatedTargets);
+    } else {
+      saveJarSavingsTargets(updatedTargets);
+    }
+    setSelectedJarKey(jarId);
+  };
 
   return (
     <div className="space-y-6">
@@ -167,13 +190,23 @@ export const PotesView: React.FC<PotesViewProps> = ({
         </button>
       </div>
 
-      {/* Gráfico de Rosca Interativo de Consumo vs Limite */}
-      <PotesDonutChart
-        jars={metrics.jars}
-        jarLimits={jarLimits}
+      {/* Rosca Dupla Concêntrica: Meta Ideal vs Gasto Real dos 6 Potes */}
+      <SixJarsAllocationDonut
+        transactions={transactions}
+        usePjProfitInPf={usePjProfitInPf}
         selectedJarKey={selectedJarKey}
         onSelectJar={setSelectedJarKey}
+        onFilterJarInAgenda={onFilterJarInAgenda}
+      />
+
+      {/* Consultor de Economia IA - Gemini */}
+      <SmartSavingsAdvisorCard
+        transactions={transactions}
+        usePjProfitInPf={usePjProfitInPf}
+        jarLimits={jarLimits}
+        onFilterJarInAgenda={onFilterJarInAgenda}
         onOpenLimitsModal={onOpenLimitsModal}
+        onCreateReductionGoal={handleCreateReductionGoal}
       />
 
       {/* Componente de Metas de Economia dos 6 Potes & Alcance Mensal */}
