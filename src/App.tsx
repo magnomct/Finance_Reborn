@@ -1059,8 +1059,10 @@ export default function App() {
 
             <AnnualDashboardView 
               transactions={transactions}
+              recurringList={recurringList}
               dreams={dreams}
               jarLimits={jarLimits}
+              usePjProfitInPf={usePjProfitInPf}
               selectedMonth={selectedMonth}
               selectedMonthIndex={selectedMonthIndex}
               onSelectMonth={(monthIdx) => {

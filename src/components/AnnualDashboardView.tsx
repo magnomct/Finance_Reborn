@@ -16,13 +16,16 @@ import { SavingsTrendsBarChart } from './SavingsTrendsBarChart';
 import { SavingsVsNecessitiesCard } from './SavingsVsNecessitiesCard';
 import { DreamsProgressCard } from './DreamsProgressCard';
 import { AnnualSavingsGoalsAccumulator } from './AnnualSavingsGoalsAccumulator';
-import { Transaction, JarType, DreamGoal } from '../types';
+import { FutureBalanceProjectionChart } from './FutureBalanceProjectionChart';
+import { Transaction, JarType, DreamGoal, RecurringExpense } from '../types';
 
 interface AnnualDashboardViewProps {
   onSelectMonth?: (monthIndex: number) => void;
   transactions?: Transaction[];
+  recurringList?: RecurringExpense[];
   dreams?: DreamGoal[];
   jarLimits?: Record<JarType, number>;
+  usePjProfitInPf?: boolean;
   selectedMonth?: string;
   selectedMonthIndex?: number;
   onUpdateDreamBalance?: (dreamId: string, newBalance: number) => void;
@@ -33,8 +36,10 @@ interface AnnualDashboardViewProps {
 export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({ 
   onSelectMonth,
   transactions = [],
+  recurringList = [],
   dreams = [],
   jarLimits = {} as Record<JarType, number>,
+  usePjProfitInPf = true,
   selectedMonth = 'Outubro / 2026',
   selectedMonthIndex = 2,
   onUpdateDreamBalance,
@@ -391,6 +396,17 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
         dreams={dreams}
         onUpdateDreamBalance={onUpdateDreamBalance}
       />
+
+      {/* Projeção de Saldo Futuro - Próximos 6 Meses (M+1 a M+6 por Pote e Consolidado) */}
+      {(viewMode === 'resumo' || viewMode === 'fluxo' || viewMode === 'graficos') && (
+        <FutureBalanceProjectionChart
+          transactions={transactions}
+          recurringList={recurringList}
+          dreams={dreams}
+          usePjProfitInPf={usePjProfitInPf}
+          onNavigateToScreen={onNavigateToScreen}
+        />
+      )}
 
       {/* Gráfico Comparativo de Fluxo de Caixa Sazonal (Flutuações 12 Meses, Picos Atípicos e Previsão de Liquidez) */}
       {(viewMode === 'resumo' || viewMode === 'fluxo') && (
