@@ -1189,6 +1189,7 @@ export default function App() {
           <div className="px-4">
             <ChartsView 
               transactions={transactions} 
+              dreams={dreams}
               usePjProfitInPf={usePjProfitInPf} 
               selectedMonth={selectedMonth} 
               hierarchy={categoryHierarchy}

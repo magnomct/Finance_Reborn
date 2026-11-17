@@ -4,7 +4,7 @@ import {
   CheckCircle2, DollarSign, Calendar, Flame, ShieldCheck, Zap,
   Layers, ArrowRight, Activity, PiggyBank
 } from 'lucide-react';
-import { Transaction, JarType, ParentCategoryItem } from '../types';
+import { Transaction, JarType, ParentCategoryItem, DreamGoal } from '../types';
 import { calculateFinancialMetrics, simulateDailyCashflow, formatBRL } from '../utils/finance';
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { CategoryPieChart } from './CategoryPieChart';
@@ -12,9 +12,11 @@ import { MonthlyBalanceLineChart } from './MonthlyBalanceLineChart';
 import { ExpenseHeatmapChart } from './ExpenseHeatmapChart';
 import { MonthlyVariabilityCard } from './MonthlyVariabilityCard';
 import { CumulativeSavingsLineChart } from './CumulativeSavingsLineChart';
+import { MonthlyNetWorthD3Chart } from './MonthlyNetWorthD3Chart';
 
 interface ChartsViewProps {
   transactions: Transaction[];
+  dreams?: DreamGoal[];
   usePjProfitInPf: boolean;
   selectedMonth: string;
   hierarchy?: ParentCategoryItem[];
@@ -22,12 +24,13 @@ interface ChartsViewProps {
 
 export const ChartsView: React.FC<ChartsViewProps> = ({
   transactions,
+  dreams = [],
   usePjProfitInPf,
   selectedMonth,
   hierarchy
 }) => {
   const [selectedJarSlice, setSelectedJarSlice] = useState<JarType | null>(null);
-  const [chartMode, setChartMode] = useState<'donut' | 'categorias' | 'linha' | 'ritmo' | 'evolucao' | 'calor' | 'variabilidade' | 'poupanca_acumulada'>('donut');
+  const [chartMode, setChartMode] = useState<'donut' | 'patrimonio' | 'categorias' | 'linha' | 'ritmo' | 'evolucao' | 'calor' | 'variabilidade' | 'poupanca_acumulada'>('donut');
 
   const metrics = useMemo(() => {
     return calculateFinancialMetrics(transactions, usePjProfitInPf);
@@ -105,6 +108,19 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
           >
             <PieChart className="w-4 h-4" />
             <span>Distribuição dos 6 Potes</span>
+          </button>
+
+          <button
+            onClick={() => setChartMode('patrimonio')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
+              chartMode === 'patrimonio'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+            }`}
+            data-testid="tab-chart-patrimonio-d3"
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span>Evolução Patrimonial (D3)</span>
           </button>
 
           <button
@@ -721,6 +737,26 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
           transactions={transactions}
           usePjProfitInPf={usePjProfitInPf}
           selectedMonth={selectedMonth}
+        />
+      )}
+
+      {/* ========================================================= */}
+      {/* NOVO MODO FOCADO: EVOLUÇÃO PATRIMONIAL MENSAL (D3.JS)     */}
+      {/* ========================================================= */}
+      {chartMode === 'patrimonio' && (
+        <MonthlyNetWorthD3Chart
+          transactions={transactions}
+          dreams={dreams}
+        />
+      )}
+
+      {/* ========================================================= */}
+      {/* CARD INTEGRADO NA GRID PRINCIPAL DE GRÁFICOS INTUITIVOS   */}
+      {/* ========================================================= */}
+      {chartMode === 'donut' && (
+        <MonthlyNetWorthD3Chart
+          transactions={transactions}
+          dreams={dreams}
         />
       )}
 

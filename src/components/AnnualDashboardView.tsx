@@ -357,6 +357,28 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
         </div>
       </div>
 
+      {/* Card Configurar Renda Base Consolidada (Atualiza os 6 Potes e Projeções em Tempo Real) */}
+      {baseIncomeConfig &&
+        realizedIncome &&
+        effectiveBaseIncome !== undefined &&
+        onSaveManualIncome &&
+        onSwitchToAutoIncome &&
+        onUseRealizedIncome && (
+          <BaseIncomeConfigCard
+            config={baseIncomeConfig}
+            effectiveBaseIncome={effectiveBaseIncome}
+            realizedIncome={realizedIncome}
+            customPercentages={customJarPercentages}
+            usePjProfitInPf={usePjProfitInPf}
+            onSaveManualIncome={onSaveManualIncome}
+            onSwitchToAuto={onSwitchToAutoIncome}
+            onUseRealizedIncome={onUseRealizedIncome}
+            onNavigateToSixJars={
+              onNavigateToScreen ? () => onNavigateToScreen('potes') : undefined
+            }
+          />
+        )}
+
       {/* KPI Cards Row - 2 columns on mobile (2x2) and 4 on desktop */}
       <div className={`grid gap-2.5 sm:gap-3.5 ${isMobile ? 'grid-cols-2 keep-grid-2' : 'grid-cols-2 lg:grid-cols-4'}`}>
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm min-w-0">
@@ -399,28 +421,6 @@ export const AnnualDashboardView: React.FC<AnnualDashboardViewProps> = ({
           </span>
         </div>
       </div>
-
-      {/* Card Configurar Renda Base Consolidada (Atualiza os 6 Potes e Projeções em Tempo Real) */}
-      {baseIncomeConfig &&
-        realizedIncome &&
-        effectiveBaseIncome !== undefined &&
-        onSaveManualIncome &&
-        onSwitchToAutoIncome &&
-        onUseRealizedIncome && (
-          <BaseIncomeConfigCard
-            config={baseIncomeConfig}
-            effectiveBaseIncome={effectiveBaseIncome}
-            realizedIncome={realizedIncome}
-            customPercentages={customJarPercentages}
-            usePjProfitInPf={usePjProfitInPf}
-            onSaveManualIncome={onSaveManualIncome}
-            onSwitchToAuto={onSwitchToAutoIncome}
-            onUseRealizedIncome={onUseRealizedIncome}
-            onNavigateToSixJars={
-              onNavigateToScreen ? () => onNavigateToScreen('potes') : undefined
-            }
-          />
-        )}
 
       {/* Card Resumo de Conclusão Acumulada de Sonhos & Metas Ativos */}
       <DreamsProgressCard

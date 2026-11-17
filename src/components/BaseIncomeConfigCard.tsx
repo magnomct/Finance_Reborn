@@ -391,8 +391,9 @@ export const BaseIncomeConfigCard: React.FC<BaseIncomeConfigCardProps> = ({
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="submit"
+                  disabled={draftIncomeBRL <= 0}
                   data-testid="btn-save-base-income"
-                  className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Salvar e Sincronizar</span>
@@ -462,8 +463,9 @@ export const BaseIncomeConfigCard: React.FC<BaseIncomeConfigCardProps> = ({
               <div className="sm:col-span-4 flex items-center gap-2">
                 <button
                   type="submit"
+                  disabled={draftIncomeBRL <= 0}
                   data-testid="btn-save-base-income"
-                  className="flex-1 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="flex-1 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Salvar ({formatBRL(draftIncomeBRL)})</span>
@@ -479,6 +481,11 @@ export const BaseIncomeConfigCard: React.FC<BaseIncomeConfigCardProps> = ({
                 </button>
               </div>
             </div>
+          )}
+          {draftIncomeBRL <= 0 && (
+            <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+              Informe um valor maior que R$ 0,00 ou utilize &quot;Sincronizado c/ Extrato + MEI&quot;.
+            </p>
           )}
         </form>
       )}
