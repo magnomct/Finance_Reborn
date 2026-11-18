@@ -11,6 +11,7 @@ import {
 import { DreamGoal, Transaction } from '../types';
 import {
   calculateConsolidatedNetWorthKPIs,
+  MonthlyNetWorthPoint,
   ConsolidatedNetWorthKPIs,
 } from '../utils/finance';
 import {
@@ -19,7 +20,7 @@ import {
   formatCurrencyBRL,
   formatMonthKeyLabels,
   formatSignedPercentPtBR,
-  MonthlyNetWorthPoint,
+  MonthlyNetWorthPoint as ChartNetWorthPoint,
   NetWorthPeriodFilter,
 } from '../utils/monthlyNetWorth';
 
@@ -32,7 +33,7 @@ export interface MonthlyNetWorthD3ChartProps {
 }
 
 interface TooltipHoverState {
-  point: MonthlyNetWorthPoint;
+  point: ChartNetWorthPoint;
   xPx: number;
   yPx: number;
   containerWidth: number;
@@ -92,10 +93,10 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
     });
   }, [resolvedData, period, anchorMonthKey]);
 
-  const kpis: ConsolidatedNetWorthKPIs = useMemo(
-    () => calculateConsolidatedNetWorthKPIs(summary.points),
-    [summary.points]
-  );
+  const kpis: ConsolidatedNetWorthKPIs = useMemo(() => {
+    const monthlySeries: MonthlyNetWorthPoint[] = summary.points;
+    return calculateConsolidatedNetWorthKPIs(monthlySeries);
+  }, [summary.points]);
 
   const bestMonthDisplay = useMemo(() => {
     if (!kpis.bestMonth) return null;
@@ -316,7 +317,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
 
     // Area Generator (gradient fill under curve)
     const areaGenerator = d3
-      .area<MonthlyNetWorthPoint>()
+      .area<ChartNetWorthPoint>()
       .x(d => xScale(d.date))
       .y0(() => yScale(Math.max(niceYMin, 0)))
       .y1(d => yScale(d.totalNetWorthBRL))
@@ -331,7 +332,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
 
     // Line Generator (3px smooth curveMonotoneX)
     const lineGenerator = d3
-      .line<MonthlyNetWorthPoint>()
+      .line<ChartNetWorthPoint>()
       .x(d => xScale(d.date))
       .y(d => yScale(d.totalNetWorthBRL))
       .curve(d3.curveMonotoneX);
@@ -393,14 +394,14 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .attr('stroke-width', 2.5);
 
     // Bisector for smooth mouse/touch snapping to nearest month
-    const bisectDate = d3.bisector<MonthlyNetWorthPoint, Date>(d => d.date).left;
+    const bisectDate = d3.bisector<ChartNetWorthPoint, Date>(d => d.date).left;
 
     const handlePointerMove = (event: MouseEvent | TouchEvent) => {
       const [pointerX] = d3.pointer(event, overlayNode);
       const clampedX = Math.max(0, Math.min(innerWidth, pointerX));
       const xDate = xScale.invert(clampedX);
 
-      let nearestPoint: MonthlyNetWorthPoint;
+      let nearestPoint: ChartNetWorthPoint;
       if (points.length === 1) {
         nearestPoint = points[0];
       } else {

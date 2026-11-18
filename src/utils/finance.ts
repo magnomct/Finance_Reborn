@@ -513,10 +513,16 @@ export function calculateConsolidatedNetWorthKPIs(
   const sortedSeries = [...monthlySeries].sort((a, b) => a.month.localeCompare(b.month));
 
   const normalized = sortedSeries.map(item => {
-    const pf = roundNetWorthCurrency(item.pfBalance || 0);
-    const mei = roundNetWorthCurrency(item.meiBalance || 0);
-    const goals = roundNetWorthCurrency(item.goalsBalance || 0);
-    const total = roundNetWorthCurrency(pf + mei + goals);
+    const rawPf = Number(item.pfBalance);
+    const rawMei = Number(item.meiBalance);
+    const rawGoals = Number(item.goalsBalance);
+    const pf = Number.isFinite(rawPf) ? roundNetWorthCurrency(rawPf) : 0;
+    const mei = Number.isFinite(rawMei) ? roundNetWorthCurrency(rawMei) : 0;
+    const goals = Number.isFinite(rawGoals) ? roundNetWorthCurrency(rawGoals) : 0;
+    const rawExplicitTotal = item.totalNetWorth !== undefined ? Number(item.totalNetWorth) : NaN;
+    const total = Number.isFinite(rawExplicitTotal)
+      ? roundNetWorthCurrency(rawExplicitTotal)
+      : roundNetWorthCurrency(pf + mei + goals);
     return {
       month: item.month,
       pf,
@@ -557,12 +563,10 @@ export function calculateConsolidatedNetWorthKPIs(
 
   let rawGrowthPct = 0;
   if (normalized.length > 1) {
-    if (firstMonth.total > 0) {
-      rawGrowthPct = ((lastMonth.total - firstMonth.total) / firstMonth.total) * 100;
-    } else if (firstMonth.total === 0) {
-      rawGrowthPct = lastMonth.total > 0 ? 100 : lastMonth.total < 0 ? -100 : 0;
+    if (firstMonth.total !== 0) {
+      rawGrowthPct = (periodGrowthBRL / Math.abs(firstMonth.total)) * 100;
     } else {
-      rawGrowthPct = ((lastMonth.total - firstMonth.total) / Math.abs(firstMonth.total)) * 100;
+      rawGrowthPct = lastMonth.total > 0 ? 100 : lastMonth.total < 0 ? -100 : 0;
     }
   }
   const periodGrowthPct = Number.isFinite(rawGrowthPct) ? roundNetWorthCurrency(rawGrowthPct) : 0;

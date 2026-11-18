@@ -318,4 +318,12 @@ test('finance.calculateConsolidatedNetWorthKPIs handles fewer than 2 months and 
   assert.equal(negative.periodGrowthPct, -60);
   assert.equal(negative.monthlyAvgEvolutionBRL, -1500);
   assert.equal(negative.bestMonth, null);
+
+  const explicitTotal = calculateFinanceNetWorthKPIs([
+    { month: '2026-09', pfBalance: 1000, meiBalance: 500, goalsBalance: 500, totalNetWorth: 2500 },
+    { month: '2026-10', pfBalance: 1500, meiBalance: 1000, goalsBalance: 500, totalNetWorth: 3750 },
+  ]);
+  assert.equal(explicitTotal.currentNetWorth, 3750);
+  assert.equal(explicitTotal.periodGrowthBRL, 1250);
+  assert.equal(explicitTotal.periodGrowthPct, 50);
 });
