@@ -5,7 +5,12 @@ import {
   Layers, ArrowRight, Activity, PiggyBank
 } from 'lucide-react';
 import { Transaction, JarType, ParentCategoryItem, DreamGoal } from '../types';
-import { calculateFinancialMetrics, simulateDailyCashflow, formatBRL } from '../utils/finance';
+import {
+  calculateFinancialMetrics,
+  simulateDailyCashflow,
+  formatBRL,
+  buildHistoricalNetWorthSeries,
+} from '../utils/finance';
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { CategoryPieChart } from './CategoryPieChart';
 import { MonthlyBalanceLineChart } from './MonthlyBalanceLineChart';
@@ -39,6 +44,10 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
   const cashflowSim = useMemo(() => {
     return simulateDailyCashflow(transactions, metrics.effectiveIncomeBase, 0, 31);
   }, [transactions, metrics.effectiveIncomeBase]);
+
+  const netWorthSeries = useMemo(() => {
+    return buildHistoricalNetWorthSeries(transactions, dreams);
+  }, [transactions, dreams]);
 
   // Donut chart calculation
   const donutData = useMemo(() => {
@@ -273,6 +282,15 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
           <p className="text-[10px] text-slate-500 mt-0.5">Metodologia 6 Potes Yupee</p>
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* EVOLUÇÃO PATRIMONIAL MENSAL (D3.JS) - DESTAQUE PRINCIPAL  */}
+      {/* ========================================================= */}
+      {(chartMode === 'donut' || chartMode === 'patrimonio') && (
+        <div className="col-span-full">
+          <MonthlyNetWorthD3Chart data={netWorthSeries} />
+        </div>
+      )}
 
       {/* ========================================================= */}
       {/* MODO 1: GRÁFICO DE ROSCA INTERATIVO (DONUT DOS 6 POTES)     */}
@@ -737,26 +755,6 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
           transactions={transactions}
           usePjProfitInPf={usePjProfitInPf}
           selectedMonth={selectedMonth}
-        />
-      )}
-
-      {/* ========================================================= */}
-      {/* NOVO MODO FOCADO: EVOLUÇÃO PATRIMONIAL MENSAL (D3.JS)     */}
-      {/* ========================================================= */}
-      {chartMode === 'patrimonio' && (
-        <MonthlyNetWorthD3Chart
-          transactions={transactions}
-          dreams={dreams}
-        />
-      )}
-
-      {/* ========================================================= */}
-      {/* CARD INTEGRADO NA GRID PRINCIPAL DE GRÁFICOS INTUITIVOS   */}
-      {/* ========================================================= */}
-      {chartMode === 'donut' && (
-        <MonthlyNetWorthD3Chart
-          transactions={transactions}
-          dreams={dreams}
         />
       )}
 

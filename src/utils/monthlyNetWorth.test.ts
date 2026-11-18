@@ -5,8 +5,12 @@ import {
   formatCompactAxisBRL,
   formatMonthKeyLabels,
 } from './monthlyNetWorth';
-import { calculateConsolidatedNetWorthKPIs as calculateFinanceNetWorthKPIs } from './finance';
+import {
+  calculateConsolidatedNetWorthKPIs as calculateFinanceNetWorthKPIs,
+  buildHistoricalNetWorthSeries,
+} from './finance';
 import { DreamGoal, Transaction } from '../types';
+import { INITIAL_DREAMS, INITIAL_TRANSACTIONS } from '../data/initialData';
 
 test('formatCompactAxisBRL formats thousands and millions cleanly in pt-BR style', () => {
   assert.equal(formatCompactAxisBRL(10000), 'R$ 10k');
@@ -327,3 +331,104 @@ test('finance.calculateConsolidatedNetWorthKPIs handles fewer than 2 months and 
   assert.equal(explicitTotal.periodGrowthBRL, 1250);
   assert.equal(explicitTotal.periodGrowthPct, 50);
 });
+
+test('buildHistoricalNetWorthSeries returns 12 consistent anchor-ended points when empty', () => {
+  const emptySeries = buildHistoricalNetWorthSeries([], [], '2026-10');
+  assert.equal(emptySeries.length, 12);
+  assert.equal(emptySeries[0].month, '2025-11');
+  assert.equal(emptySeries[11].month, '2026-10');
+  for (const pt of emptySeries) {
+    assert.equal(
+      pt.totalNetWorth,
+      Math.round((pt.pfBalance + pt.meiBalance + pt.goalsBalance) * 100) / 100
+    );
+  }
+});
+
+test('buildHistoricalNetWorthSeries computes cumulative PF, MEI (minus PF transfers), and Goals across >=3 months', () => {
+  const multiMonthSeries = buildHistoricalNetWorthSeries(
+    [
+      // 2026-08: PF +3000 -1000 = +2000; MEI +2500
+      { date: '2026-08-05', amount: 3000, type: 'income', scope: 'PF' },
+      { date: '2026-08-12', amount: 1000, type: 'expense', scope: 'PF' },
+      { date: '2026-08-20', amount: 2500, type: 'income', scope: 'MEI' },
+      // 2026-09: PF +1000; MEI +1000 -500 (pró-labore transfer) -200 (expense) = +300 => MEI cumul 2800
+      { date: '2026-09-05', amount: 1000, type: 'receita', costCenter: 'Magno' },
+      { date: '2026-09-10', amount: 1000, type: 'receita', costCenter: 'PJ' },
+      { date: '2026-09-15', amount: -500, type: 'despesa', costCenter: 'PJ', description: 'Transferência Pró-Labore' },
+      { date: '2026-09-18', amount: -200, type: 'despesa', scope: 'PJ' },
+      // 2026-10: PF +500; MEI +200
+      { date: '2026-10-03', amount: 500, type: 'reembolso', costCenter: 'Nathan' },
+      { date: '2026-10-14', amount: 200, type: 'income', scope: 'MEI' },
+    ],
+    [
+      {
+        id: 'g1',
+        currentAmount: 1500,
+        contributionsHistory: [
+          { date: '2026-08-15', amount: 500 },
+          { date: '2026-09-15', amount: 500 },
+          { date: '2026-10-15', amount: 500 },
+        ],
+      },
+      {
+        id: 'g2',
+        current: 400, // unlogged initial base (anchored at first month)
+      },
+    ]
+  );
+
+  assert.equal(multiMonthSeries.length, 3);
+  assert.equal(multiMonthSeries[0].month, '2026-08');
+  assert.equal(multiMonthSeries[0].pfBalance, 2000);
+  assert.equal(multiMonthSeries[0].meiBalance, 2500);
+  assert.equal(multiMonthSeries[0].goalsBalance, 900); // 500 + 400 unlogged base
+  assert.equal(multiMonthSeries[0].totalNetWorth, 5400);
+
+  assert.equal(multiMonthSeries[1].month, '2026-09');
+  assert.equal(multiMonthSeries[1].pfBalance, 3000);
+  assert.equal(multiMonthSeries[1].meiBalance, 2800);
+  assert.equal(multiMonthSeries[1].goalsBalance, 1400);
+  assert.equal(multiMonthSeries[1].totalNetWorth, 7200);
+
+  assert.equal(multiMonthSeries[2].month, '2026-10');
+  assert.equal(multiMonthSeries[2].pfBalance, 3500);
+  assert.equal(multiMonthSeries[2].meiBalance, 3000);
+  assert.equal(multiMonthSeries[2].goalsBalance, 1900); // exact sum of goal balances (1500 + 400)
+  assert.equal(multiMonthSeries[2].totalNetWorth, 8400);
+});
+
+test('buildHistoricalNetWorthSeries triggers 12-month smart backfill on single-month data while anchoring final month to real balances', () => {
+  const initialSeries = buildHistoricalNetWorthSeries(INITIAL_TRANSACTIONS, INITIAL_DREAMS);
+  assert.equal(initialSeries.length, 12);
+  assert.equal(initialSeries[0].month, '2025-11');
+
+  const finalPoint = initialSeries[11];
+  assert.equal(finalPoint.month, '2026-10');
+  // INITIAL_TRANSACTIONS: PF = (2060 + 858) - 4508 = -1590; MEI = 3060.86 - 1468.55 = 1592.31
+  // INITIAL_DREAMS: 450 + 1200 + 850 + 600 = 3100
+  assert.equal(finalPoint.pfBalance, -1590);
+  assert.equal(finalPoint.meiBalance, 1592.31);
+  assert.equal(finalPoint.goalsBalance, 3100);
+  assert.equal(finalPoint.totalNetWorth, 3102.31);
+
+  // Adding a PF receita updates the anchored final month reactively
+  const updatedTxs: Transaction[] = [
+    ...INITIAL_TRANSACTIONS,
+    {
+      id: 'extra-bonus',
+      date: '2026-10-28',
+      description: 'Bônus Extra PF',
+      amount: 2000,
+      type: 'receita',
+      jar: 'LIF_10',
+      costCenter: 'Magno',
+      account: 'Inter PF',
+      status: 'liquidado',
+    },
+  ];
+  const updatedSeries = buildHistoricalNetWorthSeries(updatedTxs, INITIAL_DREAMS);
+  assert.equal(updatedSeries[11].pfBalance, 410);
+  assert.equal(updatedSeries[11].totalNetWorth, 5102.31);
+});
+

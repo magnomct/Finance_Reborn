@@ -32,7 +32,8 @@ const formatPct = (val: number) =>
   })}%`;
 
 export interface MonthlyNetWorthD3ChartProps {
-  transactions: Transaction[];
+  data?: MonthlyNetWorthPoint[];
+  transactions?: Transaction[];
   dreams?: DreamGoal[];
   defaultPeriod?: NetWorthPeriodFilter;
   anchorMonthKey?: string;
@@ -54,7 +55,8 @@ const PERIOD_OPTIONS: Array<{ id: NetWorthPeriodFilter; label: string; ariaLabel
 ];
 
 export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
-  transactions,
+  data,
+  transactions = [],
   dreams = [],
   defaultPeriod = '12M',
   anchorMonthKey = '2026-10',
@@ -73,6 +75,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
     let effectiveDreams = dreams;
 
     if (
+      (!data || data.length === 0) &&
       typeof window !== 'undefined' &&
       window.localStorage &&
       effectiveTx.length === 0 &&
@@ -89,19 +92,75 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
     }
 
     return { effectiveTx, effectiveDreams };
-  }, [transactions, dreams]);
+  }, [data, transactions, dreams]);
 
-  const fullSummary = useMemo(() => {
+  const allPoints: ChartNetWorthPoint[] = useMemo(() => {
+    if (data && data.length > 0) {
+      const sorted = [...data].sort((a, b) => a.month.localeCompare(b.month));
+      return sorted.map((item, idx) => {
+        const pf = Math.round((Number(item.pfBalance) || 0) * 100) / 100;
+        const mei = Math.round((Number(item.meiBalance) || 0) * 100) / 100;
+        const goals = Math.round((Number(item.goalsBalance) || 0) * 100) / 100;
+        const total =
+          item.totalNetWorth !== undefined && Number.isFinite(item.totalNetWorth)
+            ? Math.round(item.totalNetWorth * 100) / 100
+            : Math.round((pf + mei + goals) * 100) / 100;
+
+        const prevItem = idx > 0 ? sorted[idx - 1] : null;
+        const prevTotal = prevItem
+          ? prevItem.totalNetWorth !== undefined && Number.isFinite(prevItem.totalNetWorth)
+            ? Math.round(prevItem.totalNetWorth * 100) / 100
+            : Math.round(
+                ((Number(prevItem.pfBalance) || 0) +
+                  (Number(prevItem.meiBalance) || 0) +
+                  (Number(prevItem.goalsBalance) || 0)) *
+                  100
+              ) / 100
+          : total;
+
+        const deltaBRL = idx > 0 ? Math.round((total - prevTotal) * 100) / 100 : 0;
+        const deltaPct =
+          idx > 0 && Math.abs(prevTotal) > 0.01
+            ? Math.round((deltaBRL / Math.abs(prevTotal)) * 100 * 100) / 100
+            : idx > 0 && prevTotal === 0 && deltaBRL !== 0
+              ? deltaBRL > 0
+                ? 100
+                : -100
+              : 0;
+
+        const labels = formatMonthKeyLabels(item.month);
+
+        return {
+          index: idx,
+          month: item.month,
+          monthKey: item.month,
+          monthLabel: labels.monthLabel,
+          fullMonthLabel: labels.fullMonthLabel,
+          date: labels.date,
+          pfBalance: pf,
+          meiBalance: mei,
+          goalsBalance: goals,
+          totalNetWorth: total,
+          pfCumulativeBalance: pf,
+          meiCumulativeReserve: mei,
+          goalsCumulativeBalance: goals,
+          totalNetWorthBRL: total,
+          monthlyDeltaBRL: deltaBRL,
+          monthlyDeltaPct: deltaPct,
+          isSimulated: false,
+        };
+      });
+    }
+
     return buildMonthlyNetWorthSeries({
       transactions: resolvedData.effectiveTx,
       dreams: resolvedData.effectiveDreams,
       period: 'ALL',
       anchorMonthKey,
-    });
-  }, [resolvedData, anchorMonthKey]);
+    }).points;
+  }, [data, resolvedData, anchorMonthKey]);
 
   const filteredSeries: ChartNetWorthPoint[] = useMemo(() => {
-    const allPoints = fullSummary.points;
     const sliced =
       period === '3M'
         ? allPoints.slice(-3)
@@ -111,7 +170,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
             ? allPoints.slice(-12)
             : allPoints;
     return sliced.map((pt, idx) => ({ ...pt, index: idx }));
-  }, [fullSummary.points, period]);
+  }, [allPoints, period]);
 
   const kpis: ConsolidatedNetWorthKPIs = useMemo(() => {
     const seriesForKpis: MonthlyNetWorthPoint[] = filteredSeries;
@@ -382,10 +441,10 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .attr('stroke', strokeColor)
       .attr('stroke-width', 2);
 
-    // Interactive Crosshair (dashed vertical guide line + highlighted point circle)
+    // Interactive Crosshair (dashed vertical guide line + outer glow ring + active dot)
     const crosshairGroup = rootGroup
       .append('g')
-      .attr('class', 'd3-crosshair-group')
+      .attr('class', 'focus-group d3-crosshair-group')
       .style('display', 'none')
       .style('pointer-events', 'none');
 
@@ -394,24 +453,23 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .attr('class', 'd3-crosshair-line')
       .attr('y1', 0)
       .attr('y2', innerHeight)
-      .attr('stroke', strokeColor)
+      .attr('stroke', '#94a3b8')
       .attr('stroke-width', 1.5)
-      .attr('stroke-dasharray', '4,4')
-      .attr('stroke-opacity', 0.8);
+      .attr('stroke-dasharray', '4,4');
 
     const crosshairHalo = crosshairGroup
       .append('circle')
-      .attr('r', 10)
+      .attr('r', 8)
       .attr('fill', strokeColor)
-      .attr('fill-opacity', 0.18);
+      .attr('opacity', 0.25);
 
     const crosshairCircle = crosshairGroup
       .append('circle')
       .attr('class', 'd3-crosshair-dot')
-      .attr('r', 6)
+      .attr('r', 5)
       .attr('fill', strokeColor)
       .attr('stroke', '#ffffff')
-      .attr('stroke-width', 2.5);
+      .attr('stroke-width', 2);
 
     // Bisector for smooth mouse/touch snapping to nearest month
     const bisectDate = d3.bisector<ChartNetWorthPoint, Date>(d => d.date).left;
@@ -479,14 +537,16 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
   const growthPctFormatted = formatPct(kpis.periodGrowthPct);
   const avgSign = kpis.monthlyAvgEvolutionBRL > 0 ? '+' : '';
 
-  // Compute safe floating HTML tooltip coordinates (never clipped on left/right edges)
+  // Compute safe edge-aware floating HTML tooltip coordinates (flips left when xPx > 65% width)
   const tooltipStyle = useMemo(() => {
     if (!hoveredInfo) return undefined;
-    const tooltipWidth = hoveredInfo.containerWidth < 400 ? 228 : 264;
-    const preferRight = hoveredInfo.xPx + tooltipWidth + 20 <= hoveredInfo.containerWidth;
-    const rawLeft = preferRight
-      ? hoveredInfo.xPx + 14
-      : hoveredInfo.xPx - tooltipWidth - 14;
+    const tooltipWidth = hoveredInfo.containerWidth < 400 ? 236 : 272;
+    const flipLeft =
+      hoveredInfo.xPx > hoveredInfo.containerWidth * 0.65 ||
+      hoveredInfo.xPx + tooltipWidth + 20 > hoveredInfo.containerWidth;
+    const rawLeft = flipLeft
+      ? hoveredInfo.xPx - tooltipWidth - 14
+      : hoveredInfo.xPx + 14;
     const clampedLeft = Math.max(
       8,
       Math.min(hoveredInfo.containerWidth - tooltipWidth - 8, rawLeft)
@@ -722,48 +782,34 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
               </span>
             </div>
 
-            <div className="pt-1 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                vs. mês anterior:
-              </span>
+            <div className="pt-1.5 text-[10px] text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-slate-800 space-y-1 tabular-nums">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
+                <span>PF: <strong>{formatBRL(hoveredInfo.point.pfBalance)}</strong></span>
+                <span className="text-slate-400">•</span>
+                <span>MEI: <strong>{formatBRL(hoveredInfo.point.meiBalance)}</strong></span>
+                <span className="text-slate-400">•</span>
+                <span>Metas: <strong>{formatBRL(hoveredInfo.point.goalsBalance)}</strong></span>
+              </div>
+            </div>
+
+            <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800">
               {hoveredInfo.point.index === 0 && hoveredInfo.point.monthlyDeltaBRL === 0 ? (
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                   Início da série
                 </span>
               ) : (
                 <span
-                  className={`text-[11px] font-black tabular-nums ${
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-black tabular-nums ${
                     hoveredInfo.point.monthlyDeltaBRL >= 0
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-rose-600 dark:text-rose-400'
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
                   }`}
                 >
                   {hoveredInfo.point.monthlyDeltaBRL >= 0 ? '▲ +' : '▼ -'}
                   {formatBRL(Math.abs(hoveredInfo.point.monthlyDeltaBRL))} (
-                  {formatPct(hoveredInfo.point.monthlyDeltaPct)})
+                  {formatPct(hoveredInfo.point.monthlyDeltaPct)}) vs. mês anterior
                 </span>
               )}
-            </div>
-
-            <div className="pt-1.5 text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 space-y-1 tabular-nums">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-slate-400">PF:</span>
-                <strong className="text-slate-700 dark:text-slate-200">
-                  {formatBRL(hoveredInfo.point.pfBalance)}
-                </strong>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-slate-400">MEI:</span>
-                <strong className="text-slate-700 dark:text-slate-200">
-                  {formatBRL(hoveredInfo.point.meiBalance)}
-                </strong>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-slate-400">Metas:</span>
-                <strong className="text-slate-700 dark:text-slate-200">
-                  {formatBRL(hoveredInfo.point.goalsBalance)}
-                </strong>
-              </div>
             </div>
           </div>
         )}
