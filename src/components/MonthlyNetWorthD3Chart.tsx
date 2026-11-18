@@ -17,12 +17,19 @@ import {
 import {
   buildMonthlyNetWorthSeries,
   formatCompactAxisBRL,
-  formatCurrencyBRL,
   formatMonthKeyLabels,
-  formatSignedPercentPtBR,
   MonthlyNetWorthPoint as ChartNetWorthPoint,
   NetWorthPeriodFilter,
 } from '../utils/monthlyNetWorth';
+
+const formatBRL = (val: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+const formatPct = (val: number) =>
+  `${val >= 0 ? '+' : ''}${val.toLocaleString('pt-BR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`;
 
 export interface MonthlyNetWorthD3ChartProps {
   transactions: Transaction[];
@@ -84,19 +91,32 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
     return { effectiveTx, effectiveDreams };
   }, [transactions, dreams]);
 
-  const summary = useMemo(() => {
+  const fullSummary = useMemo(() => {
     return buildMonthlyNetWorthSeries({
       transactions: resolvedData.effectiveTx,
       dreams: resolvedData.effectiveDreams,
-      period,
+      period: 'ALL',
       anchorMonthKey,
     });
-  }, [resolvedData, period, anchorMonthKey]);
+  }, [resolvedData, anchorMonthKey]);
+
+  const filteredSeries: ChartNetWorthPoint[] = useMemo(() => {
+    const allPoints = fullSummary.points;
+    const sliced =
+      period === '3M'
+        ? allPoints.slice(-3)
+        : period === '6M'
+          ? allPoints.slice(-6)
+          : period === '12M'
+            ? allPoints.slice(-12)
+            : allPoints;
+    return sliced.map((pt, idx) => ({ ...pt, index: idx }));
+  }, [fullSummary.points, period]);
 
   const kpis: ConsolidatedNetWorthKPIs = useMemo(() => {
-    const monthlySeries: MonthlyNetWorthPoint[] = summary.points;
-    return calculateConsolidatedNetWorthKPIs(monthlySeries);
-  }, [summary.points]);
+    const seriesForKpis: MonthlyNetWorthPoint[] = filteredSeries;
+    return calculateConsolidatedNetWorthKPIs(seriesForKpis);
+  }, [filteredSeries]);
 
   const bestMonthDisplay = useMemo(() => {
     if (!kpis.bestMonth) return null;
@@ -142,12 +162,12 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
   // Clear hover tooltip cleanly whenever period or underlying data changes
   useEffect(() => {
     setHoveredInfo(null);
-  }, [period, summary.points.length]);
+  }, [period, filteredSeries.length]);
 
   // D3 rendering pass (isolated to SVG ref, zero element duplication)
   useEffect(() => {
     const svgEl = svgRef.current;
-    if (!svgEl || containerWidth <= 0 || summary.points.length === 0) return;
+    if (!svgEl || containerWidth <= 0 || filteredSeries.length === 0) return;
 
     const svg = d3.select(svgEl);
     svg.selectAll('*').remove();
@@ -171,10 +191,10 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .attr('role', 'img')
       .attr(
         'aria-label',
-        `Gráfico de linha e área mostrando evolução patrimonial mensal de ${summary.points[0].monthLabel} até ${summary.points[summary.points.length - 1].monthLabel}`
+        `Gráfico de linha e área mostrando evolução patrimonial mensal de ${filteredSeries[0].monthLabel} até ${filteredSeries[filteredSeries.length - 1].monthLabel}`
       );
 
-    const points = summary.points;
+    const points = filteredSeries;
     const strokeColor = kpis.isPositive ? '#10b981' : '#f43f5e';
 
     // Gradient definition (0.28 top opacity to 0.0 base opacity)
@@ -452,15 +472,11 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
         .on('touchmove', event => handlePointerMove(event as TouchEvent))
         .on('mouseleave', handlePointerLeave);
     }
-  }, [containerWidth, summary, kpis.isPositive, gradientId]);
+  }, [containerWidth, filteredSeries, kpis.isPositive, gradientId]);
 
   const isPositive = kpis.isPositive;
   const growthSign = kpis.periodGrowthBRL > 0 ? '+' : '';
-  const growthPctSign = kpis.periodGrowthPct > 0 ? '+' : kpis.periodGrowthPct < 0 ? '-' : '';
-  const growthPctFormatted = `${growthPctSign}${Math.abs(kpis.periodGrowthPct).toLocaleString('pt-BR', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  })}%`;
+  const growthPctFormatted = formatPct(kpis.periodGrowthPct);
   const avgSign = kpis.monthlyAvgEvolutionBRL > 0 ? '+' : '';
 
   // Compute safe floating HTML tooltip coordinates (never clipped on left/right edges)
@@ -562,7 +578,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
               <Wallet className="w-4 h-4 text-indigo-500" />
             </div>
             <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
-              {formatCurrencyBRL(kpis.currentNetWorth)}
+              {formatBRL(kpis.currentNetWorth)}
             </div>
           </div>
 
@@ -590,9 +606,8 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
             </div>
 
             <div className="inline-block w-full px-2.5 py-1 rounded-lg bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/60 text-[11px] font-medium text-slate-600 dark:text-slate-300 leading-snug tabular-nums">
-              PF: {formatCurrencyBRL(kpis.breakdown.pf)} • MEI:{' '}
-              {formatCurrencyBRL(kpis.breakdown.mei)} • Metas:{' '}
-              {formatCurrencyBRL(kpis.breakdown.goals)}
+              PF: {formatBRL(kpis.breakdown.pf)} • MEI: {formatBRL(kpis.breakdown.mei)} • Metas:{' '}
+              {formatBRL(kpis.breakdown.goals)}
             </div>
           </div>
         </div>
@@ -640,7 +655,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
               }`}
             >
               {growthSign}
-              {formatCurrencyBRL(kpis.periodGrowthBRL)}
+              {formatBRL(kpis.periodGrowthBRL)}
             </div>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -661,14 +676,13 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
             </div>
             <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
               {avgSign}
-              {formatCurrencyBRL(kpis.monthlyAvgEvolutionBRL)}
+              {formatBRL(kpis.monthlyAvgEvolutionBRL)}
               <span className="text-xs font-bold text-slate-400 ml-1">/ mês</span>
             </div>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            Baseado em {summary.points.length}{' '}
-            {summary.points.length === 1 ? 'mês' : 'meses'} ({kpis.intervalsCount}{' '}
-            {kpis.intervalsCount === 1 ? 'intervalo' : 'intervalos'})
+            Em {kpis.analyzedMonths}{' '}
+            {kpis.analyzedMonths === 1 ? 'mês analisado' : 'meses analisados'}
           </p>
         </div>
       </div>
@@ -704,7 +718,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
                 Patrimônio Consolidado
               </span>
               <span className="text-base font-black text-slate-900 dark:text-white tabular-nums">
-                {formatCurrencyBRL(hoveredInfo.point.totalNetWorthBRL)}
+                {formatBRL(hoveredInfo.point.totalNetWorthBRL)}
               </span>
             </div>
 
@@ -725,8 +739,8 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
                   }`}
                 >
                   {hoveredInfo.point.monthlyDeltaBRL >= 0 ? '▲ +' : '▼ -'}
-                  {formatCurrencyBRL(Math.abs(hoveredInfo.point.monthlyDeltaBRL))} (
-                  {formatSignedPercentPtBR(hoveredInfo.point.monthlyDeltaPct)})
+                  {formatBRL(Math.abs(hoveredInfo.point.monthlyDeltaBRL))} (
+                  {formatPct(hoveredInfo.point.monthlyDeltaPct)})
                 </span>
               )}
             </div>
@@ -735,19 +749,19 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
               <div className="flex items-center justify-between gap-2">
                 <span className="text-slate-400">PF:</span>
                 <strong className="text-slate-700 dark:text-slate-200">
-                  {formatCurrencyBRL(hoveredInfo.point.pfBalance)}
+                  {formatBRL(hoveredInfo.point.pfBalance)}
                 </strong>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-slate-400">MEI:</span>
                 <strong className="text-slate-700 dark:text-slate-200">
-                  {formatCurrencyBRL(hoveredInfo.point.meiBalance)}
+                  {formatBRL(hoveredInfo.point.meiBalance)}
                 </strong>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-slate-400">Metas:</span>
                 <strong className="text-slate-700 dark:text-slate-200">
-                  {formatCurrencyBRL(hoveredInfo.point.goalsBalance)}
+                  {formatBRL(hoveredInfo.point.goalsBalance)}
                 </strong>
               </div>
             </div>
@@ -772,8 +786,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
               </strong>{' '}
               com variação de{' '}
               <strong className="tabular-nums font-black text-emerald-600 dark:text-emerald-400">
-                +{formatCurrencyBRL(bestMonthDisplay.deltaBRL)} (
-                {formatSignedPercentPtBR(bestMonthDisplay.deltaPct)})
+                +{formatBRL(bestMonthDisplay.deltaBRL)} ({formatPct(bestMonthDisplay.deltaPct)})
               </strong>
               .
             </p>
@@ -781,7 +794,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
           <span className="text-[11px] text-slate-400 shrink-0 tabular-nums">
             Total ao fim de {bestMonthDisplay.monthLabel}:{' '}
             <strong className="text-slate-700 dark:text-slate-200">
-              {formatCurrencyBRL(bestMonthDisplay.totalNetWorth)}
+              {formatBRL(bestMonthDisplay.totalNetWorth)}
             </strong>
           </span>
         </div>

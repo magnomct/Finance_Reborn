@@ -428,6 +428,181 @@ function calculateDeterministicJarOptimization(params) {
   };
 }
 
+// src/utils/sixJarsMetrics.ts
+function formatPctPtBr(pct, decimals = 1) {
+  return pct.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
+}
+
+// src/utils/savingsAdvisor.ts
+function round2(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+function formatCurrencyPtBr(value) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
+}
+function buildDeterministicSavingsPlan(snapshot) {
+  const offender = snapshot.primaryOffenderJar;
+  const topSub = snapshot.topSubcategories[0];
+  const secondSub = snapshot.topSubcategories[1];
+  const thirdSub = snapshot.topSubcategories[2];
+  const topTx = snapshot.topTransactions[0];
+  const bestDonor = snapshot.donorJars[0];
+  const lifJar = snapshot.jars.find((j) => j.jarId === "LIF_10");
+  const offenderLabel = offender.jarName;
+  const topSubLabel = topSub ? topSub.categoryPath : topTx ? topTx.description : "Despesas Gerais";
+  const offenderCategoryPath = `${offender.shortName} > ${topSubLabel}`;
+  const rawSavingTarget = offender.excessBRL > 0 ? Math.max(
+    Math.min(offender.excessBRL, offender.actualSpentBRL * 0.45),
+    offender.excessBRL * 0.55
+  ) : offender.actualSpentBRL > 0 ? offender.actualSpentBRL * 0.15 : snapshot.rendaLiquidaMensal * 0.05;
+  const estimatedMonthlySavingsBRL = round2(Math.max(50, rawSavingTarget));
+  const pctDelta = round2(Math.max(0, offender.actualIncomePct - offender.targetPct));
+  const headline = offender.excessBRL > 0 ? `Pote ${offender.shortName} ${formatPctPtBr(pctDelta)}% acima da renda por peso em ${topSub?.subcategory || offender.shortName}` : offender.actualSpentBRL > 0 ? `Otimize ${topSub?.subcategory || offender.shortName} para turbinar seus aportes mensais` : `Or\xE7amento dos 6 Potes zerado: direcione sobra inicial para Liberdade Financeira`;
+  const subCountText = topSub ? `${topSub.categoryPath} (${formatCurrencyPtBr(topSub.totalBRL)} em ${topSub.txCount} ${topSub.txCount === 1 ? "lan\xE7amento" : "lan\xE7amentos"}, perfil ${topSub.nature})` : "despesas acumuladas no m\xEAs";
+  const diagnosis = offender.excessBRL > 0 ? `Em ${snapshot.monthLabel}, o pote ${offenderLabel} consumiu ${formatCurrencyPtBr(
+    offender.actualSpentBRL
+  )} (${formatPctPtBr(offender.actualIncomePct)}% da sua renda de ${formatCurrencyPtBr(
+    snapshot.rendaLiquidaMensal
+  )}), excedendo o teto em ${formatCurrencyPtBr(offender.excessBRL)}. O principal vetor \xE9 ${subCountText}, concentrando o maior potencial de corte r\xE1pido sem afetar itens essenciais.` : offender.actualSpentBRL > 0 ? `Em ${snapshot.monthLabel}, todos os 6 Potes operam dentro dos limites previstos sobre sua renda de ${formatCurrencyPtBr(
+    snapshot.rendaLiquidaMensal
+  )}, com maior concentra\xE7\xE3o em ${offenderLabel} (${formatCurrencyPtBr(
+    offender.actualSpentBRL
+  )}). Ajustes pontuais em ${subCountText} permitem acelerar ainda mais seus objetivos de patrim\xF4nio.` : `Nenhuma despesa foi lan\xE7ada em ${snapshot.monthLabel} at\xE9 o momento sobre a base de ${formatCurrencyPtBr(
+    snapshot.rendaLiquidaMensal
+  )}. Aproveite o in\xEDcio limpo do m\xEAs para automatizar as transfer\xEAncias dos potes investidores antes dos gastos vari\xE1veis.`;
+  const step1Saving = round2(estimatedMonthlySavingsBRL * 0.5);
+  const step2Saving = round2(estimatedMonthlySavingsBRL * 0.3);
+  const step3Saving = round2(Math.max(10, estimatedMonthlySavingsBRL - step1Saving - step2Saving));
+  const hasOverdraft = snapshot.topTransactions.some(
+    (t) => t.description.toLowerCase().includes("cheque especial") || t.categoryPath.toLowerCase().includes("juros")
+  );
+  const actionableSteps = [
+    {
+      id: "step-1",
+      title: topSub ? `Reduzir em 20% o bloco "${topSub.subcategory}"` : `Definir teto semanal para ${offender.shortName}`,
+      description: topSub ? `Revisar ${topSub.txCount} lan\xE7amento(s) de ${topSub.categoryPath} (${formatCurrencyPtBr(
+        topSub.totalBRL
+      )}, natureza ${topSub.nature}) aplicando trava de gastos nos pr\xF3ximos 15 dias.` : `Dividir o or\xE7amento de ${offenderLabel} em 4 blocos semanais para evitar estouro na segunda quinzena.`,
+      potentialSavingBRL: step1Saving
+    },
+    {
+      id: "step-2",
+      title: hasOverdraft ? "Blindar conta contra Juros de Cheque Especial" : secondSub ? `Renegociar ou pausar excessos em "${secondSub.subcategory}"` : "Auditar assinaturas e d\xE9bitos recorrentes do cart\xE3o",
+      description: hasOverdraft ? "Antecipar transfer\xEAncia de reserva de giro do lucro PJ antes do dia 25 para eliminar tarifas evit\xE1veis de cheque especial." : secondSub ? `Avaliar os ${secondSub.txCount} gasto(s) em ${secondSub.categoryPath} (${formatCurrencyPtBr(
+        secondSub.totalBRL
+      )}) buscando substitui\xE7\xE3o ou parcelamento sem juros.` : `Listar cobran\xE7as autom\xE1ticas no cart\xE3o concentrador e cancelar itens com baixo uso nos \xFAltimos 30 dias.`,
+      potentialSavingBRL: step2Saving
+    },
+    {
+      id: "step-3",
+      title: thirdSub ? `Substituir gastos vari\xE1veis em "${thirdSub.subcategory}"` : "Aplicar regra das 48h para compras vari\xE1veis",
+      description: thirdSub ? `Estabelecer teto fixo por ocorr\xEAncia em ${thirdSub.categoryPath} (atual: ${formatCurrencyPtBr(
+        thirdSub.totalBRL
+      )}) antes de aprovar novos pedidos no fim de semana.` : `Adiar compras n\xE3o planejadas acima de R$ 80 por 48 horas e redirecionar o valor poupado ao pote Liberdade Financeira.`,
+      potentialSavingBRL: step3Saving
+    }
+  ];
+  const rebalanceSuggestion = offender.excessBRL > 0 && bestDonor ? `Use temporariamente a folga de ${formatCurrencyPtBr(bestDonor.surplusBRL)} dispon\xEDvel em ${bestDonor.jarName} para compensar parte do excesso de ${formatCurrencyPtBr(
+    offender.excessBRL
+  )} em ${offender.shortName}, mantendo novas sa\xEDdas congeladas at\xE9 o fechamento do m\xEAs.` : lifJar ? `Com os potes sob controle, redirecione os ${formatCurrencyPtBr(
+    estimatedMonthlySavingsBRL
+  )} economizados diretamente para ${lifJar.jarName} (teto atual de ${formatCurrencyPtBr(
+    lifJar.targetLimitBRL
+  )}), acelerando sua gera\xE7\xE3o de renda passiva.` : `Direcione ${formatCurrencyPtBr(
+    estimatedMonthlySavingsBRL
+  )} da economia projetada para Liberdade Financeira (LIF 10%) assim que fechar o m\xEAs.`;
+  return {
+    headline,
+    offenderCategoryPath,
+    estimatedMonthlySavingsBRL,
+    diagnosis,
+    actionableSteps,
+    rebalanceSuggestion
+  };
+}
+function sanitizeSavingsAdvisorPlan(raw, fallbackSnapshot) {
+  const fallback = buildDeterministicSavingsPlan(fallbackSnapshot);
+  if (!raw || typeof raw !== "object") return fallback;
+  const obj = raw;
+  const headline = typeof obj.headline === "string" && obj.headline.trim().length > 4 ? obj.headline.trim() : fallback.headline;
+  const offenderCategoryPath = typeof obj.offenderCategoryPath === "string" && obj.offenderCategoryPath.trim().length > 2 ? obj.offenderCategoryPath.trim() : fallback.offenderCategoryPath;
+  const estimatedMonthlySavingsBRL = typeof obj.estimatedMonthlySavingsBRL === "number" && Number.isFinite(obj.estimatedMonthlySavingsBRL) && obj.estimatedMonthlySavingsBRL >= 0 ? round2(obj.estimatedMonthlySavingsBRL) : fallback.estimatedMonthlySavingsBRL;
+  const diagnosis = typeof obj.diagnosis === "string" && obj.diagnosis.trim().length > 10 ? obj.diagnosis.trim() : fallback.diagnosis;
+  const rebalanceSuggestion = typeof obj.rebalanceSuggestion === "string" && obj.rebalanceSuggestion.trim().length > 10 ? obj.rebalanceSuggestion.trim() : fallback.rebalanceSuggestion;
+  const rawSteps = Array.isArray(obj.actionableSteps) ? obj.actionableSteps : [];
+  const parsedSteps = rawSteps.slice(0, 3).map((item, idx) => {
+    const rec = item && typeof item === "object" ? item : {};
+    const fbStep = fallback.actionableSteps[idx] || fallback.actionableSteps[0];
+    return {
+      id: `step-${idx + 1}`,
+      title: typeof rec.title === "string" && rec.title.trim().length > 2 ? rec.title.trim() : fbStep.title,
+      description: typeof rec.description === "string" && rec.description.trim().length > 5 ? rec.description.trim() : fbStep.description,
+      potentialSavingBRL: typeof rec.potentialSavingBRL === "number" && Number.isFinite(rec.potentialSavingBRL) && rec.potentialSavingBRL >= 0 ? round2(rec.potentialSavingBRL) : fbStep.potentialSavingBRL
+    };
+  });
+  while (parsedSteps.length < 3) {
+    const fbStep = fallback.actionableSteps[parsedSteps.length];
+    if (fbStep) parsedSteps.push(fbStep);
+    else break;
+  }
+  return {
+    headline,
+    offenderCategoryPath,
+    estimatedMonthlySavingsBRL,
+    diagnosis,
+    actionableSteps: parsedSteps,
+    rebalanceSuggestion
+  };
+}
+function buildSavingsAdvisorPrompt(snapshot) {
+  return `Voc\xEA \xE9 o Consultor de Economia IA especialista na metodologia dos 6 Potes (T. Harv Eker) e em finan\xE7as pessoais brasileiras.
+Analise o retrato financeiro real do m\xEAs "${snapshot.monthLabel}" (${snapshot.monthKey}):
+
+1. Renda L\xEDquida Mensal (Base 100%): ${formatCurrencyPtBr(snapshot.rendaLiquidaMensal)}
+2. Gasto Total nos 6 Potes: ${formatCurrencyPtBr(snapshot.totalSpentBRL)}
+3. Situa\xE7\xE3o dos 6 Potes:
+${snapshot.jars.map(
+    (j) => `- ${j.jarName} (${j.jarId}): Meta ${j.targetPct}% (${formatCurrencyPtBr(
+      j.targetLimitBRL
+    )}) | Real ${j.actualIncomePct}% (${formatCurrencyPtBr(j.actualSpentBRL)}) | Consumo ${j.consumptionPct}% | Status: ${j.status} | Folga: ${formatCurrencyPtBr(j.surplusBRL)} | Excesso: ${formatCurrencyPtBr(
+      j.excessBRL
+    )}`
+  ).join("\n")}
+
+4. Pote Ofensor Principal: ${snapshot.primaryOffenderJar.jarName} (${snapshot.primaryOffenderJar.jarId})
+5. Top 3 Categorias/Subcategorias Ofensoras neste Pote:
+${snapshot.topSubcategories.length > 0 ? snapshot.topSubcategories.map(
+    (s, i) => `${i + 1}. ${s.categoryPath} \u2014 ${formatCurrencyPtBr(s.totalBRL)} (${s.txCount} transa\xE7\xF5es, perfil ${s.nature})`
+  ).join("\n") : "- Nenhuma subcategoria detalhada registrada."}
+
+6. Top 5 Maiores Despesas deste Pote:
+${snapshot.topTransactions.length > 0 ? snapshot.topTransactions.map(
+    (t, i) => `${i + 1}. [${t.date}] ${t.description} (${t.categoryPath}, ${t.nature}) \u2014 ${formatCurrencyPtBr(
+      t.amountBRL
+    )}`
+  ).join("\n") : "- Nenhuma despesa lan\xE7ada."}
+
+7. Potes com Folga Dispon\xEDvel:
+${snapshot.donorJars.length > 0 ? snapshot.donorJars.map((d) => `- ${d.jarName}: ${formatCurrencyPtBr(d.surplusBRL)} livres`).join("\n") : "- Nenhum pote com folga positiva no momento."}
+
+REGRAS OBRIGAT\xD3RIAS:
+- Responda integralmente em Portugu\xEAs do Brasil (pt-BR) usando valores em Reais (R$).
+- "headline": t\xEDtulo direto e diagn\xF3stico com o principal desvio e categoria (m\xE1x. 85 caracteres).
+- "offenderCategoryPath": caminho hier\xE1rquico ex: "Necessidades > Cart\xE3o de Cr\xE9dito" ou "Lazer > Delivery".
+- "estimatedMonthlySavingsBRL": n\xFAmero realista de economia mensal em R$ (n\xFAmero positivo).
+- "diagnosis": exatamente 2 frases objetivas citando os n\xFAmeros reais do usu\xE1rio e padr\xF5es de fixo vs. vari\xE1vel.
+- "actionableSteps": exatamente 3 micro-a\xE7\xF5es pr\xE1ticas e espec\xEDficas para as subcategorias ofensoras acima, cada uma com "title", "description" e "potentialSavingBRL" num\xE9rico.
+- "rebalanceSuggestion": explique qual pote com folga pode absorver temporariamente o excesso OU quanto redirecionar para "Liberdade Financeira" caso os potes estejam saud\xE1veis.`;
+}
+
 // server.ts
 import_dotenv.default.config();
 if (process.env.DISABLE_HMR === void 0) {
@@ -805,6 +980,135 @@ Responda SOMENTE o JSON puro, sem markdown tags adicionais.`;
       tripGeminiCircuit("Cr\xE9ditos de pr\xE9-pagamento esgotados");
     }
     return res.json(getDeterministicResult());
+  }
+});
+app.post("/api/consultor-economia-potes", async (req, res) => {
+  const snapshot = req.body?.snapshot;
+  if (!snapshot || !snapshot.primaryOffenderJar) {
+    return res.status(400).json({ error: "Snapshot dos 6 Potes inv\xE1lido." });
+  }
+  const generatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  if (!isGeminiAvailable()) {
+    return res.json({
+      plan: buildDeterministicSavingsPlan(snapshot),
+      source: "heuristic",
+      modelUsed: "local-heuristic",
+      generatedAt
+    });
+  }
+  const apiKey = process.env.GEMINI_API_KEY;
+  const ai = new import_genai.GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        "User-Agent": "aistudio-build"
+      }
+    }
+  });
+  const prompt = buildSavingsAdvisorPrompt(snapshot);
+  const responseSchema = {
+    type: import_genai.Type.OBJECT,
+    properties: {
+      headline: {
+        type: import_genai.Type.STRING,
+        description: "T\xEDtulo direto e diagn\xF3stico com o principal desvio e categoria."
+      },
+      offenderCategoryPath: {
+        type: import_genai.Type.STRING,
+        description: "Caminho da categoria ofensora, ex: Necessidades > Alimenta\xE7\xE3o > Delivery."
+      },
+      estimatedMonthlySavingsBRL: {
+        type: import_genai.Type.NUMBER,
+        description: "Meta realista de economia mensal em Reais (R$)."
+      },
+      diagnosis: {
+        type: import_genai.Type.STRING,
+        description: "An\xE1lise objetiva em 2 frases citando n\xFAmeros reais e padr\xF5es de gastos."
+      },
+      actionableSteps: {
+        type: import_genai.Type.ARRAY,
+        description: "Lista com exatamente 3 micro-a\xE7\xF5es pr\xE1ticas para reduzir custos.",
+        items: {
+          type: import_genai.Type.OBJECT,
+          properties: {
+            title: { type: import_genai.Type.STRING, description: "T\xEDtulo curto da micro-a\xE7\xE3o." },
+            description: { type: import_genai.Type.STRING, description: "Passos pr\xE1ticos e espec\xEDficos." },
+            potentialSavingBRL: { type: import_genai.Type.NUMBER, description: "Economia estimada em R$." }
+          },
+          required: ["title", "description", "potentialSavingBRL"]
+        }
+      },
+      rebalanceSuggestion: {
+        type: import_genai.Type.STRING,
+        description: "Sugest\xE3o de qual pote com folga pode absorver o excesso ou quanto redirecionar para Liberdade Financeira."
+      }
+    },
+    required: [
+      "headline",
+      "offenderCategoryPath",
+      "estimatedMonthlySavingsBRL",
+      "diagnosis",
+      "actionableSteps",
+      "rebalanceSuggestion"
+    ]
+  };
+  try {
+    let modelUsed = "gemini-2.5-flash";
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: modelUsed,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema
+        }
+      });
+    } catch (firstErr) {
+      if (isBillingOrQuotaError(firstErr)) {
+        tripGeminiCircuit("Cr\xE9ditos de pr\xE9-pagamento esgotados");
+        return res.json({
+          plan: buildDeterministicSavingsPlan(snapshot),
+          source: "heuristic",
+          modelUsed: "local-heuristic",
+          generatedAt
+        });
+      }
+      modelUsed = "gemini-4-hydrogen";
+      response = await ai.models.generateContent({
+        model: modelUsed,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema
+        }
+      });
+    }
+    const rawText = (response.text || "{}").trim();
+    let parsedJson = {};
+    try {
+      parsedJson = JSON.parse(rawText);
+    } catch {
+      const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+      parsedJson = JSON.parse(cleaned);
+    }
+    const plan = sanitizeSavingsAdvisorPlan(parsedJson, snapshot);
+    return res.json({
+      plan,
+      source: "gemini",
+      modelUsed,
+      generatedAt
+    });
+  } catch (err) {
+    if (isBillingOrQuotaError(err)) {
+      tripGeminiCircuit("Cr\xE9ditos de pr\xE9-pagamento esgotados");
+    }
+    return res.json({
+      plan: buildDeterministicSavingsPlan(snapshot),
+      source: "heuristic",
+      modelUsed: "local-heuristic",
+      generatedAt
+    });
   }
 });
 async function startServer() {
