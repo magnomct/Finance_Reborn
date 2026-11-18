@@ -449,3 +449,159 @@ export function generateRecurringTransactions(
 
   return result;
 }
+
+export interface MonthlyNetWorthPoint {
+  month: string; // YYYY-MM
+  pfBalance: number;
+  meiBalance: number;
+  goalsBalance: number;
+  totalNetWorth?: number;
+}
+
+export interface ConsolidatedNetWorthBestMonth {
+  month: string;
+  deltaBRL: number;
+  deltaPct: number;
+  totalNetWorth: number;
+}
+
+export interface ConsolidatedNetWorthKPIs {
+  currentNetWorth: number;
+  breakdown: {
+    pf: number;
+    mei: number;
+    goals: number;
+  };
+  breakdownWeights: {
+    pfPct: number;
+    meiPct: number;
+    goalsPct: number;
+  };
+  periodGrowthBRL: number;
+  periodGrowthPct: number;
+  monthlyAvgEvolutionBRL: number;
+  isPositive: boolean;
+  analyzedMonths: number;
+  monthsCount: number;
+  intervalsCount: number;
+  bestMonth: ConsolidatedNetWorthBestMonth | null;
+}
+
+function roundNetWorthCurrency(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export function calculateConsolidatedNetWorthKPIs(
+  monthlySeries: MonthlyNetWorthPoint[]
+): ConsolidatedNetWorthKPIs {
+  if (!Array.isArray(monthlySeries) || monthlySeries.length === 0) {
+    return {
+      currentNetWorth: 0,
+      breakdown: { pf: 0, mei: 0, goals: 0 },
+      breakdownWeights: { pfPct: 0, meiPct: 0, goalsPct: 0 },
+      periodGrowthBRL: 0,
+      periodGrowthPct: 0,
+      monthlyAvgEvolutionBRL: 0,
+      isPositive: true,
+      analyzedMonths: 0,
+      monthsCount: 0,
+      intervalsCount: 1,
+      bestMonth: null,
+    };
+  }
+
+  const sortedSeries = [...monthlySeries].sort((a, b) => a.month.localeCompare(b.month));
+
+  const normalized = sortedSeries.map(item => {
+    const pf = roundNetWorthCurrency(item.pfBalance || 0);
+    const mei = roundNetWorthCurrency(item.meiBalance || 0);
+    const goals = roundNetWorthCurrency(item.goalsBalance || 0);
+    const total = roundNetWorthCurrency(pf + mei + goals);
+    return {
+      month: item.month,
+      pf,
+      mei,
+      goals,
+      total,
+    };
+  });
+
+  const firstMonth = normalized[0];
+  const lastMonth = normalized[normalized.length - 1];
+
+  const currentNetWorth = lastMonth.total;
+  const breakdown = {
+    pf: lastMonth.pf,
+    mei: lastMonth.mei,
+    goals: lastMonth.goals,
+  };
+
+  const posPf = Math.max(0, breakdown.pf);
+  const posMei = Math.max(0, breakdown.mei);
+  const posGoals = Math.max(0, breakdown.goals);
+  const positiveSum = posPf + posMei + posGoals;
+
+  const breakdownWeights =
+    positiveSum > 0
+      ? {
+          pfPct: roundNetWorthCurrency((posPf / positiveSum) * 100),
+          meiPct: roundNetWorthCurrency((posMei / positiveSum) * 100),
+          goalsPct: roundNetWorthCurrency((posGoals / positiveSum) * 100),
+        }
+      : { pfPct: 0, meiPct: 0, goalsPct: 0 };
+
+  const periodGrowthBRL =
+    normalized.length > 1
+      ? roundNetWorthCurrency(lastMonth.total - firstMonth.total)
+      : 0;
+
+  let rawGrowthPct = 0;
+  if (normalized.length > 1) {
+    if (firstMonth.total > 0) {
+      rawGrowthPct = ((lastMonth.total - firstMonth.total) / firstMonth.total) * 100;
+    } else if (firstMonth.total === 0) {
+      rawGrowthPct = lastMonth.total > 0 ? 100 : lastMonth.total < 0 ? -100 : 0;
+    } else {
+      rawGrowthPct = ((lastMonth.total - firstMonth.total) / Math.abs(firstMonth.total)) * 100;
+    }
+  }
+  const periodGrowthPct = Number.isFinite(rawGrowthPct) ? roundNetWorthCurrency(rawGrowthPct) : 0;
+
+  const intervalsCount = Math.max(1, normalized.length - 1);
+  const monthlyAvgEvolutionBRL = roundNetWorthCurrency(periodGrowthBRL / intervalsCount);
+
+  let bestMonth: ConsolidatedNetWorthBestMonth | null = null;
+  for (let i = 1; i < normalized.length; i++) {
+    const prev = normalized[i - 1];
+    const curr = normalized[i];
+    const deltaBRL = roundNetWorthCurrency(curr.total - prev.total);
+    if (deltaBRL > 0 && (!bestMonth || deltaBRL > bestMonth.deltaBRL)) {
+      const deltaPct =
+        prev.total > 0
+          ? roundNetWorthCurrency((deltaBRL / prev.total) * 100)
+          : prev.total === 0
+            ? 100
+            : roundNetWorthCurrency((deltaBRL / Math.abs(prev.total)) * 100);
+      bestMonth = {
+        month: curr.month,
+        deltaBRL,
+        deltaPct,
+        totalNetWorth: curr.total,
+      };
+    }
+  }
+
+  return {
+    currentNetWorth,
+    breakdown,
+    breakdownWeights,
+    periodGrowthBRL,
+    periodGrowthPct,
+    monthlyAvgEvolutionBRL,
+    isPositive: periodGrowthBRL >= 0,
+    analyzedMonths: normalized.length,
+    monthsCount: normalized.length,
+    intervalsCount,
+    bestMonth,
+  };
+}

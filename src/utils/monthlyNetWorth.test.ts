@@ -5,6 +5,7 @@ import {
   formatCompactAxisBRL,
   formatMonthKeyLabels,
 } from './monthlyNetWorth';
+import { calculateConsolidatedNetWorthKPIs as calculateFinanceNetWorthKPIs } from './finance';
 import { DreamGoal, Transaction } from '../types';
 
 test('formatCompactAxisBRL formats thousands and millions cleanly in pt-BR style', () => {
@@ -231,4 +232,90 @@ test('detects negative cumulative trend when expenses exceed income across perio
   assert.equal(summary.periodGrowthBRL, -4000); // 1000 - 5000
   assert.equal(summary.points[1].monthlyDeltaBRL, -3000);
   assert.equal(summary.points[1].monthlyDeltaPct, -60);
+});
+
+
+test('finance.calculateConsolidatedNetWorthKPIs computes exact KPIs, composition, bestMonth, and interval average', () => {
+  const kpis = calculateFinanceNetWorthKPIs([
+    { month: '2026-08', pfBalance: 2000, meiBalance: 1000, goalsBalance: 1000 }, // total 4000
+    { month: '2026-09', pfBalance: 3000, meiBalance: 2500, goalsBalance: 1500 }, // total 7000 (+3000)
+    { month: '2026-10', pfBalance: 5000, meiBalance: 3000, goalsBalance: 2000 }, // total 10000 (+3000)
+  ]);
+
+  assert.equal(kpis.currentNetWorth, 10000);
+  assert.deepEqual(kpis.breakdown, { pf: 5000, mei: 3000, goals: 2000 });
+  assert.deepEqual(kpis.breakdownWeights, { pfPct: 50, meiPct: 30, goalsPct: 20 });
+  assert.equal(kpis.periodGrowthBRL, 6000);
+  assert.equal(kpis.periodGrowthPct, 150);
+  assert.equal(kpis.intervalsCount, 2);
+  assert.equal(kpis.analyzedMonths, 3);
+  assert.equal(kpis.monthlyAvgEvolutionBRL, 3000);
+  assert.equal(kpis.isPositive, true);
+  assert.deepEqual(kpis.bestMonth, {
+    month: '2026-09',
+    deltaBRL: 3000,
+    deltaPct: 75,
+    totalNetWorth: 7000,
+  });
+});
+
+test('finance.calculateConsolidatedNetWorthKPIs guards against division by zero when initial net worth is 0', () => {
+  const positiveFromZero = calculateFinanceNetWorthKPIs([
+    { month: '2026-09', pfBalance: 0, meiBalance: 0, goalsBalance: 0 },
+    { month: '2026-10', pfBalance: 1500, meiBalance: 500, goalsBalance: 500 },
+  ]);
+  assert.equal(positiveFromZero.periodGrowthBRL, 2500);
+  assert.equal(positiveFromZero.periodGrowthPct, 100);
+  assert.equal(Number.isFinite(positiveFromZero.periodGrowthPct), true);
+  assert.equal(positiveFromZero.isPositive, true);
+
+  const flatZero = calculateFinanceNetWorthKPIs([
+    { month: '2026-09', pfBalance: 0, meiBalance: 0, goalsBalance: 0 },
+    { month: '2026-10', pfBalance: 0, meiBalance: 0, goalsBalance: 0 },
+  ]);
+  assert.equal(flatZero.periodGrowthBRL, 0);
+  assert.equal(flatZero.periodGrowthPct, 0);
+  assert.equal(Number.isNaN(flatZero.periodGrowthPct), false);
+  assert.equal(flatZero.bestMonth, null);
+
+  const negativeFromZero = calculateFinanceNetWorthKPIs([
+    { month: '2026-09', pfBalance: 0, meiBalance: 0, goalsBalance: 0 },
+    { month: '2026-10', pfBalance: -400, meiBalance: 0, goalsBalance: 0 },
+  ]);
+  assert.equal(negativeFromZero.periodGrowthBRL, -400);
+  assert.equal(negativeFromZero.periodGrowthPct, -100);
+  assert.equal(negativeFromZero.isPositive, false);
+
+  const recoveredFromNegative = calculateFinanceNetWorthKPIs([
+    { month: '2026-10', pfBalance: 1000, meiBalance: 500, goalsBalance: 0 },
+    { month: '2026-09', pfBalance: -500, meiBalance: 0, goalsBalance: 0 },
+  ]);
+  assert.equal(recoveredFromNegative.currentNetWorth, 1500);
+  assert.equal(recoveredFromNegative.periodGrowthBRL, 2000);
+  assert.equal(recoveredFromNegative.periodGrowthPct, 400);
+  assert.equal(recoveredFromNegative.isPositive, true);
+  assert.equal(recoveredFromNegative.analyzedMonths, 2);
+});
+
+test('finance.calculateConsolidatedNetWorthKPIs handles fewer than 2 months and negative periods safely', () => {
+  const single = calculateFinanceNetWorthKPIs([
+    { month: '2026-10', pfBalance: 1200, meiBalance: 800, goalsBalance: 500 },
+  ]);
+  assert.equal(single.currentNetWorth, 2500);
+  assert.equal(single.periodGrowthBRL, 0);
+  assert.equal(single.periodGrowthPct, 0);
+  assert.equal(single.monthlyAvgEvolutionBRL, 0);
+  assert.equal(single.intervalsCount, 1);
+  assert.equal(single.bestMonth, null);
+
+  const negative = calculateFinanceNetWorthKPIs([
+    { month: '2026-08', pfBalance: 5000, meiBalance: 0, goalsBalance: 0 },
+    { month: '2026-09', pfBalance: 3000, meiBalance: 0, goalsBalance: 0 },
+    { month: '2026-10', pfBalance: 2000, meiBalance: 0, goalsBalance: 0 },
+  ]);
+  assert.equal(negative.isPositive, false);
+  assert.equal(negative.periodGrowthBRL, -3000);
+  assert.equal(negative.periodGrowthPct, -60);
+  assert.equal(negative.monthlyAvgEvolutionBRL, -1500);
+  assert.equal(negative.bestMonth, null);
 });

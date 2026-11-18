@@ -4,10 +4,15 @@ export type NetWorthPeriodFilter = '3M' | '6M' | '12M' | 'ALL';
 
 export interface MonthlyNetWorthPoint {
   index: number;
+  month: string; // YYYY-MM
   monthKey: string; // YYYY-MM
   monthLabel: string; // e.g., "Out/26"
   fullMonthLabel: string; // e.g., "Outubro de 2026"
   date: Date;
+  pfBalance: number;
+  meiBalance: number;
+  goalsBalance: number;
+  totalNetWorth: number;
   pfCumulativeBalance: number;
   meiCumulativeReserve: number;
   goalsCumulativeBalance: number;
@@ -88,6 +93,140 @@ export function formatCompactAxisBRL(value: number): string {
     return `${sign}R$ ${formatted}k`;
   }
   return `${sign}R$ ${Math.round(abs)}`;
+}
+
+export function formatCurrencyBRL(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+}
+
+export function formatSignedPercentPtBR(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  const sign = safe > 0 ? '+' : safe < 0 ? '-' : '';
+  const absFormatted = Math.abs(safe).toLocaleString('pt-BR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  return `${sign}${absFormatted}%`;
+}
+
+export interface NetWorthMonthlySeriesItem {
+  monthKey?: string;
+  saldoPF?: number;
+  caixaMEI?: number;
+  saldoMetas?: number;
+  pfCumulativeBalance?: number;
+  meiCumulativeReserve?: number;
+  goalsCumulativeBalance?: number;
+}
+
+export interface ConsolidatedNetWorthKPIs {
+  currentNetWorth: number;
+  breakdown: {
+    pf: number;
+    mei: number;
+    goals: number;
+  };
+  breakdownWeights: {
+    pfPct: number;
+    meiPct: number;
+    goalsPct: number;
+  };
+  periodGrowthBRL: number;
+  periodGrowthPct: number;
+  monthlyAvgEvolutionBRL: number;
+  isPositive: boolean;
+  monthsCount: number;
+  intervalsCount: number;
+}
+
+export function calculateConsolidatedNetWorthKPIs(
+  monthlySeries: NetWorthMonthlySeriesItem[]
+): ConsolidatedNetWorthKPIs {
+  if (!Array.isArray(monthlySeries) || monthlySeries.length === 0) {
+    return {
+      currentNetWorth: 0,
+      breakdown: { pf: 0, mei: 0, goals: 0 },
+      breakdownWeights: { pfPct: 0, meiPct: 0, goalsPct: 0 },
+      periodGrowthBRL: 0,
+      periodGrowthPct: 0,
+      monthlyAvgEvolutionBRL: 0,
+      isPositive: true,
+      monthsCount: 0,
+      intervalsCount: 1,
+    };
+  }
+
+  const normalized = monthlySeries.map(item => {
+    const pf = roundCurrency(item.saldoPF ?? item.pfCumulativeBalance ?? 0);
+    const mei = roundCurrency(item.caixaMEI ?? item.meiCumulativeReserve ?? 0);
+    const goals = roundCurrency(item.saldoMetas ?? item.goalsCumulativeBalance ?? 0);
+    return {
+      pf,
+      mei,
+      goals,
+      patrimonioMes: roundCurrency(pf + mei + goals),
+    };
+  });
+
+  const first = normalized[0];
+  const last = normalized[normalized.length - 1];
+
+  const currentNetWorth = last.patrimonioMes;
+  const breakdown = {
+    pf: last.pf,
+    mei: last.mei,
+    goals: last.goals,
+  };
+
+  // Proportional composition weights (clamped >= 0 for visual bar segments)
+  const posPf = Math.max(0, breakdown.pf);
+  const posMei = Math.max(0, breakdown.mei);
+  const posGoals = Math.max(0, breakdown.goals);
+  const positiveSum = posPf + posMei + posGoals;
+
+  const breakdownWeights =
+    positiveSum > 0
+      ? {
+          pfPct: roundCurrency((posPf / positiveSum) * 100),
+          meiPct: roundCurrency((posMei / positiveSum) * 100),
+          goalsPct: roundCurrency((posGoals / positiveSum) * 100),
+        }
+      : { pfPct: 0, meiPct: 0, goalsPct: 0 };
+
+  const patrimonioInicial = first.patrimonioMes;
+  const patrimonioFinal = last.patrimonioMes;
+
+  const variacaoBRL =
+    normalized.length > 1 ? roundCurrency(patrimonioFinal - patrimonioInicial) : 0;
+
+  let periodGrowthPct = 0;
+  if (normalized.length > 1) {
+    if (patrimonioInicial > 0) {
+      periodGrowthPct = roundCurrency((variacaoBRL / patrimonioInicial) * 100);
+    } else if (patrimonioInicial === 0) {
+      periodGrowthPct = variacaoBRL > 0 ? 100 : 0;
+    } else {
+      periodGrowthPct = roundCurrency((variacaoBRL / Math.abs(patrimonioInicial)) * 100);
+    }
+  }
+
+  const intervalos = Math.max(1, normalized.length - 1);
+  const monthlyAvgEvolutionBRL = roundCurrency(variacaoBRL / intervalos);
+
+  return {
+    currentNetWorth,
+    breakdown,
+    breakdownWeights,
+    periodGrowthBRL: variacaoBRL,
+    periodGrowthPct,
+    monthlyAvgEvolutionBRL,
+    isPositive: variacaoBRL >= 0,
+    monthsCount: normalized.length,
+    intervalsCount: intervalos,
+  };
 }
 
 function roundCurrency(value: number): number {
@@ -314,10 +453,15 @@ export function buildMonthlyNetWorthSeries(options: {
 
     return {
       index: idx,
+      month: item.monthKey,
       monthKey: item.monthKey,
       monthLabel: labels.monthLabel,
       fullMonthLabel: labels.fullMonthLabel,
       date: labels.date,
+      pfBalance: item.pfBalance,
+      meiBalance: item.meiReserve,
+      goalsBalance: item.goalsBalance,
+      totalNetWorth: total,
       pfCumulativeBalance: item.pfBalance,
       meiCumulativeReserve: item.meiReserve,
       goalsCumulativeBalance: item.goalsBalance,

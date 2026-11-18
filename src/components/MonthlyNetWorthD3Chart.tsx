@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import {
   TrendingUp,
@@ -6,15 +6,19 @@ import {
   Award,
   Wallet,
   Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-  Layers,
+  Activity,
 } from 'lucide-react';
 import { DreamGoal, Transaction } from '../types';
-import { formatBRL } from '../utils/finance';
+import {
+  calculateConsolidatedNetWorthKPIs,
+  ConsolidatedNetWorthKPIs,
+} from '../utils/finance';
 import {
   buildMonthlyNetWorthSeries,
   formatCompactAxisBRL,
+  formatCurrencyBRL,
+  formatMonthKeyLabels,
+  formatSignedPercentPtBR,
   MonthlyNetWorthPoint,
   NetWorthPeriodFilter,
 } from '../utils/monthlyNetWorth';
@@ -54,20 +58,54 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const rawGradientId = useId();
-  const gradientId = useMemo(
-    () => `networth-area-grad-${rawGradientId.replace(/[^a-zA-Z0-9_-]/g, '')}`,
-    [rawGradientId]
-  );
+  const gradientId = 'netWorthGradient';
+
+  const resolvedData = useMemo(() => {
+    let effectiveTx = transactions;
+    let effectiveDreams = dreams;
+
+    if (
+      typeof window !== 'undefined' &&
+      window.localStorage &&
+      effectiveTx.length === 0 &&
+      effectiveDreams.length === 0
+    ) {
+      try {
+        const savedTx = window.localStorage.getItem('yupee_transactions_v2');
+        const savedDreams = window.localStorage.getItem('yupee_dreams_v2');
+        if (savedTx) effectiveTx = JSON.parse(savedTx) as Transaction[];
+        if (savedDreams) effectiveDreams = JSON.parse(savedDreams) as DreamGoal[];
+      } catch {
+        // Safe fallback if localStorage cannot be parsed
+      }
+    }
+
+    return { effectiveTx, effectiveDreams };
+  }, [transactions, dreams]);
 
   const summary = useMemo(() => {
     return buildMonthlyNetWorthSeries({
-      transactions,
-      dreams,
+      transactions: resolvedData.effectiveTx,
+      dreams: resolvedData.effectiveDreams,
       period,
       anchorMonthKey,
     });
-  }, [transactions, dreams, period, anchorMonthKey]);
+  }, [resolvedData, period, anchorMonthKey]);
+
+  const kpis: ConsolidatedNetWorthKPIs = useMemo(
+    () => calculateConsolidatedNetWorthKPIs(summary.points),
+    [summary.points]
+  );
+
+  const bestMonthDisplay = useMemo(() => {
+    if (!kpis.bestMonth) return null;
+    const labels = formatMonthKeyLabels(kpis.bestMonth.month);
+    return {
+      ...kpis.bestMonth,
+      monthLabel: labels.monthLabel,
+      fullMonthLabel: labels.fullMonthLabel,
+    };
+  }, [kpis.bestMonth]);
 
   // Observe container width dynamically for true D3 responsiveness
   useEffect(() => {
@@ -114,7 +152,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
     svg.selectAll('*').remove();
 
     const isMobile = containerWidth < 520;
-    const chartHeight = isMobile ? 250 : 300;
+    const chartHeight = isMobile ? 260 : 320;
     const margin = {
       top: 18,
       right: isMobile ? 14 : 24,
@@ -136,9 +174,9 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       );
 
     const points = summary.points;
-    const strokeColor = summary.isPositiveTrend ? '#10b981' : '#f43f5e';
+    const strokeColor = kpis.isPositive ? '#10b981' : '#f43f5e';
 
-    // Gradient definition (0.25 top opacity to 0.0 base opacity)
+    // Gradient definition (0.28 top opacity to 0.0 base opacity)
     const defs = svg.append('defs');
     const areaGradient = defs
       .append('linearGradient')
@@ -152,7 +190,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .append('stop')
       .attr('offset', '0%')
       .attr('stop-color', strokeColor)
-      .attr('stop-opacity', 0.25);
+      .attr('stop-opacity', 0.28);
 
     areaGradient
       .append('stop')
@@ -177,12 +215,11 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .domain([minDate, maxDate])
       .range([0, innerWidth]);
 
-    // Y Scale (d3.scaleLinear)
+    // Y Scale (d3.scaleLinear with 10% top padding: [0, maxTotal * 1.1])
     const rawMin = d3.min(points, d => d.totalNetWorthBRL) ?? 0;
     const rawMax = d3.max(points, d => d.totalNetWorthBRL) ?? 1000;
-    const span = Math.max(500, rawMax - rawMin);
-    const yMin = rawMin < 0 ? rawMin - span * 0.15 : 0;
-    const yMax = rawMax + span * 0.15;
+    const yMin = rawMin < 0 ? rawMin * 1.1 : 0;
+    const yMax = Math.max(100, rawMax * 1.1);
 
     const yScale = d3
       .scaleLinear()
@@ -350,7 +387,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
     const crosshairCircle = crosshairGroup
       .append('circle')
       .attr('class', 'd3-crosshair-dot')
-      .attr('r', 5.5)
+      .attr('r', 6)
       .attr('fill', strokeColor)
       .attr('stroke', '#ffffff')
       .attr('stroke-width', 2.5);
@@ -414,19 +451,21 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
         .on('touchmove', event => handlePointerMove(event as TouchEvent))
         .on('mouseleave', handlePointerLeave);
     }
-  }, [containerWidth, summary, gradientId]);
+  }, [containerWidth, summary, kpis.isPositive, gradientId]);
 
-  const isPositive = summary.isPositiveTrend;
-  const growthSign = summary.periodGrowthBRL >= 0 ? '+' : '';
-  const growthPctFormatted = `${summary.periodGrowthPct >= 0 ? '+' : ''}${summary.periodGrowthPct
-    .toFixed(1)
-    .replace('.', ',')}%`;
-  const avgSign = summary.averageMonthlyEvolutionBRL >= 0 ? '+' : '';
+  const isPositive = kpis.isPositive;
+  const growthSign = kpis.periodGrowthBRL > 0 ? '+' : '';
+  const growthPctSign = kpis.periodGrowthPct > 0 ? '+' : kpis.periodGrowthPct < 0 ? '-' : '';
+  const growthPctFormatted = `${growthPctSign}${Math.abs(kpis.periodGrowthPct).toLocaleString('pt-BR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`;
+  const avgSign = kpis.monthlyAvgEvolutionBRL > 0 ? '+' : '';
 
   // Compute safe floating HTML tooltip coordinates (never clipped on left/right edges)
   const tooltipStyle = useMemo(() => {
     if (!hoveredInfo) return undefined;
-    const tooltipWidth = 248;
+    const tooltipWidth = hoveredInfo.containerWidth < 400 ? 228 : 264;
     const preferRight = hoveredInfo.xPx + tooltipWidth + 20 <= hoveredInfo.containerWidth;
     const rawLeft = preferRight
       ? hoveredInfo.xPx + 14
@@ -435,7 +474,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       8,
       Math.min(hoveredInfo.containerWidth - tooltipWidth - 8, rawLeft)
     );
-    const clampedTop = Math.max(8, Math.min(145, hoveredInfo.yPx - 36));
+    const clampedTop = Math.max(8, Math.min(155, hoveredInfo.yPx - 36));
     return {
       left: `${clampedLeft}px`,
       top: `${clampedTop}px`,
@@ -510,93 +549,125 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       </div>
 
       {/* Top 3 KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* KPI 1: Patrimônio Atual Consolidado */}
         <div
-          className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800"
+          className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col justify-between gap-2.5"
           data-testid="kpi-networth-current"
         >
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold mb-1">
-            <span>Patrimônio Atual Consolidado</span>
-            <Wallet className="w-4 h-4 text-indigo-500" />
+          <div>
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold mb-1">
+              <span>Patrimônio Atual Consolidado</span>
+              <Wallet className="w-4 h-4 text-indigo-500" />
+            </div>
+            <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
+              {formatCurrencyBRL(kpis.currentNetWorth)}
+            </div>
           </div>
-          <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
-            {formatBRL(summary.currentNetWorthBRL)}
+
+          <div className="space-y-1.5">
+            {/* Barra pill de composição proporcional (PF / MEI / Metas) */}
+            <div
+              className="h-2 w-full rounded-full overflow-hidden flex bg-slate-200 dark:bg-slate-700"
+              aria-label="Composição proporcional entre PF, MEI e Metas"
+            >
+              <div
+                className="h-full bg-blue-500 transition-all duration-300"
+                style={{ width: `${kpis.breakdownWeights.pfPct}%` }}
+                title={`Saldo PF: ${kpis.breakdownWeights.pfPct.toFixed(1).replace('.', ',')}%`}
+              />
+              <div
+                className="h-full bg-amber-500 transition-all duration-300"
+                style={{ width: `${kpis.breakdownWeights.meiPct}%` }}
+                title={`Caixa MEI: ${kpis.breakdownWeights.meiPct.toFixed(1).replace('.', ',')}%`}
+              />
+              <div
+                className="h-full bg-emerald-500 transition-all duration-300"
+                style={{ width: `${kpis.breakdownWeights.goalsPct}%` }}
+                title={`Metas/Potes: ${kpis.breakdownWeights.goalsPct.toFixed(1).replace('.', ',')}%`}
+              />
+            </div>
+
+            <div className="inline-block w-full px-2.5 py-1 rounded-lg bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/60 text-[11px] font-medium text-slate-600 dark:text-slate-300 leading-snug tabular-nums">
+              PF: {formatCurrencyBRL(kpis.breakdown.pf)} • MEI:{' '}
+              {formatCurrencyBRL(kpis.breakdown.mei)} • Metas:{' '}
+              {formatCurrencyBRL(kpis.breakdown.goals)}
+            </div>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
-            PF {formatCompactAxisBRL(summary.currentBreakdown.pfBalance)} · MEI{' '}
-            {formatCompactAxisBRL(summary.currentBreakdown.meiReserve)} · Metas{' '}
-            {formatCompactAxisBRL(summary.currentBreakdown.goalsBalance)}
-          </p>
         </div>
 
         {/* KPI 2: Crescimento no Período */}
         <div
-          className={`p-4 rounded-2xl border ${
+          className={`p-4 rounded-2xl border flex flex-col justify-between gap-2 ${
             isPositive
               ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/80 dark:border-emerald-900/60'
               : 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200/80 dark:border-rose-900/60'
           }`}
           data-testid="kpi-networth-growth"
         >
-          <div className="flex items-center justify-between text-xs font-semibold mb-1">
-            <span
-              className={
+          <div>
+            <div className="flex items-center justify-between gap-2 text-xs font-semibold mb-1">
+              <span
+                className={
+                  isPositive
+                    ? 'text-emerald-800 dark:text-emerald-300'
+                    : 'text-rose-800 dark:text-rose-300'
+                }
+              >
+                Crescimento no Período ({period === 'ALL' ? 'Tudo' : period})
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full border text-[11px] font-black tabular-nums inline-flex items-center gap-1 shrink-0 ${
+                  isPositive
+                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                    : 'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                }`}
+              >
+                {isPositive ? (
+                  <TrendingUp className="w-3.5 h-3.5" />
+                ) : (
+                  <TrendingDown className="w-3.5 h-3.5" />
+                )}
+                {growthPctFormatted}
+              </span>
+            </div>
+            <div
+              className={`text-xl font-black tabular-nums ${
                 isPositive
-                  ? 'text-emerald-800 dark:text-emerald-300'
-                  : 'text-rose-800 dark:text-rose-300'
-              }
-            >
-              Crescimento no Período ({period === 'ALL' ? 'Tudo' : period})
-            </span>
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-black tabular-nums inline-flex items-center gap-0.5 ${
-                isPositive
-                  ? 'bg-emerald-100 dark:bg-emerald-900/70 text-emerald-700 dark:text-emerald-300'
-                  : 'bg-rose-100 dark:bg-rose-900/70 text-rose-700 dark:text-rose-300'
+                  ? 'text-[#10b981] dark:text-emerald-400'
+                  : 'text-[#f43f5e] dark:text-rose-400'
               }`}
             >
-              {isPositive ? (
-                <ArrowUpRight className="w-3 h-3" />
-              ) : (
-                <ArrowDownRight className="w-3 h-3" />
-              )}
-              {growthPctFormatted}
-            </span>
+              {growthSign}
+              {formatCurrencyBRL(kpis.periodGrowthBRL)}
+            </div>
           </div>
-          <div
-            className={`text-xl font-black tabular-nums ${
-              isPositive
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-rose-600 dark:text-rose-400'
-            }`}
-          >
-            {growthSign}
-            {formatBRL(summary.periodGrowthBRL)}
-          </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {summary.points.length} {summary.points.length === 1 ? 'mês analisado' : 'meses analisados'}
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            {kpis.analyzedMonths}{' '}
+            {kpis.analyzedMonths === 1 ? 'mês consolidado' : 'meses consolidados'}
           </p>
         </div>
 
         {/* KPI 3: Média de Evolução Mensal */}
         <div
-          className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800"
+          className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col justify-between gap-2"
           data-testid="kpi-networth-avg"
         >
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold mb-1">
-            <span>Média de Evolução Mensal</span>
-            <Layers className="w-4 h-4 text-blue-500" />
+          <div>
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold mb-1">
+              <span>Média de Evolução Mensal</span>
+              <Activity className="w-4 h-4 text-blue-500" />
+            </div>
+            <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
+              {avgSign}
+              {formatCurrencyBRL(kpis.monthlyAvgEvolutionBRL)}
+              <span className="text-xs font-bold text-slate-400 ml-1">/ mês</span>
+            </div>
           </div>
-          <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
-            {avgSign}
-            {formatBRL(summary.averageMonthlyEvolutionBRL)}
-            <span className="text-xs font-bold text-slate-400 ml-1">/mês</span>
-          </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {summary.isUsingFallbackDataset
-              ? 'Base demonstrativa de 12 meses ativa'
-              : 'Ritmo médio líquido de acumulação'}
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Baseado em {summary.points.length}{' '}
+            {summary.points.length === 1 ? 'mês' : 'meses'} ({kpis.intervalsCount}{' '}
+            {kpis.intervalsCount === 1 ? 'intervalo' : 'intervalos'})
           </p>
         </div>
       </div>
@@ -632,7 +703,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
                 Patrimônio Consolidado
               </span>
               <span className="text-base font-black text-slate-900 dark:text-white tabular-nums">
-                {formatBRL(hoveredInfo.point.totalNetWorthBRL)}
+                {formatCurrencyBRL(hoveredInfo.point.totalNetWorthBRL)}
               </span>
             </div>
 
@@ -653,30 +724,29 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
                   }`}
                 >
                   {hoveredInfo.point.monthlyDeltaBRL >= 0 ? '▲ +' : '▼ -'}
-                  {formatBRL(Math.abs(hoveredInfo.point.monthlyDeltaBRL))} (
-                  {hoveredInfo.point.monthlyDeltaPct >= 0 ? '+' : ''}
-                  {hoveredInfo.point.monthlyDeltaPct.toFixed(1).replace('.', ',')}%)
+                  {formatCurrencyBRL(Math.abs(hoveredInfo.point.monthlyDeltaBRL))} (
+                  {formatSignedPercentPtBR(hoveredInfo.point.monthlyDeltaPct)})
                 </span>
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 tabular-nums">
-              <div>
-                <span className="block text-[9px] text-slate-400">Conta PF</span>
+            <div className="pt-1.5 text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 space-y-1 tabular-nums">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-400">PF:</span>
                 <strong className="text-slate-700 dark:text-slate-200">
-                  {formatCompactAxisBRL(hoveredInfo.point.pfCumulativeBalance)}
+                  {formatCurrencyBRL(hoveredInfo.point.pfBalance)}
                 </strong>
               </div>
-              <div>
-                <span className="block text-[9px] text-slate-400">Caixa MEI</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-400">MEI:</span>
                 <strong className="text-slate-700 dark:text-slate-200">
-                  {formatCompactAxisBRL(hoveredInfo.point.meiCumulativeReserve)}
+                  {formatCurrencyBRL(hoveredInfo.point.meiBalance)}
                 </strong>
               </div>
-              <div>
-                <span className="block text-[9px] text-slate-400">Metas</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-400">Metas:</span>
                 <strong className="text-slate-700 dark:text-slate-200">
-                  {formatCompactAxisBRL(hoveredInfo.point.goalsCumulativeBalance)}
+                  {formatCurrencyBRL(hoveredInfo.point.goalsBalance)}
                 </strong>
               </div>
             </div>
@@ -685,7 +755,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       </div>
 
       {/* Dynamic Footer Insight Highlighting Best Growth Month */}
-      {summary.bestMonth && (
+      {bestMonthDisplay && (
         <div
           className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
           data-testid="d3-networth-footer-insight"
@@ -697,28 +767,20 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
             <p className="leading-relaxed">
               Melhor mês de evolução patrimonial no período:{' '}
               <strong className="text-slate-900 dark:text-white font-black">
-                {summary.bestMonth.fullMonthLabel} ({summary.bestMonth.monthLabel})
+                {bestMonthDisplay.fullMonthLabel} ({bestMonthDisplay.monthLabel})
               </strong>{' '}
               com variação de{' '}
-              <strong
-                className={`tabular-nums font-black ${
-                  summary.bestMonth.monthlyDeltaBRL >= 0
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-rose-600 dark:text-rose-400'
-                }`}
-              >
-                {summary.bestMonth.monthlyDeltaBRL >= 0 ? '+' : ''}
-                {formatBRL(summary.bestMonth.monthlyDeltaBRL)} (
-                {summary.bestMonth.monthlyDeltaPct >= 0 ? '+' : ''}
-                {summary.bestMonth.monthlyDeltaPct.toFixed(1).replace('.', ',')}%)
+              <strong className="tabular-nums font-black text-emerald-600 dark:text-emerald-400">
+                +{formatCurrencyBRL(bestMonthDisplay.deltaBRL)} (
+                {formatSignedPercentPtBR(bestMonthDisplay.deltaPct)})
               </strong>
               .
             </p>
           </div>
           <span className="text-[11px] text-slate-400 shrink-0 tabular-nums">
-            Total ao fim de {summary.bestMonth.monthLabel}:{' '}
+            Total ao fim de {bestMonthDisplay.monthLabel}:{' '}
             <strong className="text-slate-700 dark:text-slate-200">
-              {formatBRL(summary.bestMonth.totalNetWorthBRL)}
+              {formatCurrencyBRL(bestMonthDisplay.totalNetWorth)}
             </strong>
           </span>
         </div>
