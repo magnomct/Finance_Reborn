@@ -121,6 +121,52 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   const [onlyPendingMonthlyFilter, setOnlyPendingMonthlyFilter] = useState(false);
   const [isPendingBannerExpanded, setIsPendingBannerExpanded] = useState(false);
   const goalsGridRef = useRef<HTMLDivElement | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const [pulsingDreamId, setPulsingDreamId] = useState<string | null>(null);
+  const prevDreamAmountsRef = useRef<Record<string, number> | null>(null);
+
+  useEffect(() => {
+    let timer = 0;
+    const raf = requestAnimationFrame(() => {
+      timer = window.setTimeout(() => {
+        setIsMounted(true);
+      }, 60);
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (prevDreamAmountsRef.current === null) {
+      const initial: Record<string, number> = {};
+      dreams.forEach(d => {
+        initial[d.id] = d.current;
+      });
+      prevDreamAmountsRef.current = initial;
+      return;
+    }
+
+    let newlyIncreasedId: string | null = null;
+    const nextSnapshot: Record<string, number> = {};
+    dreams.forEach(d => {
+      const prevAmt = prevDreamAmountsRef.current?.[d.id];
+      if (prevAmt !== undefined && d.current > prevAmt) {
+        newlyIncreasedId = d.id;
+      }
+      nextSnapshot[d.id] = d.current;
+    });
+    prevDreamAmountsRef.current = nextSnapshot;
+
+    if (newlyIncreasedId) {
+      setPulsingDreamId(newlyIncreasedId);
+      const timer = setTimeout(() => {
+        setPulsingDreamId(curr => (curr === newlyIncreasedId ? null : curr));
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [dreams]);
 
   const monthlyGoalsSummary = useMemo(
     () => evaluateAllMonthlyGoalsProgress(dreams, transactions),
@@ -1091,7 +1137,7 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {displayedDreams.map(dream => {
+          {displayedDreams.map((dream, index) => {
             const Icon = getIcon(dream.iconName);
             const pct = Math.min(100, (dream.current / (dream.target || 1)) * 100);
             const remainingAmount = Math.max(0, dream.target - dream.current);
@@ -1123,12 +1169,18 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                 : monthlyProgress?.status === 'warning'
                 ? 'border-2 border-amber-300 dark:border-amber-800/80'
                 : 'border border-slate-200 dark:border-slate-800';
+            const isPulsing = pulsingDreamId === dream.id;
 
             return (
               <div 
                 key={dream.id}
                 data-testid={`dream-card-${dream.id}`}
-                className={`bg-white dark:bg-slate-900 p-5 rounded-3xl ${cardBorderClass} shadow-sm flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden`}
+                style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
+                className={`group animate-goal-card-enter bg-white dark:bg-slate-900 p-5 rounded-3xl ${cardBorderClass} shadow-sm flex flex-col justify-between transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg relative overflow-hidden ${
+                  isPulsing
+                    ? 'animate-contribution-pulse ring-2 ring-emerald-400/80 dark:ring-emerald-500/70'
+                    : ''
+                }`}
               >
                 <div>
                   {/* Top Row: Icon + Priority Selector + Badges */}
@@ -1220,8 +1272,18 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className={`w-2 h-2 rounded-full shrink-0 ${pct >= 100 ? 'bg-emerald-500 animate-ping' : 'bg-indigo-500'}`} />
-                        <span className="font-bold text-slate-800 dark:text-slate-200 truncate">
-                          Progresso: <span className="text-indigo-600 dark:text-indigo-400 font-black">{pct.toFixed(1)}%</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200 truncate flex items-center gap-1.5">
+                          <span>Progresso:</span>
+                          <span
+                            className={`inline-flex items-center px-1.5 py-0.5 rounded-md font-black tabular-nums transition-transform duration-200 group-hover:scale-105 group-hover:font-bold ${
+                              pct >= 100
+                                ? 'bg-emerald-100/90 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300'
+                                : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400'
+                            }`}
+                            data-testid={`dream-progress-pct-${dream.id}`}
+                          >
+                            {pct.toFixed(1)}%
+                          </span>
                         </span>
                       </div>
                       <span 
@@ -1239,7 +1301,7 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                     {/* Gráfico de Barra Visual com Marcadores de Meta (25%, 50%, 75%) + Contagem Regressiva ao Lado */}
                     <div className="flex flex-col sm:flex-row sm:items-start gap-2.5 pt-1">
                       <div className="relative flex-1 min-w-0">
-                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden relative shadow-inner">
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-3 group-hover:h-3.5 rounded-full overflow-hidden relative shadow-inner transition-all duration-300">
                           {/* Marcadores de Etapa no Trilho */}
                           <div className="absolute top-0 bottom-0 left-[25%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="25% da meta" />
                           <div className="absolute top-0 bottom-0 left-[50%] w-[1px] bg-slate-300 dark:bg-slate-700 z-10 opacity-70" title="50% da meta" />
@@ -1247,10 +1309,25 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
 
                           {/* Barra Gradiente de Preenchimento do Saldo Atual */}
                           <div 
-                            className={`h-full bg-gradient-to-r ${dream.gradient} transition-all duration-700 rounded-full shadow-sm relative`}
-                            style={{ width: `${Math.min(100, Math.max(pct, 2))}%` }}
+                            className={`h-full bg-gradient-to-r ${dream.gradient} transition-all duration-700 ease-out rounded-full shadow-sm relative overflow-hidden group-hover:brightness-110 ${
+                              pct >= 100
+                                ? 'group-hover:shadow-[0_0_12px_rgba(16,185,129,0.45)]'
+                                : 'group-hover:shadow-[0_0_12px_rgba(99,102,241,0.45)]'
+                            } ${isPulsing ? 'brightness-125' : ''}`}
+                            style={{
+                              width: isMounted
+                                ? `${pct > 0 ? Math.min(100, Math.max(pct, 2)) : 0}%`
+                                : '0%',
+                            }}
                             data-testid={`dream-progress-bar-${dream.id}`}
-                          />
+                          >
+                            <span
+                              aria-hidden="true"
+                              className={`goal-progress-shimmer ${
+                                pct >= 100 ? 'goal-progress-shimmer-active' : ''
+                              }`}
+                            />
+                          </div>
                         </div>
 
                         {/* Ticks e Legendas dos Marcos da Barra de Progresso */}
@@ -1313,6 +1390,8 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
                           setDepositAmount('');
                           setSelectedDreamForDeposit(targetDream);
                         }}
+                        isMounted={isMounted}
+                        isPulsing={isPulsing}
                       />
                     )}
                   </div>

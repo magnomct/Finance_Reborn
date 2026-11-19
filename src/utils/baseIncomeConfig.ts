@@ -1,5 +1,6 @@
 import { JarType, Transaction } from '../types';
 import { JAR_DEFINITIONS } from '../data/initialData';
+import { safeGetStorage, safeSetStorage } from './storage';
 import {
   DEFAULT_SIX_JAR_PERCENTAGES,
   SIX_JAR_KEYS,
@@ -9,6 +10,8 @@ import {
 
 export const BASE_INCOME_STORAGE_KEY = '@finance_app:base_income_v1';
 export const JAR_PERCENTAGES_STORAGE_KEY = '@finance_app:jar_percentages_v1';
+export const BASE_INCOME_SYNC_EVENT = 'yupee:base-income-updated';
+export const DEFAULT_BASE_MONTHLY_INCOME = 3652.31;
 
 type CoreJarId = Exclude<JarType, 'PJ_EXCLUIDO'>;
 const CORE_SIX_JAR_KEYS = SIX_JAR_KEYS as CoreJarId[];
@@ -84,16 +87,13 @@ export function sanitizeBaseIncomeConfig(raw: unknown): BaseIncomeConfig {
 }
 
 export function loadBaseIncomeConfig(): BaseIncomeConfig {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return createDefaultBaseIncomeConfig();
-  }
-  try {
-    const saved = window.localStorage.getItem(BASE_INCOME_STORAGE_KEY);
-    if (!saved) return createDefaultBaseIncomeConfig();
-    return sanitizeBaseIncomeConfig(JSON.parse(saved));
-  } catch {
-    return createDefaultBaseIncomeConfig();
-  }
+  const raw = safeGetStorage<unknown>(
+    BASE_INCOME_STORAGE_KEY,
+    null,
+    val => Boolean(val && typeof val === 'object' && !Array.isArray(val))
+  );
+  if (!raw) return createDefaultBaseIncomeConfig();
+  return sanitizeBaseIncomeConfig(raw);
 }
 
 export function saveBaseIncomeConfig(config: BaseIncomeConfig): BaseIncomeConfig {
@@ -101,35 +101,34 @@ export function saveBaseIncomeConfig(config: BaseIncomeConfig): BaseIncomeConfig
     ...config,
     updatedAt: config.updatedAt || new Date().toISOString(),
   });
-  if (typeof window !== 'undefined' && window.localStorage) {
+  safeSetStorage(BASE_INCOME_STORAGE_KEY, clean);
+
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
     try {
-      window.localStorage.setItem(BASE_INCOME_STORAGE_KEY, JSON.stringify(clean));
+      window.dispatchEvent(new CustomEvent(BASE_INCOME_SYNC_EVENT, { detail: clean }));
     } catch {
-      // Ignore storage quota errors gracefully
+      // Ignore event dispatch issues in restricted environments
     }
   }
   return clean;
 }
 
 export function loadJarPercentages(): Record<CoreJarId, number> {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return { ...DEFAULT_SIX_JAR_PERCENTAGES };
-  }
-  try {
-    const saved = window.localStorage.getItem(JAR_PERCENTAGES_STORAGE_KEY);
-    if (!saved) return { ...DEFAULT_SIX_JAR_PERCENTAGES };
-    const parsed = JSON.parse(saved) as Partial<Record<CoreJarId, number>>;
-    const result: Record<CoreJarId, number> = { ...DEFAULT_SIX_JAR_PERCENTAGES };
-    CORE_SIX_JAR_KEYS.forEach(k => {
-      const val = parsed?.[k];
-      if (typeof val === 'number' && Number.isFinite(val) && val >= 0 && val <= 100) {
-        result[k] = val;
-      }
-    });
-    return result;
-  } catch {
-    return { ...DEFAULT_SIX_JAR_PERCENTAGES };
-  }
+  const parsed = safeGetStorage<Partial<Record<CoreJarId, number>> | null>(
+    JAR_PERCENTAGES_STORAGE_KEY,
+    null,
+    val => Boolean(val && typeof val === 'object' && !Array.isArray(val))
+  );
+  if (!parsed) return { ...DEFAULT_SIX_JAR_PERCENTAGES };
+
+  const result: Record<CoreJarId, number> = { ...DEFAULT_SIX_JAR_PERCENTAGES };
+  CORE_SIX_JAR_KEYS.forEach(k => {
+    const val = parsed[k];
+    if (typeof val === 'number' && Number.isFinite(val) && val >= 0 && val <= 100) {
+      result[k] = val;
+    }
+  });
+  return result;
 }
 
 export function saveJarPercentages(
@@ -142,13 +141,7 @@ export function saveJarPercentages(
       result[k] = val;
     }
   });
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      window.localStorage.setItem(JAR_PERCENTAGES_STORAGE_KEY, JSON.stringify(result));
-    } catch {
-      // Ignore storage quota errors gracefully
-    }
-  }
+  safeSetStorage(JAR_PERCENTAGES_STORAGE_KEY, result);
   return result;
 }
 

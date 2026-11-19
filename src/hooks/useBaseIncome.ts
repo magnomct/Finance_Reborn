@@ -1,6 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { JarType, Transaction } from '../types';
 import {
+  BASE_INCOME_STORAGE_KEY,
+  BASE_INCOME_SYNC_EVENT,
   BaseIncomeConfig,
   JarAllocationPreviewItem,
   RealizedIncomeBreakdown,
@@ -48,6 +50,36 @@ export function useBaseIncome({
   onCascadeJarLimits,
 }: UseBaseIncomeOptions): UseBaseIncomeResult {
   const [config, setConfig] = useState<BaseIncomeConfig>(() => loadBaseIncomeConfig());
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleSyncEvent = (event: Event) => {
+      const custom = event as CustomEvent<BaseIncomeConfig>;
+      if (custom.detail) {
+        setConfig(prev =>
+          prev.updatedAt === custom.detail.updatedAt && prev.mode === custom.detail.mode && prev.manualTotalBRL === custom.detail.manualTotalBRL
+            ? prev
+            : custom.detail
+        );
+      } else {
+        setConfig(loadBaseIncomeConfig());
+      }
+    };
+
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (event.key === BASE_INCOME_STORAGE_KEY) {
+        setConfig(loadBaseIncomeConfig());
+      }
+    };
+
+    window.addEventListener(BASE_INCOME_SYNC_EVENT, handleSyncEvent);
+    window.addEventListener('storage', handleStorageEvent);
+    return () => {
+      window.removeEventListener(BASE_INCOME_SYNC_EVENT, handleSyncEvent);
+      window.removeEventListener('storage', handleStorageEvent);
+    };
+  }, []);
 
   const realizedIncome = useMemo(
     () => calculateRealizedConsolidatedIncome(transactions, usePjProfitInPf),

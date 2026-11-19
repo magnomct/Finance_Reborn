@@ -21,6 +21,8 @@ interface MonthlyContributionTargetTrackerProps {
   onUpdateTarget: (dreamId: string, monthlyTargetBRL: number, preferredDepositDay: number) => void;
   onCompleteMonthlyGoal: (dream: DreamGoal, shortfallBRL: number) => void;
   onRegisterContribution: (dream: DreamGoal) => void;
+  isMounted?: boolean;
+  isPulsing?: boolean;
 }
 
 export const MonthlyContributionTargetTracker: React.FC<MonthlyContributionTargetTrackerProps> = ({
@@ -29,6 +31,8 @@ export const MonthlyContributionTargetTracker: React.FC<MonthlyContributionTarge
   onUpdateTarget,
   onCompleteMonthlyGoal,
   onRegisterContribution,
+  isMounted = true,
+  isPulsing = false,
 }) => {
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [targetInput, setTargetInput] = useState(String(progress.monthlyTargetBRL || ''));
@@ -102,6 +106,20 @@ export const MonthlyContributionTargetTracker: React.FC<MonthlyContributionTarge
       : progress.ritmoTier === 'rose'
       ? 'bg-rose-500'
       : 'bg-amber-500';
+
+  const barGlowClass =
+    progress.ritmoTier === 'emerald'
+      ? 'group-hover:shadow-[0_0_12px_rgba(16,185,129,0.45)]'
+      : progress.ritmoTier === 'rose'
+      ? 'group-hover:shadow-[0_0_12px_rgba(244,63,94,0.45)]'
+      : 'group-hover:shadow-[0_0_12px_rgba(245,158,11,0.45)]';
+
+  const pctPillClass =
+    progress.ritmoTier === 'emerald'
+      ? 'bg-emerald-100/90 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
+      : progress.ritmoTier === 'rose'
+      ? 'bg-rose-100/90 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300'
+      : 'bg-amber-100/90 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300';
 
   const showUseSuggestedBtn =
     progress.remainingBalance > 0 &&
@@ -280,7 +298,12 @@ export const MonthlyContributionTargetTracker: React.FC<MonthlyContributionTarge
             <strong className="font-bold text-slate-800 dark:text-slate-100">
               {formatBRL(progress.monthlyTargetBRL)}
             </strong>{' '}
-            (<strong className="font-black">{progress.monthlyCompletionPct.toFixed(0)}%</strong>)
+            <span
+              className={`inline-flex items-center px-1.5 py-0.5 rounded-md font-black text-[10px] tabular-nums transition-transform duration-200 group-hover:scale-105 group-hover:font-bold ${pctPillClass}`}
+              data-testid={`monthly-target-pct-${dream.id}`}
+            >
+              {progress.monthlyCompletionPct.toFixed(0)}%
+            </span>
           </span>
 
           <button
@@ -293,12 +316,21 @@ export const MonthlyContributionTargetTracker: React.FC<MonthlyContributionTarge
           </button>
         </div>
 
-        <div className="relative w-full h-2 bg-white dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200/80 dark:border-slate-700/80">
+        <div className="relative w-full h-2 group-hover:h-2.5 bg-white dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200/80 dark:border-slate-700/80 transition-all duration-300">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${barFillClass}`}
-            style={{ width: `${progress.clampedCompletionPct}%` }}
+            className={`h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden group-hover:brightness-110 ${barFillClass} ${barGlowClass} ${
+              isPulsing ? 'brightness-125' : ''
+            }`}
+            style={{ width: isMounted ? `${progress.clampedCompletionPct}%` : '0%' }}
             data-testid={`monthly-target-bar-${dream.id}`}
-          />
+          >
+            <span
+              aria-hidden="true"
+              className={`goal-progress-shimmer ${
+                progress.clampedCompletionPct >= 100 ? 'goal-progress-shimmer-active' : ''
+              }`}
+            />
+          </div>
         </div>
       </div>
 

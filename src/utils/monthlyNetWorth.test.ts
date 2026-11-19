@@ -11,6 +11,10 @@ import {
 } from './finance';
 import { DreamGoal, Transaction } from '../types';
 import { INITIAL_DREAMS, INITIAL_TRANSACTIONS } from '../data/initialData';
+import {
+  projectScopedNetWorthSeries,
+  SCOPE_CONFIG,
+} from '../components/MonthlyNetWorthD3Chart';
 
 test('formatCompactAxisBRL formats thousands and millions cleanly in pt-BR style', () => {
   assert.equal(formatCompactAxisBRL(10000), 'R$ 10k');
@@ -431,4 +435,146 @@ test('buildHistoricalNetWorthSeries triggers 12-month smart backfill on single-m
   assert.equal(updatedSeries[11].pfBalance, 410);
   assert.equal(updatedSeries[11].totalNetWorth, 5102.31);
 });
+
+test('SCOPE_CONFIG defines exact semantic hex colors and adaptive pt-BR KPI titles per scope', () => {
+  assert.equal(SCOPE_CONFIG.CONSOLIDATED.positiveHex, '#10b981');
+  assert.equal(SCOPE_CONFIG.PF.positiveHex, '#6366f1');
+  assert.equal(SCOPE_CONFIG.MEI.positiveHex, '#0ea5e9');
+  assert.equal(SCOPE_CONFIG.GOALS.positiveHex, '#8b5cf6');
+
+  assert.equal(SCOPE_CONFIG.CONSOLIDATED.kpi1Title, 'Patrimônio Consolidado');
+  assert.equal(SCOPE_CONFIG.PF.kpi1Title, 'Saldo Acumulado PF');
+  assert.equal(SCOPE_CONFIG.MEI.kpi1Title, 'Reserva Caixa MEI');
+  assert.equal(SCOPE_CONFIG.GOALS.kpi1Title, 'Saldo em Metas & Potes');
+});
+
+test('projectScopedNetWorthSeries isolates PF, MEI, and GOALS cleanly with scoped deltas and share percentages without mutating input', () => {
+  const baseSummary = buildMonthlyNetWorthSeries({
+    transactions: [
+      {
+        id: 'p1',
+        date: '2026-08-10',
+        description: 'Salário Ago',
+        amount: 2000,
+        type: 'receita',
+        jar: 'NEC_55',
+        costCenter: 'Magno',
+        account: 'Inter PF',
+        status: 'liquidado',
+      },
+      {
+        id: 'm1',
+        date: '2026-08-15',
+        description: 'MEI Ago',
+        amount: 1000,
+        type: 'receita',
+        jar: 'PJ_EXCLUIDO',
+        costCenter: 'PJ',
+        account: 'Inter PJ',
+        status: 'liquidado',
+      },
+      {
+        id: 'p2',
+        date: '2026-09-10',
+        description: 'Salário Set',
+        amount: 3000,
+        type: 'receita',
+        jar: 'NEC_55',
+        costCenter: 'Magno',
+        account: 'Inter PF',
+        status: 'liquidado',
+      },
+      {
+        id: 'm2',
+        date: '2026-09-15',
+        description: 'MEI Set',
+        amount: 500,
+        type: 'receita',
+        jar: 'PJ_EXCLUIDO',
+        costCenter: 'PJ',
+        account: 'Inter PJ',
+        status: 'liquidado',
+      },
+      {
+        id: 'p3',
+        date: '2026-10-10',
+        description: 'Salário Out',
+        amount: 1000,
+        type: 'receita',
+        jar: 'NEC_55',
+        costCenter: 'Magno',
+        account: 'Inter PF',
+        status: 'liquidado',
+      },
+    ],
+    dreams: [
+      {
+        id: 'd1',
+        title: 'Meta',
+        target: 5000,
+        current: 2500,
+        monthlyDeposit: 500,
+        category: 'Reserva',
+        impact: 'Paz',
+        iconName: 'Shield',
+        gradient: 'from-blue-500 to-indigo-500',
+        contributionsHistory: [
+          { id: 'c1', date: '2026-08-20', amount: 1000 },
+          { id: 'c2', date: '2026-09-20', amount: 1000 },
+          { id: 'c3', date: '2026-10-20', amount: 500 },
+        ],
+      },
+    ],
+    period: 'ALL',
+  });
+
+  const snapshotBefore = JSON.stringify(baseSummary.points);
+
+  // PF scope: 2000 -> 5000 (+3000, +150%) -> 6000 (+1000, +20%)
+  const pfSeries = projectScopedNetWorthSeries(baseSummary.points, 'PF');
+  assert.equal(pfSeries.length, 3);
+  assert.equal(pfSeries[0].pfBalance, 2000);
+  assert.equal(pfSeries[0].meiBalance, 0);
+  assert.equal(pfSeries[0].goalsBalance, 0);
+  assert.equal(pfSeries[0].totalNetWorth, 2000);
+  assert.equal(pfSeries[0].consolidatedTotalNetWorthBRL, 4000);
+  assert.equal(pfSeries[0].scopeSharePct, 50);
+
+  assert.equal(pfSeries[1].totalNetWorth, 5000);
+  assert.equal(pfSeries[1].monthlyDeltaBRL, 3000);
+  assert.equal(pfSeries[1].monthlyDeltaPct, 150);
+
+  const pfKpis = calculateFinanceNetWorthKPIs(pfSeries);
+  assert.equal(pfKpis.currentNetWorth, 6000);
+  assert.equal(pfKpis.periodGrowthBRL, 4000);
+  assert.equal(pfKpis.periodGrowthPct, 200);
+
+  // MEI scope: 1000 -> 1500 (+500, +50%) -> 1500 (0, 0%)
+  const meiSeries = projectScopedNetWorthSeries(baseSummary.points, 'MEI');
+  assert.equal(meiSeries[2].pfBalance, 0);
+  assert.equal(meiSeries[2].meiBalance, 1500);
+  assert.equal(meiSeries[2].goalsBalance, 0);
+  assert.equal(meiSeries[2].totalNetWorth, 1500);
+  assert.equal(meiSeries[2].monthlyDeltaBRL, 0);
+  assert.equal(meiSeries[2].scopeSharePct, 15); // 1500 / 10000 consolidated
+
+  const meiKpis = calculateFinanceNetWorthKPIs(meiSeries);
+  assert.equal(meiKpis.currentNetWorth, 1500);
+  assert.equal(meiKpis.periodGrowthBRL, 500);
+  assert.equal(meiKpis.periodGrowthPct, 50);
+
+  // GOALS scope: 1000 -> 2000 (+1000, +100%) -> 2500 (+500, +25%)
+  const goalsSeries = projectScopedNetWorthSeries(baseSummary.points, 'GOALS');
+  assert.equal(goalsSeries[2].pfBalance, 0);
+  assert.equal(goalsSeries[2].meiBalance, 0);
+  assert.equal(goalsSeries[2].goalsBalance, 2500);
+  assert.equal(goalsSeries[2].totalNetWorth, 2500);
+  assert.equal(goalsSeries[2].monthlyDeltaBRL, 500);
+  assert.equal(goalsSeries[2].monthlyDeltaPct, 25);
+  assert.equal(goalsSeries[2].scopeSharePct, 25); // 2500 / 10000 consolidated
+
+  // Original input array untouched
+  assert.equal(JSON.stringify(baseSummary.points), snapshotBefore);
+});
+
 
