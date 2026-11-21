@@ -6,7 +6,7 @@ import {
   Filter, Search, Clock, Zap, Sparkles, RefreshCw, RotateCcw,
   FileSpreadsheet, Table, Bell, X, Edit3, BellRing, FileText, Download
 } from 'lucide-react';
-import { DashboardMonthlyPdfModal } from './components/DashboardMonthlyPdfModal';
+import { ExportModal, parseMonthLabelToYM } from './components/ExportModal';
 
 import { 
   Transaction, JarType, CostCenter, AccountType, ActiveScreen, 
@@ -90,6 +90,16 @@ import {
   saveJarPercentages,
 } from './utils/baseIncomeConfig';
 import { DEFAULT_SIX_JAR_PERCENTAGES } from './utils/sixJarsMetrics';
+import {
+  ensureStorageSchemaVersion,
+  safeGetStorage,
+  safeSetStorage,
+  isValidTransactionArray,
+  isValidRecurringArray,
+  isValidDreamArray,
+  isValidAutoRulesArray,
+  isValidStringArray,
+} from './utils/storage';
 
 export default function App() {
   // Screens & Navigation - Default to the complete Dashboard with Resumo dos Dados
@@ -100,41 +110,22 @@ export default function App() {
   const months = ['Agosto / 2026', 'Setembro / 2026', 'Outubro / 2026', 'Novembro / 2026'];
   const selectedMonth = months[selectedMonthIndex] || 'Outubro / 2026';
 
-  // Persistence in LocalStorage
+  // Persistence in Schema-Safe LocalStorage
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    try {
-      const saved = localStorage.getItem('yupee_transactions_v2');
-      return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
-    } catch {
-      return INITIAL_TRANSACTIONS;
-    }
+    ensureStorageSchemaVersion();
+    return safeGetStorage<Transaction[]>('yupee_transactions_v2', INITIAL_TRANSACTIONS, isValidTransactionArray);
   });
 
   const [recurringList, setRecurringList] = useState<RecurringExpense[]>(() => {
-    try {
-      const saved = localStorage.getItem('yupee_recurring_v3');
-      return saved ? JSON.parse(saved) : INITIAL_RECURRING;
-    } catch {
-      return INITIAL_RECURRING;
-    }
+    return safeGetStorage<RecurringExpense[]>('yupee_recurring_v3', INITIAL_RECURRING, isValidRecurringArray);
   });
 
   const [dreams, setDreams] = useState<DreamGoal[]>(() => {
-    try {
-      const saved = localStorage.getItem('yupee_dreams_v2');
-      return saved ? JSON.parse(saved) : INITIAL_DREAMS;
-    } catch {
-      return INITIAL_DREAMS;
-    }
+    return safeGetStorage<DreamGoal[]>('yupee_dreams_v2', INITIAL_DREAMS, isValidDreamArray);
   });
 
   const [autoRules, setAutoRules] = useState<AutoCategoryRule[]>(() => {
-    try {
-      const saved = localStorage.getItem('yupee_rules_v2');
-      return saved ? JSON.parse(saved) : INITIAL_AUTO_RULES;
-    } catch {
-      return INITIAL_AUTO_RULES;
-    }
+    return safeGetStorage<AutoCategoryRule[]>('yupee_rules_v2', INITIAL_AUTO_RULES, isValidAutoRulesArray);
   });
 
   // Category Hierarchy (2-level hierarchy: Categoria Pai > Subcategoria with Fixo/Variável classification)
@@ -267,23 +258,15 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [resetNotification]);
 
-  // Save to LocalStorage
+  // Save to Schema-Safe LocalStorage
   useEffect(() => {
-    try {
-      localStorage.setItem('yupee_transactions_v2', JSON.stringify(transactions));
-    } catch (e) {
-      console.error(e);
-    }
+    safeSetStorage('yupee_transactions_v2', transactions);
   }, [transactions]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('yupee_recurring_v3', JSON.stringify(recurringList));
-      localStorage.setItem('yupee_dreams_v2', JSON.stringify(dreams));
-      localStorage.setItem('yupee_rules_v2', JSON.stringify(autoRules));
-    } catch (e) {
-      console.error(e);
-    }
+    safeSetStorage('yupee_recurring_v3', recurringList);
+    safeSetStorage('yupee_dreams_v2', dreams);
+    safeSetStorage('yupee_rules_v2', autoRules);
   }, [recurringList, dreams, autoRules]);
 
   // Financial Metrics Calculation (synced with configured Base Monthly Income)
@@ -317,12 +300,8 @@ export default function App() {
   });
 
   const [dispatchedTags, setDispatchedTags] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem('yupee_dispatched_notification_tags');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
+    const saved = safeGetStorage<string[]>('yupee_dispatched_notification_tags', [], isValidStringArray);
+    return new Set(saved);
   });
 
   // Automatically check and dispatch native notifications for expenses due in <= 2 days if permission is granted
@@ -336,11 +315,7 @@ export default function App() {
         updatedTags.add(item.payload.tag);
       });
       setDispatchedTags(updatedTags);
-      try {
-        localStorage.setItem('yupee_dispatched_notification_tags', JSON.stringify([...updatedTags]));
-      } catch (err) {
-        console.error(err);
-      }
+      safeSetStorage('yupee_dispatched_notification_tags', [...updatedTags]);
     }
   }, [transactions, notificationPermission, dispatchedTags]);
 
@@ -357,11 +332,7 @@ export default function App() {
           updatedTags.add(item.payload.tag);
         });
         setDispatchedTags(updatedTags);
-        try {
-          localStorage.setItem('yupee_dispatched_notification_tags', JSON.stringify([...updatedTags]));
-        } catch (err) {
-          console.error(err);
-        }
+        safeSetStorage('yupee_dispatched_notification_tags', [...updatedTags]);
       } else {
         // Show welcome confirmation notification
         dispatchNativeBrowserNotification({
@@ -753,16 +724,16 @@ export default function App() {
 
             {/* Ações do Cabeçalho */}
             <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-              {/* Botão Baixar Relatório Mensal Consolidado em PDF */}
+              {/* Botão Global de Exportação (PDF / CSV / Excel) */}
               <button
                 type="button"
                 onClick={() => setIsGlobalPdfModalOpen(true)}
                 className="flex items-center gap-1 px-2 py-1.5 rounded-xl border border-teal-500/30 bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/80 text-xs font-bold transition cursor-pointer shadow-2xs shrink-0"
-                title="Gerar e baixar resumo mensal consolidado das finanças em PDF"
+                title="Exportar extrato financeiro em PDF, CSV ou Excel"
                 data-testid="btn-header-pdf"
               >
-                <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                <span className="text-[11px] font-bold">PDF</span>
+                <Download className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                <span className="text-[11px] font-bold">Exportar</span>
               </button>
 
               {/* Botão Alertas de Orçamento */}
@@ -1239,7 +1210,7 @@ export default function App() {
               transactions={transactions}
               jarSavingsTargets={jarSavingsTargets}
               onSaveSavingsTargets={handleSaveJarSavingsTargets}
-              effectiveIncomeBase={financialMetrics.effectiveIncomeBase}
+              effectiveIncomeBase={effectiveBaseIncome}
               jarLimits={jarLimits}
             />
           </div>
@@ -1526,6 +1497,7 @@ export default function App() {
         autoRules={autoRules}
         defaultScope={viewScope}
         hierarchy={categoryHierarchy}
+        transactions={transactions}
       />
 
       {/* Modal Configuração de Limites Máximos e Alertas dos 6 Potes */}
@@ -1540,14 +1512,13 @@ export default function App() {
         effectiveIncomeBase={financialMetrics.effectiveIncomeBase}
       />
 
-      {/* Modal Relatório Mensal Consolidado em PDF */}
-      <DashboardMonthlyPdfModal
+      {/* Modal Global de Exportação (PDF / CSV / Excel) */}
+      <ExportModal
         isOpen={isGlobalPdfModalOpen}
         onClose={() => setIsGlobalPdfModalOpen(false)}
         transactions={transactions}
-        dreams={dreams}
-        jarLimits={jarLimits}
-        defaultMonthName={selectedMonth}
+        defaultScope={viewScope}
+        defaultYearMonth={parseMonthLabelToYM(selectedMonth)}
       />
 
       {/* Modal de Reset e Configuração do Ambiente do Zero */}

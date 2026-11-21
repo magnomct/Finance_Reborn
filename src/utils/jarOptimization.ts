@@ -1,5 +1,6 @@
 import { Transaction, JarType } from '../types';
 import { JAR_DEFINITIONS } from '../data/initialData';
+import { DEFAULT_BASE_MONTHLY_INCOME } from './baseIncomeConfig';
 
 export interface JarHistoricalStat {
   jarId: JarType;
@@ -58,7 +59,7 @@ export function calculateJarHistoricalStats(
   transactions: Transaction[],
   incomeBase: number
 ): Record<JarType, JarHistoricalStat> {
-  const safeIncome = incomeBase > 0 ? incomeBase : 3652.31;
+  const safeIncome = incomeBase > 0 ? incomeBase : DEFAULT_BASE_MONTHLY_INCOME;
   const stats: Record<JarType, JarHistoricalStat> = {} as any;
 
   CORE_JAR_KEYS.forEach(key => {
@@ -111,7 +112,7 @@ export function calculateDeterministicJarOptimization(params: {
     averageMonthlyExpense = 2000,
   } = params;
 
-  const safeIncome = incomeBase > 0 ? incomeBase : 3652.31;
+  const safeIncome = incomeBase > 0 ? incomeBase : DEFAULT_BASE_MONTHLY_INCOME;
 
   // Derive current percentages from limits or fall back to standard
   const currentPercents: Record<JarType, number> = {} as any;

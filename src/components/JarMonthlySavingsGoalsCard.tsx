@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Transaction, JarType } from '../types';
 import { formatBRL, formatNumber } from '../utils/finance';
+import { DEFAULT_BASE_MONTHLY_INCOME } from '../utils/baseIncomeConfig';
 import { 
   calculateJarSavingsGoalsSummary, 
   suggestJarSavingsTargets, 
@@ -38,7 +39,7 @@ const JAR_ICONS: Record<JarType, React.FC<{ className?: string }>> = {
 
 export const JarMonthlySavingsGoalsCard: React.FC<JarMonthlySavingsGoalsCardProps> = ({
   transactions = [],
-  effectiveIncomeBase = 3652.31,
+  effectiveIncomeBase = DEFAULT_BASE_MONTHLY_INCOME,
   jarLimits,
   jarSavingsTargets = DEFAULT_JAR_SAVINGS_TARGETS,
   onSaveSavingsTargets,

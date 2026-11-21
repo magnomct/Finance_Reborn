@@ -18,6 +18,7 @@ import { ExpenseHeatmapChart } from './ExpenseHeatmapChart';
 import { MonthlyVariabilityCard } from './MonthlyVariabilityCard';
 import { CumulativeSavingsLineChart } from './CumulativeSavingsLineChart';
 import { MonthlyNetWorthD3Chart } from './MonthlyNetWorthD3Chart';
+import { ExpenseVariabilityCard } from './ExpenseVariabilityCard';
 
 interface ChartsViewProps {
   transactions: Transaction[];
@@ -762,7 +763,8 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
       {/* NOVO MODO: DISTRIBUIÇÃO DE VARIABILIDADE MENSAL (6 MESES)  */}
       {/* ========================================================= */}
       {(chartMode === 'variabilidade' || chartMode === 'evolucao' || chartMode === 'donut') && (
-        <div className="pt-2">
+        <div className="space-y-6 pt-2">
+          <ExpenseVariabilityCard transactions={transactions} />
           <MonthlyVariabilityCard 
             transactions={transactions} 
             hierarchy={hierarchy}

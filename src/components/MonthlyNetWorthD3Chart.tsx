@@ -11,6 +11,8 @@ import {
   User,
   Briefcase,
   Target,
+  BarChart3,
+  Sparkles,
 } from 'lucide-react';
 import { DreamGoal, Transaction } from '../types';
 import {
@@ -24,13 +26,18 @@ import {
   formatMonthKeyLabels,
   MonthlyNetWorthPoint as ChartNetWorthPoint,
   NetWorthPeriodFilter,
+  shiftMonthKey,
 } from '../utils/monthlyNetWorth';
+import { safeGetStorage, isValidTransactionArray, isValidDreamArray } from '../utils/storage';
 
 export type NetWorthScope = 'CONSOLIDATED' | 'PF' | 'MEI' | 'GOALS';
+export type NetWorthChartMode = 'line' | 'stacked';
 
 export interface ScopedChartNetWorthPoint extends ChartNetWorthPoint {
   consolidatedTotalNetWorthBRL: number;
   scopeSharePct: number;
+  isProjected?: boolean;
+  projectionStep?: number;
 }
 
 interface ScopeMetaConfig {
@@ -121,6 +128,18 @@ const SCOPE_OPTIONS: ScopeMetaConfig[] = [
   SCOPE_CONFIG.GOALS,
 ];
 
+type StackedLayerKey = 'pfBalance' | 'meiBalance' | 'goalsBalance';
+
+const STACKED_LAYERS: Array<{
+  key: StackedLayerKey;
+  label: string;
+  color: string;
+}> = [
+  { key: 'pfBalance', label: 'Saldo PF', color: '#6366f1' },
+  { key: 'meiBalance', label: 'Caixa MEI', color: '#0ea5e9' },
+  { key: 'goalsBalance', label: 'Metas & Potes', color: '#8b5cf6' },
+];
+
 const formatBRL = (val: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -136,7 +155,10 @@ const formatSharePct = (val: number) =>
     maximumFractionDigits: 1,
   })}%`;
 
-const roundCurrency = (val: number): number => Math.round(val * 100) / 100;
+const roundCurrency = (val: number): number => {
+  if (!Number.isFinite(val)) return 0;
+  return Math.round(val * 100) / 100;
+};
 
 export function projectScopedNetWorthSeries(
   filteredSeries: ChartNetWorthPoint[],
@@ -224,8 +246,85 @@ export function projectScopedNetWorthSeries(
       monthlyDeltaPct,
       consolidatedTotalNetWorthBRL: consolidatedTotal,
       scopeSharePct: Number.isFinite(rawSharePct) ? rawSharePct : 0,
+      isProjected: false,
     };
   });
+}
+
+/**
+ * Appends `steps` (default 3) future monthly projection points using
+ * `currentNetWorth + (monthlyAvgEvolutionBRL * step)`.
+ */
+export function buildNetWorthProjectionPoints(
+  scopedSeries: ScopedChartNetWorthPoint[],
+  monthlyAvgEvolutionBRL: number,
+  steps: number = 3
+): ScopedChartNetWorthPoint[] {
+  if (!Array.isArray(scopedSeries) || scopedSeries.length === 0 || steps <= 0) {
+    return [];
+  }
+
+  const last = scopedSeries[scopedSeries.length - 1];
+  const safeAvg = Number.isFinite(monthlyAvgEvolutionBRL) ? monthlyAvgEvolutionBRL : 0;
+  const currentTotal = last.totalNetWorthBRL;
+
+  // Determine layer weights so projected stacked balances sum to projectedTotal
+  const baseSum = last.pfBalance + last.meiBalance + last.goalsBalance;
+  const pfWeight = Math.abs(baseSum) > 0.01 ? last.pfBalance / baseSum : 1;
+  const meiWeight = Math.abs(baseSum) > 0.01 ? last.meiBalance / baseSum : 0;
+  const goalsWeight = Math.abs(baseSum) > 0.01 ? last.goalsBalance / baseSum : 0;
+
+  const result: ScopedChartNetWorthPoint[] = [];
+  let prevTotal = currentTotal;
+
+  for (let step = 1; step <= steps; step++) {
+    const nextMonthKey = shiftMonthKey(last.month, step);
+    const labels = formatMonthKeyLabels(nextMonthKey);
+    const projectedTotal = roundCurrency(currentTotal + safeAvg * step);
+    const pfProj = roundCurrency(last.pfBalance + safeAvg * step * pfWeight);
+    const meiProj = roundCurrency(last.meiBalance + safeAvg * step * meiWeight);
+    const goalsProj = roundCurrency(projectedTotal - pfProj - meiProj);
+
+    const deltaBRL = roundCurrency(projectedTotal - prevTotal);
+    const deltaPct =
+      Math.abs(prevTotal) > 0.01
+        ? roundCurrency((deltaBRL / Math.abs(prevTotal)) * 100)
+        : deltaBRL !== 0
+          ? deltaBRL > 0
+            ? 100
+            : -100
+          : 0;
+
+    prevTotal = projectedTotal;
+
+    result.push({
+      index: scopedSeries.length + step - 1,
+      month: nextMonthKey,
+      monthKey: nextMonthKey,
+      monthLabel: `${labels.monthLabel}`,
+      fullMonthLabel: `${labels.fullMonthLabel} (Projeção M+${step})`,
+      date: labels.date,
+      pfBalance: pfProj,
+      meiBalance: meiProj,
+      goalsBalance: goalsProj,
+      totalNetWorth: projectedTotal,
+      pfCumulativeBalance: pfProj,
+      meiCumulativeReserve: meiProj,
+      goalsCumulativeBalance: goalsProj,
+      totalNetWorthBRL: projectedTotal,
+      monthlyDeltaBRL: deltaBRL,
+      monthlyDeltaPct: deltaPct,
+      consolidatedTotalNetWorthBRL: projectedTotal,
+      scopeSharePct: last.scopeSharePct,
+      isSimulated: true,
+      isProjected: true,
+      projectionStep: step,
+    });
+  }
+
+  // Ensure weights sum cleanly on edge cases
+  void goalsWeight;
+  return result;
 }
 
 export interface MonthlyNetWorthD3ChartProps {
@@ -263,6 +362,9 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
 }) => {
   const [period, setPeriod] = useState<NetWorthPeriodFilter>(defaultPeriod);
   const [activeScope, setActiveScope] = useState<NetWorthScope>(defaultScope);
+  const [chartViewMode, setChartViewMode] = useState<NetWorthChartMode>('line');
+  const [showProjection, setShowProjection] = useState<boolean>(false);
+  const [highlightedLayer, setHighlightedLayer] = useState<StackedLayerKey | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [hoveredInfo, setHoveredInfo] = useState<TooltipHoverState | null>(null);
 
@@ -270,32 +372,29 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const gradientId = 'netWorthGradient';
 
+  const hasExplicitDataProp = data !== undefined;
+
   const resolvedData = useMemo(() => {
     let effectiveTx = transactions;
     let effectiveDreams = dreams;
 
     if (
-      (!data || data.length === 0) &&
-      typeof window !== 'undefined' &&
-      window.localStorage &&
+      !hasExplicitDataProp &&
       effectiveTx.length === 0 &&
       effectiveDreams.length === 0
     ) {
-      try {
-        const savedTx = window.localStorage.getItem('yupee_transactions_v2');
-        const savedDreams = window.localStorage.getItem('yupee_dreams_v2');
-        if (savedTx) effectiveTx = JSON.parse(savedTx) as Transaction[];
-        if (savedDreams) effectiveDreams = JSON.parse(savedDreams) as DreamGoal[];
-      } catch {
-        // Safe fallback if localStorage cannot be parsed
-      }
+      effectiveTx = safeGetStorage<Transaction[]>('yupee_transactions_v2', [], isValidTransactionArray);
+      effectiveDreams = safeGetStorage<DreamGoal[]>('yupee_dreams_v2', [], isValidDreamArray);
     }
 
     return { effectiveTx, effectiveDreams };
-  }, [data, transactions, dreams]);
+  }, [hasExplicitDataProp, transactions, dreams]);
 
   const allPoints: ChartNetWorthPoint[] = useMemo(() => {
-    if (data && data.length > 0) {
+    if (hasExplicitDataProp) {
+      if (!Array.isArray(data) || data.length === 0) {
+        return [];
+      }
       const sorted = [...data].sort((a, b) => a.month.localeCompare(b.month));
       return sorted.map((item, idx) => {
         const pf = roundCurrency(Number(item.pfBalance) || 0);
@@ -357,7 +456,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       period: 'ALL',
       anchorMonthKey,
     }).points;
-  }, [data, resolvedData, anchorMonthKey]);
+  }, [hasExplicitDataProp, data, resolvedData, anchorMonthKey]);
 
   const filteredSeries: ChartNetWorthPoint[] = useMemo(() => {
     const sliced =
@@ -379,6 +478,17 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
     return calculateConsolidatedNetWorthKPIs(scopedSeries);
   }, [scopedSeries]);
 
+  const projectionPoints: ScopedChartNetWorthPoint[] = useMemo(() => {
+    if (!showProjection || scopedSeries.length === 0) return [];
+    return buildNetWorthProjectionPoints(scopedSeries, kpis.monthlyAvgEvolutionBRL, 3);
+  }, [showProjection, scopedSeries, kpis.monthlyAvgEvolutionBRL]);
+
+  const combinedSeries: ScopedChartNetWorthPoint[] = useMemo(() => {
+    if (projectionPoints.length === 0) return scopedSeries;
+    return [...scopedSeries, ...projectionPoints];
+  }, [scopedSeries, projectionPoints]);
+
+  const effectiveStackedMode = activeScope === 'CONSOLIDATED' && chartViewMode === 'stacked';
   const scopeMeta = SCOPE_CONFIG[activeScope];
   const latestScopedPoint = scopedSeries[scopedSeries.length - 1] ?? null;
 
@@ -406,8 +516,9 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
 
     updateWidth();
 
+    let observer: ResizeObserver | null = null;
     if (typeof ResizeObserver !== 'undefined') {
-      const observer = new ResizeObserver(entries => {
+      observer = new ResizeObserver(entries => {
         for (const entry of entries) {
           const measured = Math.floor(entry.contentRect.width);
           if (measured > 0) {
@@ -416,33 +527,40 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
         }
       });
       observer.observe(el);
-      return () => observer.disconnect();
     }
 
     window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, []);
+    return () => {
+      if (observer) observer.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, [scopedSeries.length]);
 
-  // Clear hover tooltip cleanly whenever period, scope, or underlying data changes
+  // Clear hover tooltip cleanly whenever period, scope, mode, or underlying data changes
   useEffect(() => {
     setHoveredInfo(null);
-  }, [period, activeScope, scopedSeries.length]);
+  }, [period, activeScope, chartViewMode, showProjection, scopedSeries.length]);
 
   const activeHexColor = kpis.isPositive ? scopeMeta.positiveHex : '#f43f5e';
 
-  // D3 rendering pass (isolated to SVG ref, zero element duplication)
+  // D3 rendering pass (isolated to SVG ref, handles 0-point, 1-point, line, stacked, and +3M projection)
   useEffect(() => {
     const svgEl = svgRef.current;
-    if (!svgEl || containerWidth <= 0 || scopedSeries.length === 0) return;
+    if (!svgEl) return;
 
     const svg = d3.select(svgEl);
+    if (containerWidth <= 0 || scopedSeries.length === 0) {
+      svg.selectAll('*').remove();
+      return;
+    }
+
     svg.selectAll('*').remove();
 
     const isMobile = containerWidth < 520;
     const chartHeight = isMobile ? 260 : 320;
     const margin = {
-      top: 18,
-      right: isMobile ? 14 : 24,
+      top: 22,
+      right: isMobile ? 16 : 28,
       bottom: 36,
       left: isMobile ? 58 : 70,
     };
@@ -457,13 +575,14 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .attr('role', 'img')
       .attr(
         'aria-label',
-        `Gráfico de linha e área (${scopeMeta.label}) mostrando evolução mensal de ${scopedSeries[0].monthLabel} até ${scopedSeries[scopedSeries.length - 1].monthLabel}`
+        `Gráfico patrimonial (${scopeMeta.label}) de ${combinedSeries[0].monthLabel} até ${combinedSeries[combinedSeries.length - 1].monthLabel}`
       );
 
-    const points = scopedSeries;
+    const histPoints = scopedSeries;
+    const allPlotPoints = combinedSeries;
     const strokeColor = activeHexColor;
 
-    // Gradient definition (0.28 top opacity to 0.0 base opacity)
+    // Gradient definition
     const defs = svg.append('defs');
     const areaGradient = defs
       .append('linearGradient')
@@ -489,10 +608,10 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
-    // X Scale (d3.scaleTime)
-    let minDate = points[0].date;
-    let maxDate = points[points.length - 1].date;
-    if (points.length === 1) {
+    // X Scale (safe for 1 point by padding +/-15 days so point sits cleanly centered without NaN)
+    let minDate = allPlotPoints[0].date;
+    let maxDate = allPlotPoints[allPlotPoints.length - 1].date;
+    if (allPlotPoints.length === 1 || minDate.getTime() === maxDate.getTime()) {
       minDate = d3.timeDay.offset(minDate, -15);
       maxDate = d3.timeDay.offset(maxDate, 15);
     }
@@ -502,22 +621,41 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .domain([minDate, maxDate])
       .range([0, innerWidth]);
 
-    // Y Scale (d3.scaleLinear with 10% top padding)
-    const rawMin = d3.min(points, d => d.totalNetWorthBRL) ?? 0;
-    const rawMax = d3.max(points, d => d.totalNetWorthBRL) ?? 1000;
+    // Stack computation if stacked mode
+    const stackGenerator = d3
+      .stack<ScopedChartNetWorthPoint>()
+      .keys(['pfBalance', 'meiBalance', 'goalsBalance'])
+      .offset(d3.stackOffsetDiverging);
+
+    const stackedHistSeries = effectiveStackedMode ? stackGenerator(histPoints) : [];
+
+    // Y Scale domain (covers single curve, stacked layers, and +3M projection)
+    let rawMin = d3.min(allPlotPoints, d => d.totalNetWorthBRL) ?? 0;
+    let rawMax = d3.max(allPlotPoints, d => d.totalNetWorthBRL) ?? 1000;
+
+    if (effectiveStackedMode && stackedHistSeries.length > 0) {
+      const stackMin = d3.min(stackedHistSeries, layer => d3.min(layer, d => d[0])) ?? 0;
+      const stackMax = d3.max(stackedHistSeries, layer => d3.max(layer, d => d[1])) ?? 1000;
+      rawMin = Math.min(rawMin, stackMin);
+      rawMax = Math.max(rawMax, stackMax);
+    }
+
     const yMin = rawMin < 0 ? rawMin * 1.15 : 0;
-    const yMax = rawMax > 0 ? Math.max(100, rawMax * 1.1) : Math.max(0, rawMax * 0.9);
+    let yMax = rawMax > 0 ? Math.max(100, rawMax * 1.12) : Math.max(100, rawMax * 0.9);
+    if (!Number.isFinite(yMax) || yMax <= yMin) {
+      yMax = yMin + 1000;
+    }
 
     const yScale = d3
       .scaleLinear()
-      .domain([yMin, yMax === yMin ? yMin + 100 : yMax])
+      .domain([yMin, yMax])
       .nice(5)
       .range([innerHeight, 0]);
 
     const [niceYMin, niceYMax] = yScale.domain();
     const baselineValue = Math.max(niceYMin, Math.min(niceYMax, 0));
 
-    // Subtle horizontal gridlines (stroke-dasharray="3,3")
+    // Horizontal gridlines
     const gridAxis = d3
       .axisLeft(yScale)
       .ticks(5)
@@ -526,7 +664,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
 
     const gridGroup = rootGroup
       .append('g')
-      .attr('class', 'd3-grid-lines text-slate-200 dark:text-slate-800')
+      .attr('class', 'd3-grid-lines text-slate-200 dark:text-slate-700/70')
       .call(gridAxis);
 
     gridGroup.select('.domain').remove();
@@ -536,7 +674,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .attr('stroke-dasharray', '3,3')
       .attr('stroke-opacity', 0.85);
 
-    // Compact Y-Axis (R$ 10k, R$ 25k)
+    // Compact Y-Axis
     const yAxis = d3
       .axisLeft(yScale)
       .ticks(5)
@@ -546,7 +684,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
 
     const yAxisGroup = rootGroup
       .append('g')
-      .attr('class', 'd3-y-axis text-slate-400 dark:text-slate-500')
+      .attr('class', 'd3-y-axis text-slate-500 dark:text-slate-400')
       .call(yAxis);
 
     yAxisGroup.select('.domain').remove();
@@ -557,26 +695,31 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .style('font-weight', '600')
       .style('font-variant-numeric', 'tabular-nums');
 
-    // X-Axis with abbreviated pt-BR month labels (Jan/26, Fev/26...)
+    // X-Axis labels (includes projected months when enabled)
     const stepModulo =
-      containerWidth < 460 && points.length > 6
+      containerWidth < 460 && allPlotPoints.length > 6
         ? 3
-        : containerWidth < 680 && points.length > 8
+        : containerWidth < 680 && allPlotPoints.length > 8
           ? 2
           : 1;
-    const tickDates = points
-      .filter((_, idx) => {
+
+    const tickDates = allPlotPoints
+      .filter((pt, idx) => {
+        if (pt.isProjected) return true;
         if (stepModulo === 1) return true;
-        if (idx === points.length - 1) return true;
-        const distFromEnd = points.length - 1 - idx;
+        if (idx === histPoints.length - 1) return true;
+        const distFromEnd = histPoints.length - 1 - idx;
         if (distFromEnd === 1) return false;
         return idx % stepModulo === 0;
       })
       .map(p => p.date);
 
-    const labelByTime = new Map<number, string>();
-    for (const p of points) {
-      labelByTime.set(p.date.getTime(), p.monthLabel);
+    const labelByTime = new Map<number, { label: string; isProjected: boolean }>();
+    for (const p of allPlotPoints) {
+      labelByTime.set(p.date.getTime(), {
+        label: p.isProjected ? `${p.monthLabel}*` : p.monthLabel,
+        isProjected: Boolean(p.isProjected),
+      });
     }
 
     const xAxis = d3
@@ -586,7 +729,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .tickPadding(12)
       .tickFormat(d => {
         const dt = d as Date;
-        return labelByTime.get(dt.getTime()) ?? '';
+        return labelByTime.get(dt.getTime())?.label ?? '';
       });
 
     const xAxisGroup = rootGroup
@@ -600,56 +743,239 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .selectAll('text')
       .attr('fill', 'currentColor')
       .style('font-size', '11px')
-      .style('font-weight', '600');
+      .style('font-weight', d => {
+        const dt = d as Date;
+        return labelByTime.get(dt.getTime())?.isProjected ? '700' : '600';
+      })
+      .style('opacity', d => {
+        const dt = d as Date;
+        return labelByTime.get(dt.getTime())?.isProjected ? 0.72 : 1;
+      });
 
-    // Area Generator (gradient fill under curve)
-    const areaGenerator = d3
-      .area<ScopedChartNetWorthPoint>()
-      .x(d => xScale(d.date))
-      .y0(() => yScale(baselineValue))
-      .y1(d => yScale(d.totalNetWorthBRL))
-      .curve(d3.curveMonotoneX);
+    // =========================================================================
+    // EDGE CASE: SINGLE-POINT MILESTONE RENDERING (NO COLLAPSED AXIS / NO NaN)
+    // =========================================================================
+    if (histPoints.length === 1 && !effectiveStackedMode) {
+      const singlePt = histPoints[0];
+      const cx = xScale(singlePt.date);
+      const cy = yScale(singlePt.totalNetWorthBRL);
 
-    rootGroup
-      .append('path')
-      .datum(points)
-      .attr('class', 'd3-networth-area')
-      .attr('fill', `url(#${gradientId})`)
-      .attr('d', areaGenerator);
+      if (Number.isFinite(cx) && Number.isFinite(cy)) {
+        // Horizontal dashed reference line
+        rootGroup
+          .append('line')
+          .attr('class', 'd3-single-point-refline')
+          .attr('data-testid', 'd3-single-point-refline')
+          .attr('x1', 0)
+          .attr('x2', innerWidth)
+          .attr('y1', cy)
+          .attr('y2', cy)
+          .attr('stroke', strokeColor)
+          .attr('stroke-width', 1.5)
+          .attr('stroke-dasharray', '5,5')
+          .attr('stroke-opacity', 0.55);
 
-    // Line Generator (3px smooth curveMonotoneX)
-    const lineGenerator = d3
-      .line<ScopedChartNetWorthPoint>()
-      .x(d => xScale(d.date))
-      .y(d => yScale(d.totalNetWorthBRL))
-      .curve(d3.curveMonotoneX);
+        // Soft milestone halo
+        rootGroup
+          .append('circle')
+          .attr('cx', cx)
+          .attr('cy', cy)
+          .attr('r', 13)
+          .attr('fill', strokeColor)
+          .attr('fill-opacity', 0.16);
 
-    rootGroup
-      .append('path')
-      .datum(points)
-      .attr('class', 'd3-networth-line')
-      .attr('fill', 'none')
-      .attr('stroke', strokeColor)
-      .attr('stroke-width', 3)
-      .attr('stroke-linecap', 'round')
-      .attr('stroke-linejoin', 'round')
-      .attr('d', lineGenerator);
+        // Centered milestone dot
+        rootGroup
+          .append('circle')
+          .attr('class', 'd3-resting-dot d3-single-point-dot')
+          .attr('data-testid', 'd3-single-point-dot')
+          .attr('cx', cx)
+          .attr('cy', cy)
+          .attr('r', 6)
+          .attr('fill', strokeColor)
+          .attr('stroke', '#ffffff')
+          .attr('stroke-width', 2.5);
 
-    // Resting data vertex markers
-    rootGroup
-      .selectAll('.d3-resting-dot')
-      .data(points)
-      .enter()
-      .append('circle')
-      .attr('class', 'd3-resting-dot')
-      .attr('cx', d => xScale(d.date))
-      .attr('cy', d => yScale(d.totalNetWorthBRL))
-      .attr('r', 3.5)
-      .attr('fill', '#ffffff')
-      .attr('stroke', strokeColor)
-      .attr('stroke-width', 2);
+        // Milestone value label above dot
+        rootGroup
+          .append('text')
+          .attr('data-testid', 'd3-single-point-label')
+          .attr('x', cx)
+          .attr('y', Math.max(14, cy - 18))
+          .attr('text-anchor', 'middle')
+          .attr('fill', strokeColor)
+          .style('font-size', '11px')
+          .style('font-weight', '800')
+          .text(`${singlePt.monthLabel}: ${formatBRL(singlePt.totalNetWorthBRL)}`);
+      }
+    } else if (effectiveStackedMode) {
+      // =======================================================================
+      // STACKED AREA MODE (d3.stack: PF #6366f1, MEI #0ea5e9, Metas #8b5cf6)
+      // =======================================================================
+      const stackColorMap: Record<string, string> = {
+        pfBalance: '#6366f1',
+        meiBalance: '#0ea5e9',
+        goalsBalance: '#8b5cf6',
+      };
 
-    // Interactive Crosshair (dashed vertical guide line + outer glow ring + active dot)
+      const stackedAreaGen = d3
+        .area<d3.SeriesPoint<ScopedChartNetWorthPoint>>()
+        .x(d => xScale(d.data.date))
+        .y0(d => yScale(d[0]))
+        .y1(d => yScale(d[1]))
+        .curve(d3.curveMonotoneX);
+
+      const stackedTopLineGen = d3
+        .line<d3.SeriesPoint<ScopedChartNetWorthPoint>>()
+        .x(d => xScale(d.data.date))
+        .y(d => yScale(d[1]))
+        .curve(d3.curveMonotoneX);
+
+      for (const layer of stackedHistSeries) {
+        const layerKey = layer.key as StackedLayerKey;
+        const layerColor = stackColorMap[layerKey] || '#10b981';
+        const isDimmed = highlightedLayer !== null && highlightedLayer !== layerKey;
+
+        rootGroup
+          .append('path')
+          .datum(layer)
+          .attr('class', `d3-stacked-area d3-stacked-area-${layerKey}`)
+          .attr('data-testid', `d3-stacked-area-${layerKey}`)
+          .attr('fill', layerColor)
+          .attr('fill-opacity', isDimmed ? 0.12 : 0.42)
+          .attr('d', stackedAreaGen);
+
+        rootGroup
+          .append('path')
+          .datum(layer)
+          .attr('class', `d3-stacked-line d3-stacked-line-${layerKey}`)
+          .attr('fill', 'none')
+          .attr('stroke', layerColor)
+          .attr('stroke-width', isDimmed ? 1 : 2)
+          .attr('stroke-opacity', isDimmed ? 0.3 : 0.9)
+          .attr('d', stackedTopLineGen);
+      }
+
+      // Resting dots along total consolidated curve
+      rootGroup
+        .selectAll('.d3-resting-dot')
+        .data(histPoints)
+        .enter()
+        .append('circle')
+        .attr('class', 'd3-resting-dot')
+        .attr('cx', d => xScale(d.date))
+        .attr('cy', d => yScale(d.totalNetWorthBRL))
+        .attr('r', 3)
+        .attr('fill', '#ffffff')
+        .attr('stroke', '#10b981')
+        .attr('stroke-width', 2);
+    } else {
+      // =======================================================================
+      // SINGLE CURVE AREA + LINE MODE
+      // =======================================================================
+      const areaGenerator = d3
+        .area<ScopedChartNetWorthPoint>()
+        .x(d => xScale(d.date))
+        .y0(() => yScale(baselineValue))
+        .y1(d => yScale(d.totalNetWorthBRL))
+        .curve(d3.curveMonotoneX);
+
+      rootGroup
+        .append('path')
+        .datum(histPoints)
+        .attr('class', 'd3-networth-area')
+        .attr('fill', `url(#${gradientId})`)
+        .attr('d', areaGenerator);
+
+      const lineGenerator = d3
+        .line<ScopedChartNetWorthPoint>()
+        .x(d => xScale(d.date))
+        .y(d => yScale(d.totalNetWorthBRL))
+        .curve(d3.curveMonotoneX);
+
+      rootGroup
+        .append('path')
+        .datum(histPoints)
+        .attr('class', 'd3-networth-line')
+        .attr('fill', 'none')
+        .attr('stroke', strokeColor)
+        .attr('stroke-width', 3)
+        .attr('stroke-linecap', 'round')
+        .attr('stroke-linejoin', 'round')
+        .attr('d', lineGenerator);
+
+      rootGroup
+        .selectAll('.d3-resting-dot')
+        .data(histPoints)
+        .enter()
+        .append('circle')
+        .attr('class', 'd3-resting-dot')
+        .attr('cx', d => xScale(d.date))
+        .attr('cy', d => yScale(d.totalNetWorthBRL))
+        .attr('r', 3.5)
+        .attr('fill', '#ffffff')
+        .attr('stroke', strokeColor)
+        .attr('stroke-width', 2);
+    }
+
+    // =========================================================================
+    // 3-MONTH DASHED FUTURE PROJECTION LINE (Projetar +3M)
+    // =========================================================================
+    if (showProjection && projectionPoints.length > 0 && histPoints.length > 0) {
+      const projectionSegment = [histPoints[histPoints.length - 1], ...projectionPoints];
+
+      const projectionLineGen = d3
+        .line<ScopedChartNetWorthPoint>()
+        .x(d => xScale(d.date))
+        .y(d => yScale(d.totalNetWorthBRL))
+        .curve(d3.curveMonotoneX);
+
+      rootGroup
+        .append('path')
+        .datum(projectionSegment)
+        .attr('class', 'd3-networth-projection-line')
+        .attr('data-testid', 'd3-networth-projection-line')
+        .attr('fill', 'none')
+        .attr('stroke', strokeColor)
+        .attr('stroke-width', 2.5)
+        .attr('stroke-dasharray', '6,4')
+        .attr('opacity', 0.65)
+        .attr('d', projectionLineGen);
+
+      rootGroup
+        .selectAll('.d3-projection-dot')
+        .data(projectionPoints)
+        .enter()
+        .append('circle')
+        .attr('class', 'd3-projection-dot')
+        .attr('data-testid', 'd3-projection-dot')
+        .attr('cx', d => xScale(d.date))
+        .attr('cy', d => yScale(d.totalNetWorthBRL))
+        .attr('r', 4)
+        .attr('fill', '#ffffff')
+        .attr('stroke', strokeColor)
+        .attr('stroke-width', 2)
+        .attr('stroke-dasharray', '2,2')
+        .attr('opacity', 0.75);
+
+      const finalProj = projectionPoints[projectionPoints.length - 1];
+      const finalX = xScale(finalProj.date);
+      const finalY = yScale(finalProj.totalNetWorthBRL);
+      if (Number.isFinite(finalX) && Number.isFinite(finalY)) {
+        rootGroup
+          .append('text')
+          .attr('x', Math.min(innerWidth, finalX))
+          .attr('y', Math.max(12, finalY - 12))
+          .attr('text-anchor', 'end')
+          .attr('fill', strokeColor)
+          .attr('opacity', 0.85)
+          .style('font-size', '10px')
+          .style('font-weight', '800')
+          .text(`+3M: ${formatCompactAxisBRL(finalProj.totalNetWorthBRL)}`);
+      }
+    }
+
+    // Interactive Crosshair (spans historical + projected points seamlessly)
     const crosshairGroup = rootGroup
       .append('g')
       .attr('class', 'focus-group d3-crosshair-group')
@@ -679,7 +1005,6 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       .attr('stroke', '#ffffff')
       .attr('stroke-width', 2);
 
-    // Bisector for smooth mouse/touch snapping to nearest month
     const bisectDate = d3.bisector<ScopedChartNetWorthPoint, Date>(d => d.date).left;
 
     const handlePointerMove = (event: MouseEvent | TouchEvent) => {
@@ -688,12 +1013,12 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
       const xDate = xScale.invert(clampedX);
 
       let nearestPoint: ScopedChartNetWorthPoint;
-      if (points.length === 1) {
-        nearestPoint = points[0];
+      if (allPlotPoints.length === 1) {
+        nearestPoint = allPlotPoints[0];
       } else {
-        const idx = bisectDate(points, xDate, 1);
-        const d0 = points[Math.max(0, idx - 1)];
-        const d1 = points[Math.min(points.length - 1, idx)];
+        const idx = bisectDate(allPlotPoints, xDate, 1);
+        const d0 = allPlotPoints[Math.max(0, idx - 1)];
+        const d1 = allPlotPoints[Math.min(allPlotPoints.length - 1, idx)];
         nearestPoint =
           xDate.getTime() - d0.date.getTime() > d1.date.getTime() - xDate.getTime()
             ? d1
@@ -702,6 +1027,8 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
 
       const targetX = xScale(nearestPoint.date);
       const targetY = yScale(nearestPoint.totalNetWorthBRL);
+
+      if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) return;
 
       crosshairGroup.style('display', null);
       crosshairLine.attr('x1', targetX).attr('x2', targetX);
@@ -738,14 +1065,25 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
         .on('touchmove', event => handlePointerMove(event as TouchEvent))
         .on('mouseleave', handlePointerLeave);
     }
-  }, [containerWidth, scopedSeries, activeHexColor, scopeMeta.label, gradientId]);
+  }, [
+    containerWidth,
+    scopedSeries,
+    combinedSeries,
+    projectionPoints,
+    effectiveStackedMode,
+    showProjection,
+    highlightedLayer,
+    activeHexColor,
+    scopeMeta.label,
+    gradientId,
+  ]);
 
   const isPositive = kpis.isPositive;
   const growthSign = kpis.periodGrowthBRL > 0 ? '+' : '';
   const growthPctFormatted = formatPct(kpis.periodGrowthPct);
   const avgSign = kpis.monthlyAvgEvolutionBRL > 0 ? '+' : '';
 
-  // Compute safe edge-aware floating HTML tooltip coordinates (flips left when xPx > 65% width)
+  // Compute safe edge-aware floating HTML tooltip coordinates
   const tooltipStyle = useMemo(() => {
     if (!hoveredInfo) return undefined;
     const tooltipWidth = hoveredInfo.containerWidth < 400 ? 236 : 276;
@@ -809,7 +1147,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
           </p>
         </div>
 
-        {/* Filter Controls: Layer Scope Pills + Timeframe Filter */}
+        {/* Filter Controls: Layer Scope Pills + View Mode / Projection + Timeframe Filter */}
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto xl:justify-end">
           {/* 4-Button Layer Scope Selector */}
           <div
@@ -841,6 +1179,59 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
               );
             })}
           </div>
+
+          {/* Stacked Area & +3M Projection Controls when activeScope === 'CONSOLIDATED' */}
+          {activeScope === 'CONSOLIDATED' && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div
+                className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl"
+                role="group"
+                aria-label="Modo de visualização do gráfico"
+              >
+                <button
+                  type="button"
+                  onClick={() => setChartViewMode('line')}
+                  aria-pressed={chartViewMode === 'line'}
+                  data-testid="btn-networth-mode-line"
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                    chartViewMode === 'line'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                  }`}
+                >
+                  Curva Única
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartViewMode('stacked')}
+                  aria-pressed={chartViewMode === 'stacked'}
+                  data-testid="btn-networth-mode-stacked"
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                    chartViewMode === 'stacked'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                  }`}
+                >
+                  Camadas Empilhadas
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowProjection(prev => !prev)}
+                aria-pressed={showProjection}
+                data-testid="btn-networth-project-3m"
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer whitespace-nowrap ${
+                  showProjection
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Projetar +3M</span>
+              </button>
+            </div>
+          )}
 
           {/* Period Filter Buttons (3M, 6M, 12M, Tudo) */}
           <div
@@ -874,7 +1265,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
 
       {/* Top 3 KPI Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {/* KPI 1: Adaptive Title & Scoped Breakdown */}
+        {/* KPI 1 */}
         <div
           className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col justify-between gap-2.5"
           data-testid="kpi-networth-current"
@@ -957,7 +1348,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
           </div>
         </div>
 
-        {/* KPI 2: Crescimento no Período */}
+        {/* KPI 2 */}
         <div
           className={`p-4 rounded-2xl border flex flex-col justify-between gap-2 ${
             isPositive
@@ -1013,7 +1404,7 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
           </p>
         </div>
 
-        {/* KPI 3: Média de Evolução Mensal */}
+        {/* KPI 3 */}
         <div
           className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col justify-between gap-2"
           data-testid="kpi-networth-avg"
@@ -1032,99 +1423,182 @@ export const MonthlyNetWorthD3Chart: React.FC<MonthlyNetWorthD3ChartProps> = ({
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
             Em {kpis.analyzedMonths}{' '}
             {kpis.analyzedMonths === 1 ? 'mês analisado' : 'meses analisados'}
+            {showProjection && projectionPoints.length > 0 && (
+              <span className="ml-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                • Projeção +3M: {formatBRL(projectionPoints[projectionPoints.length - 1].totalNetWorthBRL)}
+              </span>
+            )}
           </p>
         </div>
       </div>
 
-      {/* Responsive D3 Chart Canvas + Floating HTML Tooltip */}
-      <div
-        ref={containerRef}
-        className="relative w-full select-none pt-1"
-        data-testid="d3-networth-chart-container"
-      >
-        <svg
-          ref={svgRef}
-          className="block w-full overflow-visible"
-          data-testid="d3-networth-svg"
-        />
-
-        {hoveredInfo && tooltipStyle && (
-          <div
-            role="status"
-            data-testid="d3-networth-tooltip"
-            style={tooltipStyle}
-            className="pointer-events-none absolute z-20 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-xl p-3.5 text-xs space-y-2 transition-all duration-75"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
-              <span className="font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5" style={{ color: activeHexColor }} />
-                {hoveredInfo.point.fullMonthLabel}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block">
-                {scopeMeta.tooltipTitle}
-              </span>
-              <span className="text-base font-black text-slate-900 dark:text-white tabular-nums">
-                {formatBRL(hoveredInfo.point.totalNetWorthBRL)}
-              </span>
-            </div>
-
-            <div className="pt-1.5 text-[10px] text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-slate-800 space-y-1 tabular-nums">
-              {activeScope === 'CONSOLIDATED' ? (
-                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
-                  <span>
-                    PF: <strong>{formatBRL(hoveredInfo.point.pfBalance)}</strong>
-                  </span>
-                  <span className="text-slate-400">•</span>
-                  <span>
-                    MEI: <strong>{formatBRL(hoveredInfo.point.meiBalance)}</strong>
-                  </span>
-                  <span className="text-slate-400">•</span>
-                  <span>
-                    Metas: <strong>{formatBRL(hoveredInfo.point.goalsBalance)}</strong>
-                  </span>
-                </div>
-              ) : (
-                <div className="text-[11px] leading-snug">
-                  {hoveredInfo.point.totalNetWorthBRL < 0 ? 'Impacto' : 'Participação'} no
-                  consolidado do mês:{' '}
-                  <strong className="text-slate-900 dark:text-white">
-                    {formatSharePct(hoveredInfo.point.scopeSharePct)}
-                  </strong>{' '}
-                  <span className="text-slate-400">
-                    (Total: {formatBRL(hoveredInfo.point.consolidatedTotalNetWorthBRL)})
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800">
-              {hoveredInfo.point.index === 0 && hoveredInfo.point.monthlyDeltaBRL === 0 ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                  Início da série
-                </span>
-              ) : (
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-black tabular-nums ${
-                    hoveredInfo.point.monthlyDeltaBRL >= 0
-                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
-                  }`}
-                >
-                  {hoveredInfo.point.monthlyDeltaBRL >= 0 ? '▲ +' : '▼ -'}
-                  {formatBRL(Math.abs(hoveredInfo.point.monthlyDeltaBRL))} (
-                  {formatPct(hoveredInfo.point.monthlyDeltaPct)}) vs. mês anterior
-                </span>
-              )}
-            </div>
+      {/* 0-POINT EMPTY STATE vs RESPONSIVE D3 CHART */}
+      {scopedSeries.length === 0 ? (
+        <div
+          className="p-8 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-center space-y-2.5"
+          data-testid="d3-networth-empty-state"
+        >
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+            <BarChart3 className="w-6 h-6" />
           </div>
-        )}
-      </div>
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+            Nenhum histórico patrimonial registrado para o período selecionado
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+            Registre receitas, reservas MEI ou aportes em metas financeiras para acompanhar a evolução patrimonial mensal em tempo real.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {/* Interactive Stacked Legend & Projection Tag */}
+          {(effectiveStackedMode || showProjection) && (
+            <div
+              className="flex flex-wrap items-center justify-between gap-2 text-[11px] px-1"
+              data-testid="d3-networth-legend"
+            >
+              {effectiveStackedMode ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  {STACKED_LAYERS.map(layer => {
+                    const isActive = highlightedLayer === layer.key;
+                    return (
+                      <button
+                        key={layer.key}
+                        type="button"
+                        onClick={() =>
+                          setHighlightedLayer(prev => (prev === layer.key ? null : layer.key))
+                        }
+                        onMouseEnter={() => setHighlightedLayer(layer.key)}
+                        onMouseLeave={() => setHighlightedLayer(null)}
+                        data-testid={`legend-layer-${layer.key}`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-bold transition cursor-pointer ${
+                          isActive
+                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent'
+                            : 'bg-slate-50 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: layer.color }}
+                        />
+                        <span>{layer.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div />
+              )}
+
+              {showProjection && (
+                <div className="inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-semibold">
+                  <span
+                    className="w-4 border-t-2 border-dashed inline-block"
+                    style={{ borderColor: activeHexColor }}
+                  />
+                  <span>*Linha tracejada = Projeção linear (+3M)</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Responsive D3 Chart Canvas + Floating HTML Tooltip */}
+          <div
+            ref={containerRef}
+            className="relative w-full select-none pt-1"
+            data-testid="d3-networth-chart-container"
+          >
+            <svg
+              ref={svgRef}
+              className="block w-full overflow-visible"
+              data-testid="d3-networth-svg"
+            />
+
+            {hoveredInfo && tooltipStyle && (
+              <div
+                role="status"
+                data-testid="d3-networth-tooltip"
+                style={tooltipStyle}
+                className="pointer-events-none absolute z-20 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-xl p-3.5 text-xs space-y-2 transition-all duration-75"
+              >
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5 gap-2">
+                  <span className="font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5" style={{ color: activeHexColor }} />
+                    {hoveredInfo.point.fullMonthLabel}
+                  </span>
+                  {hoveredInfo.point.isProjected && (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
+                      Projeção
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block">
+                    {hoveredInfo.point.isProjected
+                      ? `${scopeMeta.tooltipTitle} (Estimado)`
+                      : scopeMeta.tooltipTitle}
+                  </span>
+                  <span className="text-base font-black text-slate-900 dark:text-white tabular-nums">
+                    {formatBRL(hoveredInfo.point.totalNetWorthBRL)}
+                  </span>
+                </div>
+
+                <div className="pt-1.5 text-[10px] text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-slate-800 space-y-1 tabular-nums">
+                  {activeScope === 'CONSOLIDATED' ? (
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
+                      <span>
+                        PF: <strong>{formatBRL(hoveredInfo.point.pfBalance)}</strong>
+                      </span>
+                      <span className="text-slate-400">•</span>
+                      <span>
+                        MEI: <strong>{formatBRL(hoveredInfo.point.meiBalance)}</strong>
+                      </span>
+                      <span className="text-slate-400">•</span>
+                      <span>
+                        Metas: <strong>{formatBRL(hoveredInfo.point.goalsBalance)}</strong>
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] leading-snug">
+                      {hoveredInfo.point.totalNetWorthBRL < 0 ? 'Impacto' : 'Participação'} no
+                      consolidado do mês:{' '}
+                      <strong className="text-slate-900 dark:text-white">
+                        {formatSharePct(hoveredInfo.point.scopeSharePct)}
+                      </strong>{' '}
+                      <span className="text-slate-400">
+                        (Total: {formatBRL(hoveredInfo.point.consolidatedTotalNetWorthBRL)})
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                  {hoveredInfo.point.index === 0 && hoveredInfo.point.monthlyDeltaBRL === 0 ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                      {scopedSeries.length === 1 ? 'Marco único registrado' : 'Início da série'}
+                    </span>
+                  ) : (
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-black tabular-nums ${
+                        hoveredInfo.point.monthlyDeltaBRL >= 0
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                      }`}
+                    >
+                      {hoveredInfo.point.monthlyDeltaBRL >= 0 ? '▲ +' : '▼ -'}
+                      {formatBRL(Math.abs(hoveredInfo.point.monthlyDeltaBRL))} (
+                      {formatPct(hoveredInfo.point.monthlyDeltaPct)}) vs. mês anterior
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Dynamic Footer Insight Highlighting Best Growth Month */}
-      {bestMonthDisplay && (
+      {bestMonthDisplay && scopedSeries.length > 0 && (
         <div
           className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
           data-testid="d3-networth-footer-insight"

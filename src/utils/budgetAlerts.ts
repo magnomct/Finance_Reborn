@@ -1,5 +1,6 @@
 import { Transaction, JarType, JarBudgetAlert, BudgetAlertStatus, JarSavingsProgress } from '../types';
 import { JAR_DEFINITIONS } from '../data/initialData';
+import { DEFAULT_BASE_MONTHLY_INCOME } from './baseIncomeConfig';
 
 export const DEFAULT_JAR_LIMITS: Record<JarType, number> = {
   NEC_55: 2000,
@@ -150,7 +151,7 @@ export function calculateJarBudgetAlerts(
  * Recommends limits for all jars based on the user's monthly income
  */
 export function suggestLimitsFromIncome(effectiveIncomeBase: number): Record<JarType, number> {
-  const base = effectiveIncomeBase > 0 ? effectiveIncomeBase : 3652.31;
+  const base = effectiveIncomeBase > 0 ? effectiveIncomeBase : DEFAULT_BASE_MONTHLY_INCOME;
   return {
     NEC_55: Math.round(base * 0.55),
     DIV_10: Math.round(base * 0.10),
@@ -166,7 +167,7 @@ export function suggestLimitsFromIncome(effectiveIncomeBase: number): Record<Jar
  * Recommends custom savings targets for each jar based on the user's monthly income
  */
 export function suggestSavingsTargetsFromIncome(effectiveIncomeBase: number): Record<JarType, number> {
-  const base = effectiveIncomeBase > 0 ? effectiveIncomeBase : 3652.31;
+  const base = effectiveIncomeBase > 0 ? effectiveIncomeBase : DEFAULT_BASE_MONTHLY_INCOME;
   return {
     NEC_55: Math.round(base * 0.05), // 5% de margem residual em necessidades
     DIV_10: Math.round(base * 0.03), // 3% de poupança em diversão

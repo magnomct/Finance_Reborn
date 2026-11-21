@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { DreamGoal, DreamPriority, Transaction, DreamSortOption, RecurringExpense, JarType } from '../types';
 import { formatBRL } from '../utils/finance';
+import { DEFAULT_BASE_MONTHLY_INCOME } from '../utils/baseIncomeConfig';
 import { DreamDepositChecklist } from './DreamDepositChecklist';
 import { DreamsDonutChart } from './DreamsDonutChart';
 import { DeadlineSimulatorModal } from './DeadlineSimulatorModal';
@@ -89,7 +90,7 @@ export const SonhosView: React.FC<SonhosViewProps> = ({
   transactions = [],
   jarSavingsTargets,
   onSaveSavingsTargets,
-  effectiveIncomeBase = 3652.31,
+  effectiveIncomeBase = DEFAULT_BASE_MONTHLY_INCOME,
   jarLimits
 }) => {
   const [selectedDreamForDeposit, setSelectedDreamForDeposit] = useState<DreamGoal | null>(null);

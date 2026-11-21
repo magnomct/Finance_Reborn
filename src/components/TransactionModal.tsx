@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Sparkles, Check, Edit3, Trash2, ArrowDownLeft, ArrowUpRight, AlertCircle, Bell, Clock, Plus, Building2 } from 'lucide-react';
 import { Transaction, JarType, CostCenter, AccountType, AutoCategoryRule, ParentCategoryItem } from '../types';
-import { applyAutoRules } from '../utils/finance';
+import { applyAutoRules, suggestCategoryFromHistory } from '../utils/finance';
 import { validateTransactionInput, normalizeTransactionData } from '../utils/transactionEditor';
 import { getReminderPresetLabel } from '../utils/reminders';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
@@ -19,6 +19,7 @@ export interface TransactionModalProps {
   defaultDate?: string;
   defaultScope?: 'PF' | 'PJ' | 'CONSOLIDADO';
   hierarchy?: ParentCategoryItem[];
+  transactions?: Transaction[];
 }
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
@@ -31,7 +32,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   autoRules,
   defaultDate = '2026-10-27',
   defaultScope = 'PF',
-  hierarchy = []
+  hierarchy = [],
+  transactions = []
 }) => {
   const isOnline = useOnlineStatus();
   const isEditing = Boolean(transactionToEdit);
@@ -56,10 +58,55 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [matchedRule, setMatchedRule] = useState<Partial<Transaction> | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [userManuallyPickedCategory, setUserManuallyPickedCategory] = useState(false);
+  const [suggestionAppliedBadge, setSuggestionAppliedBadge] = useState(false);
 
   const availableAccounts = useMemo(() => {
     return getAllAvailableAccounts(customAccountsList);
   }, [customAccountsList]);
+
+  const { hierarchyCategories, historicalOnlyCategories, availableCategories } = useMemo(() => {
+    const hSet = new Set<string>();
+    const hList: string[] = [];
+    (hierarchy || []).forEach(parent => {
+      (parent.subcategories || []).forEach(sub => {
+        const formatted = `${parent.name} > ${sub.name}`;
+        if (!hSet.has(formatted)) {
+          hSet.add(formatted);
+          hList.push(formatted);
+        }
+      });
+    });
+
+    const histSet = new Set<string>();
+    const histList: string[] = [];
+    (transactions || []).forEach(tx => {
+      const cat = (tx.category || '').trim();
+      if (cat && cat !== 'Geral' && !hSet.has(cat) && !histSet.has(cat)) {
+        histSet.add(cat);
+        histList.push(cat);
+      }
+    });
+
+    return {
+      hierarchyCategories: hList,
+      historicalOnlyCategories: histList,
+      availableCategories: ['Geral', ...hList, ...histList],
+    };
+  }, [hierarchy, transactions]);
+
+  const historySuggestion = useMemo(() => {
+    if (isEditing) return null;
+    const derivedScope: 'PF' | 'PJ' =
+      costCenter === 'PJ' || jar === 'PJ_EXCLUIDO' ? 'PJ' : 'PF';
+    return suggestCategoryFromHistory({
+      description: desc,
+      type,
+      scope: derivedScope,
+      transactions,
+      availableCategories,
+    });
+  }, [isEditing, desc, type, costCenter, jar, transactions, availableCategories]);
 
   const handleAddCustomAccount = () => {
     const trimmed = newCustomAccountName.trim();
@@ -96,6 +143,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             : ''
         );
         setMatchedRule(null);
+        setUserManuallyPickedCategory(false);
+        setSuggestionAppliedBadge(false);
       } else {
         setDesc('');
         setAmount('');
@@ -112,6 +161,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         setCustomDays('');
         setMatchedRule(null);
         setCustomCategoryMode(false);
+        setUserManuallyPickedCategory(false);
+        setSuggestionAppliedBadge(false);
       }
     }
   }, [isOpen, transactionToEdit, defaultDate, defaultScope]);
@@ -135,8 +186,19 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       if (matchedRule.jar) setJar(matchedRule.jar);
       if (matchedRule.account) setAccount(matchedRule.account);
       if (matchedRule.costCenter) setCostCenter(matchedRule.costCenter);
-      if (matchedRule.category) setCategory(matchedRule.category);
+      if (matchedRule.category) {
+        setCategory(matchedRule.category);
+        setSuggestionAppliedBadge(false);
+      }
     }
+  };
+
+  const applyHistorySuggestion = () => {
+    if (!historySuggestion) return;
+    setCategory(historySuggestion.category);
+    setCustomCategoryMode(false);
+    setUserManuallyPickedCategory(false);
+    setSuggestionAppliedBadge(true);
   };
 
   if (!isOpen) return null;
@@ -520,6 +582,44 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               )}
             </div>
 
+            {/* Sugestão Inteligente Baseada no Histórico */}
+            {historySuggestion && !isEditing && (
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={applyHistorySuggestion}
+                  data-testid="btn-category-history-suggestion"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold transition cursor-pointer ${
+                    category === historySuggestion.category && suggestionAppliedBadge
+                      ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                      : historySuggestion.confidence === 'high'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100/80'
+                      : 'bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100/80'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    Sugestão: {historySuggestion.category} ({historySuggestion.matchCount}x no histórico)
+                  </span>
+                </button>
+                {category === historySuggestion.category && suggestionAppliedBadge ? (
+                  <span
+                    data-testid="badge-category-suggestion-applied"
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400"
+                  >
+                    <Check className="w-3 h-3" />
+                    <span>Aplicada</span>
+                  </span>
+                ) : (
+                  userManuallyPickedCategory && (
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      Escolha manual mantida
+                    </span>
+                  )
+                )}
+              </div>
+            )}
+
             {!customCategoryMode && hierarchy && hierarchy.length > 0 ? (
               <select
                 value={category}
@@ -528,6 +628,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     setCustomCategoryMode(true);
                   } else {
                     setCategory(e.target.value);
+                    setUserManuallyPickedCategory(true);
+                    setSuggestionAppliedBadge(false);
                   }
                 }}
                 className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
@@ -554,6 +656,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     </optgroup>
                   );
                 })}
+                {historicalOnlyCategories.length > 0 && (
+                  <optgroup label="Categorias do Histórico">
+                    {historicalOnlyCategories.map(histCat => (
+                      <option key={`hist-${histCat}`} value={histCat}>
+                        {histCat}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
                 <option value="__CUSTOM__">➕ Digitar outra categoria personalizada...</option>
               </select>
             ) : (
@@ -561,7 +672,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 type="text"
                 placeholder="Ex: Alimentação > Delivery, Moradia > Aluguel"
                 value={category}
-                onChange={e => setCategory(e.target.value)}
+                onChange={e => {
+                  setCategory(e.target.value);
+                  setUserManuallyPickedCategory(true);
+                  setSuggestionAppliedBadge(false);
+                }}
                 className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 data-testid="input-transaction-category"
               />

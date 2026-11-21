@@ -858,3 +858,543 @@ export function buildHistoricalNetWorthSeries(
 
   return realSeries;
 }
+
+// ============================================================================
+// PJ / MEI STRATEGIC FISCAL HELPERS
+// ============================================================================
+
+export const MEI_ANNUAL_CAP_BRL = 81000;
+export const FATOR_R_THRESHOLD_PCT = 28;
+export const INSS_PRO_LABORE_RATE = 0.11;
+
+export type FatorRStatus = 'ANEXO_III_OTIMIZADO' | 'ATENCAO_ANEXO_V';
+export type MEICapAlertLevel = 'SAFE' | 'WARNING_80' | 'EXCEEDED_100';
+
+export interface PJFiscalMetricsInput {
+  grossRevenue12m: number;
+  monthlyGrossRevenue: number;
+  monthlyExpenses: number;
+  payroll12m: number;
+  dasReserveBalance: number;
+  monthlyDASProvision?: number;
+  targetProLabore?: number;
+}
+
+export interface PJFiscalMetricsResult {
+  grossRevenue12m: number;
+  monthlyGrossRevenue: number;
+  monthlyExpenses: number;
+  payroll12m: number;
+  dasReserveBalance: number;
+  monthlyDASProvision: number;
+  fatorRPercent: number;
+  fatorRProgressPct: number;
+  fatorRStatus: FatorRStatus;
+  fatorRStatusLabel: string;
+  isAnexoIIIOptimized: boolean;
+  payrollNeededFor28Pct12m: number;
+  payrollGap12m: number;
+  meiAnnualCapBRL: number;
+  meiCapUsagePct: number;
+  meiCapBarPct: number;
+  meiRemainingCapBRL: number;
+  meiCapAlertLevel: MEICapAlertLevel;
+  meiCapAlertLabel: string;
+  netMonthlyProfitBRL: number;
+  proLaboreGrossBRL: number;
+  proLaboreINSSBRL: number;
+  proLaboreNetBRL: number;
+  exemptProfitDistributionBRL: number;
+  dasMonthsCovered: number;
+  dasReserveDeficitBRL: number;
+  isDasReserveHealthy: boolean;
+}
+
+function roundFinance2(val: number): number {
+  if (!Number.isFinite(val)) return 0;
+  return Math.round((val + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Computes strategic PJ/MEI fiscal KPIs:
+ * - Fator R (12m payroll / 12m gross revenue) & Anexo III (>= 28%) optimization check
+ * - MEI R$ 81.000,00 annual ceiling progress & 80% / 100% alert badges
+ * - Monthly withdrawal split: Pró-Labore (11% INSS) vs. Distribuição de Lucros Isentos
+ * - Virtual DAS obligation reserve coverage
+ */
+export function calculatePJFiscalMetrics(
+  input: PJFiscalMetricsInput
+): PJFiscalMetricsResult {
+  const grossRevenue12m = Math.max(0, Number.isFinite(input.grossRevenue12m) ? input.grossRevenue12m : 0);
+  const monthlyGrossRevenue = Math.max(0, Number.isFinite(input.monthlyGrossRevenue) ? input.monthlyGrossRevenue : 0);
+  const monthlyExpenses = Math.max(0, Number.isFinite(input.monthlyExpenses) ? input.monthlyExpenses : 0);
+  const payroll12m = Math.max(0, Number.isFinite(input.payroll12m) ? input.payroll12m : 0);
+  const dasReserveBalance = Math.max(0, Number.isFinite(input.dasReserveBalance) ? input.dasReserveBalance : 0);
+  const monthlyDASProvision = Math.max(
+    0,
+    input.monthlyDASProvision !== undefined && Number.isFinite(input.monthlyDASProvision)
+      ? input.monthlyDASProvision
+      : 75.9
+  );
+
+  // 1. Fator R (12M)
+  const fatorRPercent = roundFinance2((payroll12m / Math.max(1, grossRevenue12m)) * 100);
+  const isAnexoIIIOptimized = grossRevenue12m > 0 ? fatorRPercent >= FATOR_R_THRESHOLD_PCT : false;
+  const fatorRStatus: FatorRStatus = isAnexoIIIOptimized
+    ? 'ANEXO_III_OTIMIZADO'
+    : 'ATENCAO_ANEXO_V';
+  const fatorRStatusLabel = isAnexoIIIOptimized
+    ? 'Anexo III Otimizado (≥ 28%)'
+    : 'Atenção: Abaixo de 28% (Anexo V)';
+  const fatorRProgressPct = roundFinance2(Math.min(100, Math.max(0, fatorRPercent)));
+  const payrollNeededFor28Pct12m = roundFinance2(grossRevenue12m * 0.28);
+  const payrollGap12m = roundFinance2(Math.max(0, payrollNeededFor28Pct12m - payroll12m));
+
+  // 2. MEI Annual Cap (R$ 81.000,00)
+  const meiCapUsagePct = roundFinance2((grossRevenue12m / MEI_ANNUAL_CAP_BRL) * 100);
+  const meiCapBarPct = roundFinance2(Math.min(100, Math.max(0, meiCapUsagePct)));
+  const meiRemainingCapBRL = roundFinance2(Math.max(0, MEI_ANNUAL_CAP_BRL - grossRevenue12m));
+
+  let meiCapAlertLevel: MEICapAlertLevel = 'SAFE';
+  let meiCapAlertLabel = 'Dentro do Teto MEI';
+  if (meiCapUsagePct >= 100) {
+    meiCapAlertLevel = 'EXCEEDED_100';
+    meiCapAlertLabel = 'Teto MEI Excedido (≥ 100%)';
+  } else if (meiCapUsagePct >= 80) {
+    meiCapAlertLevel = 'WARNING_80';
+    meiCapAlertLabel = 'Atenção: ≥ 80% do Teto MEI';
+  }
+
+  // 3. Withdrawal Split (Pró-Labore vs Lucro Isento)
+  const netMonthlyProfitBRL = roundFinance2(
+    Math.max(0, monthlyGrossRevenue - monthlyExpenses - monthlyDASProvision)
+  );
+
+  const defaultProLabore =
+    netMonthlyProfitBRL > 0
+      ? Math.min(netMonthlyProfitBRL, roundFinance2(monthlyGrossRevenue * 0.28))
+      : 0;
+  const requestedProLabore =
+    input.targetProLabore !== undefined && Number.isFinite(input.targetProLabore)
+      ? Math.max(0, input.targetProLabore)
+      : defaultProLabore;
+
+  const proLaboreGrossBRL = roundFinance2(Math.min(netMonthlyProfitBRL, requestedProLabore));
+  const proLaboreINSSBRL = roundFinance2(proLaboreGrossBRL * INSS_PRO_LABORE_RATE);
+  const proLaboreNetBRL = roundFinance2(Math.max(0, proLaboreGrossBRL - proLaboreINSSBRL));
+  const exemptProfitDistributionBRL = roundFinance2(
+    Math.max(0, netMonthlyProfitBRL - proLaboreGrossBRL)
+  );
+
+  // 4. Virtual DAS Reserve Status
+  const dasMonthsCovered =
+    monthlyDASProvision > 0
+      ? roundFinance2(dasReserveBalance / monthlyDASProvision)
+      : dasReserveBalance > 0
+        ? 12
+        : 0;
+  const dasReserveDeficitBRL = roundFinance2(Math.max(0, monthlyDASProvision - dasReserveBalance));
+  const isDasReserveHealthy = dasReserveBalance >= monthlyDASProvision;
+
+  return {
+    grossRevenue12m: roundFinance2(grossRevenue12m),
+    monthlyGrossRevenue: roundFinance2(monthlyGrossRevenue),
+    monthlyExpenses: roundFinance2(monthlyExpenses),
+    payroll12m: roundFinance2(payroll12m),
+    dasReserveBalance: roundFinance2(dasReserveBalance),
+    monthlyDASProvision: roundFinance2(monthlyDASProvision),
+    fatorRPercent,
+    fatorRProgressPct,
+    fatorRStatus,
+    fatorRStatusLabel,
+    isAnexoIIIOptimized,
+    payrollNeededFor28Pct12m,
+    payrollGap12m,
+    meiAnnualCapBRL: MEI_ANNUAL_CAP_BRL,
+    meiCapUsagePct,
+    meiCapBarPct,
+    meiRemainingCapBRL,
+    meiCapAlertLevel,
+    meiCapAlertLabel,
+    netMonthlyProfitBRL,
+    proLaboreGrossBRL,
+    proLaboreINSSBRL,
+    proLaboreNetBRL,
+    exemptProfitDistributionBRL,
+    dasMonthsCovered,
+    dasReserveDeficitBRL,
+    isDasReserveHealthy,
+  };
+}
+
+// ============================================================================
+// HISTORY-BASED SMART CATEGORY SUGGESTION ENGINE
+// ============================================================================
+
+const PT_BR_STOPWORDS = new Set([
+  'de', 'da', 'do', 'dos', 'das',
+  'em', 'no', 'na', 'nos', 'nas',
+  'para', 'por', 'com', 'sem',
+  'o', 'a', 'os', 'as', 'e',
+  'um', 'uma', 'uns', 'umas',
+  'ao', 'aos', 'a', 'as',
+]);
+
+export interface SuggestCategoryInput {
+  description: string;
+  type: 'receita' | 'despesa' | 'reembolso' | 'income' | 'expense' | string;
+  scope?: 'PF' | 'PJ' | 'MEI' | string;
+  transactions: Array<
+    Pick<Transaction, 'description' | 'category' | 'type' | 'costCenter' | 'jar' | 'date'> & {
+      scope?: string;
+    }
+  >;
+  availableCategories: string[];
+}
+
+export interface CategorySuggestionResult {
+  category: string;
+  confidence: 'high' | 'medium';
+  matchCount: number;
+}
+
+export function normalizePtBrText(raw: string): string {
+  return raw
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenizeMeaningfulPtBr(normalized: string): string[] {
+  if (!normalized) return [];
+  return normalized
+    .split(' ')
+    .filter(token => token.length >= 2 && !PT_BR_STOPWORDS.has(token));
+}
+
+function normalizeTransactionKind(t: string): 'income' | 'expense' | 'refund' {
+  const lower = (t || '').toLowerCase();
+  if (lower === 'receita' || lower === 'income') return 'income';
+  if (lower === 'reembolso' || lower === 'refund') return 'refund';
+  return 'expense';
+}
+
+function normalizeScopeKind(scope?: string, costCenter?: string, jar?: string): 'PJ' | 'PF' {
+  const s = (scope || '').toUpperCase();
+  if (s === 'PJ' || s === 'MEI') return 'PJ';
+  if (costCenter === 'PJ' || jar === 'PJ_EXCLUIDO') return 'PJ';
+  return 'PF';
+}
+
+/**
+ * Analyzes saved transactions to suggest the best matching category as the user types.
+ */
+export function suggestCategoryFromHistory(
+  input: SuggestCategoryInput
+): CategorySuggestionResult | null {
+  const rawDesc = (input.description || '').trim();
+  if (rawDesc.length < 3) return null;
+  if (!Array.isArray(input.transactions) || input.transactions.length === 0) return null;
+  if (!Array.isArray(input.availableCategories) || input.availableCategories.length === 0) return null;
+
+  const inputNorm = normalizePtBrText(rawDesc);
+  if (inputNorm.length < 3) return null;
+
+  const inputTokens = tokenizeMeaningfulPtBr(inputNorm);
+  const inputCompact = inputTokens.join(' ') || inputNorm;
+  if (inputCompact.length < 2) return null;
+
+  const targetKind = normalizeTransactionKind(input.type);
+  const targetScope = input.scope ? normalizeScopeKind(input.scope, input.scope) : null;
+
+  // Map normalized available categories -> canonical category name
+  const availableMap = new Map<string, string>();
+  for (const cat of input.availableCategories) {
+    if (typeof cat === 'string' && cat.trim()) {
+      availableMap.set(normalizePtBrText(cat), cat);
+    }
+  }
+
+  interface CategoryCandidateScore {
+    category: string;
+    totalScore: number;
+    maxSingleScore: number;
+    matchCount: number;
+    latestDate: string;
+  }
+
+  const candidates = new Map<string, CategoryCandidateScore>();
+
+  for (const tx of input.transactions) {
+    const txDesc = (tx.description || '').trim();
+    if (txDesc.length < 3) continue;
+
+    const txCatRaw = (tx.category || '').trim();
+    if (!txCatRaw || txCatRaw.toLowerCase() === 'geral') continue;
+
+    // Must match one of availableCategories
+    const canonicalCat = availableMap.get(normalizePtBrText(txCatRaw));
+    if (!canonicalCat) continue;
+
+    // Filter by matching transaction kind
+    const txKind = normalizeTransactionKind(tx.type);
+    if (txKind !== targetKind) continue;
+
+    // Filter by matching scope if provided
+    if (targetScope) {
+      const txScope = normalizeScopeKind(tx.scope, tx.costCenter, tx.jar);
+      if (txScope !== targetScope) continue;
+    }
+
+    const histNorm = normalizePtBrText(txDesc);
+    if (histNorm.length < 3) continue;
+    const histTokens = tokenizeMeaningfulPtBr(histNorm);
+    const histCompact = histTokens.join(' ') || histNorm;
+
+    let score = 0;
+
+    // 1. Exact or strong substring match
+    if (histNorm === inputNorm || histCompact === inputCompact) {
+      score += 12;
+    } else if (
+      histNorm.includes(inputNorm) ||
+      inputNorm.includes(histNorm) ||
+      (inputCompact.length >= 3 && (histCompact.includes(inputCompact) || inputCompact.includes(histCompact)))
+    ) {
+      score += 6;
+    }
+
+    // 2. Shared meaningful tokens & prefix overlap
+    if (inputTokens.length > 0 && histTokens.length > 0) {
+      let exactShared = 0;
+      let prefixShared = 0;
+      const histSet = new Set(histTokens);
+
+      for (const tok of inputTokens) {
+        if (histSet.has(tok)) {
+          exactShared += 1;
+        } else if (
+          tok.length >= 3 &&
+          histTokens.some(ht => ht.startsWith(tok) || tok.startsWith(ht))
+        ) {
+          prefixShared += 1;
+        }
+      }
+
+      if (exactShared > 0 || prefixShared > 0) {
+        const unionSize = new Set([...inputTokens, ...histTokens]).size;
+        const jaccard = (exactShared + prefixShared * 0.6) / Math.max(1, unionSize);
+        score += exactShared * 3.5 + prefixShared * 2 + jaccard * 4;
+      }
+    }
+
+    if (score <= 0) continue;
+
+    const existing = candidates.get(canonicalCat);
+    const txDate = tx.date || '0000-00-00';
+    if (!existing) {
+      candidates.set(canonicalCat, {
+        category: canonicalCat,
+        totalScore: score,
+        maxSingleScore: score,
+        matchCount: 1,
+        latestDate: txDate,
+      });
+    } else {
+      existing.totalScore += score;
+      existing.maxSingleScore = Math.max(existing.maxSingleScore, score);
+      existing.matchCount += 1;
+      if (txDate > existing.latestDate) {
+        existing.latestDate = txDate;
+      }
+    }
+  }
+
+  if (candidates.size === 0) return null;
+
+  const ranked = Array.from(candidates.values()).sort((a, b) => {
+    const scoreDiff = b.totalScore - a.totalScore;
+    if (Math.abs(scoreDiff) > 0.001) return scoreDiff;
+    if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount;
+    return b.latestDate.localeCompare(a.latestDate);
+  });
+
+  const best = ranked[0];
+  const confidence: 'high' | 'medium' =
+    best.matchCount >= 2 || best.maxSingleScore >= 7 ? 'high' : 'medium';
+
+  return {
+    category: best.category,
+    confidence,
+    matchCount: best.matchCount,
+  };
+}
+
+// ============================================================================
+// EXPENSE VARIABILITY (SIGMA STD DEV) & MONTH-END RUN-RATE ENGINE
+// ============================================================================
+
+export type VariabilityClassification = 'PREVISIVEL' | 'VOLATIL';
+
+export interface CategoryExpenseVariabilityItem {
+  category: string;
+  meanBRL: number;
+  stdDevBRL: number;
+  cv: number; // Coefficient of Variation = sigma / mu
+  cvPercent: number;
+  classification: VariabilityClassification;
+  badgeTone: 'emerald' | 'amber' | 'rose';
+  classificationLabel: string;
+  currentMonthSpentBRL: number;
+  projectedRunRateBRL: number;
+  monthsActiveCount: number;
+  monthlyTotals: Record<string, number>;
+}
+
+export interface ExpenseVariabilityReport {
+  currentMonthKey: string;
+  currentDay: number;
+  daysInMonth: number;
+  monthsAnalyzedCount: number;
+  analyzedMonthKeys: string[];
+  totalSpentCurrentMonthBRL: number;
+  totalProjectedRunRateBRL: number;
+  predictableCount: number;
+  volatileCount: number;
+  categories: CategoryExpenseVariabilityItem[];
+}
+
+/**
+ * Groups PF expenses by category across available months, computes sample mean (μ),
+ * sample standard deviation (σ), coefficient of variation (CV = σ / μ),
+ * predictable vs volatile ranking, and current-month run-rate projection.
+ */
+export function calculateCategoryExpenseVariability(
+  transactions: Transaction[],
+  referenceDateStr?: string
+): ExpenseVariabilityReport {
+  const pfExpenses = (Array.isArray(transactions) ? transactions : []).filter(
+    t =>
+      t.type === 'despesa' &&
+      t.costCenter !== 'PJ' &&
+      t.jar !== 'PJ_EXCLUIDO' &&
+      t.date &&
+      /^\d{4}-\d{2}-\d{2}/.test(t.date)
+  );
+
+  // Determine current month & elapsed day
+  const sortedDates = pfExpenses.map(t => t.date.slice(0, 10)).sort();
+  const inferredRefDate =
+    referenceDateStr && /^\d{4}-\d{2}-\d{2}$/.test(referenceDateStr)
+      ? referenceDateStr
+      : sortedDates[sortedDates.length - 1] || new Date().toISOString().slice(0, 10);
+
+  const currentMonthKey = inferredRefDate.slice(0, 7);
+  const refYear = Number(inferredRefDate.slice(0, 4)) || 2026;
+  const refMonth = Number(inferredRefDate.slice(5, 7)) || 10;
+  const refDayRaw = Number(inferredRefDate.slice(8, 10)) || 15;
+  const daysInMonth = new Date(refYear, refMonth, 0).getDate() || 30;
+  const currentDay = Math.max(1, Math.min(daysInMonth, refDayRaw));
+
+  const distinctMonthsSet = new Set<string>();
+  const categoryMonthMap = new Map<string, Map<string, number>>();
+
+  for (const tx of pfExpenses) {
+    const mk = tx.date.slice(0, 7);
+    const cat = (tx.category || 'Geral').trim() || 'Geral';
+    const amt = Math.abs(Number.isFinite(tx.amount) ? tx.amount : 0);
+    if (amt <= 0) continue;
+
+    distinctMonthsSet.add(mk);
+    let mMap = categoryMonthMap.get(cat);
+    if (!mMap) {
+      mMap = new Map<string, number>();
+      categoryMonthMap.set(cat, mMap);
+    }
+    mMap.set(mk, roundFinance2((mMap.get(mk) || 0) + amt));
+  }
+
+  const analyzedMonthKeys = Array.from(distinctMonthsSet).sort();
+  const monthsAnalyzedCount = analyzedMonthKeys.length;
+
+  const items: CategoryExpenseVariabilityItem[] = [];
+  let totalSpentCurrentMonthBRL = 0;
+  let totalProjectedRunRateBRL = 0;
+
+  for (const [category, mMap] of categoryMonthMap.entries()) {
+    const monthlyTotals: Record<string, number> = {};
+    const values: number[] = [];
+
+    for (const mk of analyzedMonthKeys) {
+      const val = roundFinance2(mMap.get(mk) || 0);
+      monthlyTotals[mk] = val;
+      values.push(val);
+    }
+
+    const n = values.length;
+    const sum = values.reduce((acc, v) => acc + v, 0);
+    const meanBRL = n > 0 ? roundFinance2(sum / n) : 0;
+
+    let stdDevBRL = 0;
+    if (n > 1) {
+      const squaredDiffSum = values.reduce((acc, v) => acc + Math.pow(v - meanBRL, 2), 0);
+      stdDevBRL = roundFinance2(Math.sqrt(squaredDiffSum / (n - 1)));
+    }
+
+    const cv = meanBRL > 0 ? Math.round((stdDevBRL / meanBRL) * 10000) / 10000 : 0;
+    const cvPercent = roundFinance2(cv * 100);
+
+    const isVolatile = cv >= 0.25;
+    const classification: VariabilityClassification = isVolatile ? 'VOLATIL' : 'PREVISIVEL';
+    const badgeTone: 'emerald' | 'amber' | 'rose' = !isVolatile
+      ? 'emerald'
+      : cv >= 0.6
+        ? 'rose'
+        : 'amber';
+    const classificationLabel = !isVolatile ? 'Previsível' : 'Volátil';
+
+    const currentMonthSpentBRL = roundFinance2(mMap.get(currentMonthKey) || 0);
+    const projectedRunRateBRL = roundFinance2((currentMonthSpentBRL / currentDay) * daysInMonth);
+
+    totalSpentCurrentMonthBRL = roundFinance2(totalSpentCurrentMonthBRL + currentMonthSpentBRL);
+    totalProjectedRunRateBRL = roundFinance2(totalProjectedRunRateBRL + projectedRunRateBRL);
+
+    items.push({
+      category,
+      meanBRL,
+      stdDevBRL,
+      cv,
+      cvPercent,
+      classification,
+      badgeTone,
+      classificationLabel,
+      currentMonthSpentBRL,
+      projectedRunRateBRL,
+      monthsActiveCount: Array.from(mMap.values()).filter(v => v > 0).length,
+      monthlyTotals,
+    });
+  }
+
+  // Sort predictable-then-volatile OR by CV descending? Let's keep predictable vs volatile clear and sort by highest projected/mean spend or CV
+  items.sort((a, b) => b.cv - a.cv || b.meanBRL - a.meanBRL);
+
+  const predictableCount = items.filter(i => i.classification === 'PREVISIVEL').length;
+  const volatileCount = items.filter(i => i.classification === 'VOLATIL').length;
+
+  return {
+    currentMonthKey,
+    currentDay,
+    daysInMonth,
+    monthsAnalyzedCount,
+    analyzedMonthKeys,
+    totalSpentCurrentMonthBRL,
+    totalProjectedRunRateBRL,
+    predictableCount,
+    volatileCount,
+    categories: items,
+  };
+}
+

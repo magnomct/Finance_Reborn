@@ -1,6 +1,7 @@
 import { Transaction, JarType, JarInfo } from '../types';
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { calculateJarExpense, DEFAULT_JAR_LIMITS, DEFAULT_JAR_SAVINGS_TARGETS, loadJarSavingsTargets, saveJarSavingsTargets } from './budgetAlerts';
+import { DEFAULT_BASE_MONTHLY_INCOME } from './baseIncomeConfig';
 
 export { loadJarSavingsTargets, saveJarSavingsTargets };
 
@@ -49,7 +50,7 @@ export function calculateJarShareOfTotalSavings(jarSavings: number, totalSavings
  * Generates smart suggestions for each jar's monthly savings target based on income.
  */
 export function suggestJarSavingsTargets(effectiveIncomeBase: number): Record<JarType, number> {
-  const base = effectiveIncomeBase > 0 ? effectiveIncomeBase : 3652.31;
+  const base = effectiveIncomeBase > 0 ? effectiveIncomeBase : DEFAULT_BASE_MONTHLY_INCOME;
   return {
     NEC_55: Math.round(base * 0.05), // 5% residual
     DIV_10: Math.round(base * 0.03), // 3% sobra lazer
@@ -75,7 +76,7 @@ export function calculateJarSavingsGoalsSummary(params: {
     transactions = [],
     limits = DEFAULT_JAR_LIMITS,
     targets = DEFAULT_JAR_SAVINGS_TARGETS,
-    effectiveIncomeBase = 3652.31,
+    effectiveIncomeBase = DEFAULT_BASE_MONTHLY_INCOME,
     jarBudgets
   } = params;
 

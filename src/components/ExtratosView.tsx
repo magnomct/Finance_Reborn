@@ -9,6 +9,7 @@ import {
   Calendar,
   X,
   Edit3,
+  Download,
 } from 'lucide-react';
 import {
   Transaction,
@@ -19,6 +20,7 @@ import { formatBRL } from '../utils/finance';
 import { JAR_DEFINITIONS } from '../data/initialData';
 import { BankImportModal } from './BankImportModal';
 import { ExportPdfModal } from './ExportPdfModal';
+import { ExportModal } from './ExportModal';
 import { StatementExporter } from './StatementExporter';
 import {
   ExportExecutionResult,
@@ -53,6 +55,7 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
 }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [isGlobalExportOpen, setIsGlobalExportOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [scopeFilter, setScopeFilter] = useState<'ALL' | 'PF' | 'PJ'>(() => {
     if (scope === 'PF') return 'PF';
@@ -355,6 +358,18 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
             >
               <FileText className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
               <span>PDF Contábil</span>
+            </button>
+
+            {/* Exportador Completo (PDF / CSV / Excel) */}
+            <button
+              type="button"
+              onClick={() => setIsGlobalExportOpen(true)}
+              data-testid="btn-extratos-global-export"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-teal-500/30 bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/80 text-teal-700 dark:text-teal-300 text-xs font-bold transition shrink-0 whitespace-nowrap cursor-pointer"
+              title="Abrir exportador completo em PDF, CSV ou Excel"
+            >
+              <Download className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>PDF / Excel / CSV</span>
             </button>
           </div>
         </div>
@@ -743,6 +758,16 @@ export const ExtratosView: React.FC<ExtratosViewProps> = ({
         onClose={() => setIsPdfModalOpen(false)}
         filteredTransactions={filtered}
         currentPeriodLabel={currentPeriodLabel}
+      />
+
+      {/* Modal Global de Exportação (PDF / CSV / Excel) */}
+      <ExportModal
+        isOpen={isGlobalExportOpen}
+        onClose={() => setIsGlobalExportOpen(false)}
+        transactions={transactions}
+        defaultScope={
+          scopeFilter === 'PF' ? 'PF' : scopeFilter === 'PJ' ? 'PJ' : 'CONSOLIDADO'
+        }
       />
     </div>
   );
