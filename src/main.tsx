@@ -2,15 +2,32 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
+import {
+  dispatchPwaNeedRefresh,
+  dispatchPwaOfflineReady,
+  registerPwaServiceWorkerSafe,
+} from './utils/pwaLifecycle';
 
-// Register PWA service worker with auto-update and offline readiness callbacks
-registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    console.log('[Yupee PWA] Novo conteúdo disponível.');
+// Safe production-only Service Worker registration with non-intrusive pt-BR callbacks
+registerPwaServiceWorkerSafe({
+  isProd: import.meta.env.PROD,
+  hasServiceWorkerSupport:
+    typeof window !== 'undefined' && 'serviceWorker' in navigator,
+  registerFn: (callbacks) =>
+    registerSW({
+      immediate: true,
+      onNeedRefresh: callbacks.onNeedRefresh,
+      onOfflineReady: callbacks.onOfflineReady,
+      onRegisterError: callbacks.onRegisterError,
+    }),
+  onNeedRefresh: () => {
+    dispatchPwaNeedRefresh();
   },
-  onOfflineReady() {
-    console.log('[Yupee PWA] Aplicativo pronto para funcionar 100% offline.');
+  onOfflineReady: () => {
+    dispatchPwaOfflineReady();
+  },
+  onError: () => {
+    // Falha silenciosa em ambientes sem suporte a Service Worker
   },
 });
 

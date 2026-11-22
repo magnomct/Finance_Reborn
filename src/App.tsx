@@ -39,7 +39,9 @@ import {
 
 import { AnnualDashboardView } from './components/AnnualDashboardView';
 import { AgendaView } from './components/AgendaView';
-import { ChartsView } from './components/ChartsView';
+const ChartsView = React.lazy(() =>
+  import('./components/ChartsView').then((mod) => ({ default: mod.ChartsView }))
+);
 import { PotesView } from './components/PotesView';
 import { SonhosView } from './components/SonhosView';
 import { AutomationsView } from './components/AutomationsView';
@@ -74,6 +76,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { MobileProvider } from './context/MobileContext';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { PWACacheStatusFooter } from './components/PWACacheStatusFooter';
 import {
   loadOfflineQueue,
   saveOfflineQueue,
@@ -100,6 +103,17 @@ import {
   isValidAutoRulesArray,
   isValidStringArray,
 } from './utils/storage';
+import {
+  PWA_NEED_REFRESH_EVENT,
+  PWA_OFFLINE_READY_EVENT,
+  PwaLifecycleState,
+  createInitialPwaLifecycleState,
+  dismissPwaNeedRefresh,
+  dismissPwaOfflineReady,
+  markPwaNeedRefresh,
+  markPwaOfflineReady,
+  triggerSafePwaUpdate,
+} from './utils/pwaLifecycle';
 
 export default function App() {
   // Screens & Navigation - Default to the complete Dashboard with Resumo dos Dados
@@ -248,6 +262,42 @@ export default function App() {
       handleSyncOfflineQueue();
     }
   }, [isOnline]);
+
+  // PWA Service Worker Lifecycle State (non-intrusive pt-BR update & offline-ready banners)
+  const [pwaLifecycle, setPwaLifecycle] = useState<PwaLifecycleState>(() =>
+    createInitialPwaLifecycleState()
+  );
+
+  useEffect(() => {
+    const handleNeedRefresh = () => {
+      setPwaLifecycle((prev) => markPwaNeedRefresh(prev));
+    };
+    const handleOfflineReady = () => {
+      setPwaLifecycle((prev) => markPwaOfflineReady(prev));
+    };
+
+    window.addEventListener(PWA_NEED_REFRESH_EVENT, handleNeedRefresh);
+    window.addEventListener(PWA_OFFLINE_READY_EVENT, handleOfflineReady);
+    return () => {
+      window.removeEventListener(PWA_NEED_REFRESH_EVENT, handleNeedRefresh);
+      window.removeEventListener(PWA_OFFLINE_READY_EVENT, handleOfflineReady);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pwaLifecycle.offlineReady || pwaLifecycle.dismissedOfflineReady) return;
+    const timer = setTimeout(() => {
+      setPwaLifecycle((prev) => dismissPwaOfflineReady(prev));
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [pwaLifecycle.offlineReady, pwaLifecycle.dismissedOfflineReady]);
+
+  const hasUnsavedModalOpen =
+    isModalOpen ||
+    isLimitsModalOpen ||
+    isGlobalPdfModalOpen ||
+    isResetModalOpen ||
+    isAndroidModalOpen;
 
   // Auto-dismiss reset notification
   useEffect(() => {
@@ -1154,17 +1204,28 @@ export default function App() {
         )}
 
         {/* ============================================================== */}
-        {/* TELA 2: GRÁFICOS INTUITIVOS                                     */}
+        {/* TELA 2: GRÁFICOS INTUITIVOS (Lazy-loaded com chunk d3-charts)  */}
         {/* ============================================================== */}
         {activeScreen === 'graficos' && (
           <div className="px-4">
-            <ChartsView 
-              transactions={transactions} 
-              dreams={dreams}
-              usePjProfitInPf={usePjProfitInPf} 
-              selectedMonth={selectedMonth} 
-              hierarchy={categoryHierarchy}
-            />
+            <React.Suspense
+              fallback={
+                <div
+                  className="p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center text-xs font-semibold text-slate-500 dark:text-slate-400"
+                  data-testid="charts-lazy-fallback"
+                >
+                  Carregando gráficos interativos...
+                </div>
+              }
+            >
+              <ChartsView 
+                transactions={transactions} 
+                dreams={dreams}
+                usePjProfitInPf={usePjProfitInPf} 
+                selectedMonth={selectedMonth} 
+                hierarchy={categoryHierarchy}
+              />
+            </React.Suspense>
           </div>
         )}
 
@@ -1481,6 +1542,8 @@ export default function App() {
         )}
         </ScreenTransition>
 
+        <PWACacheStatusFooter />
+
       </main>
 
       {/* Modal Lançamento (Novo / Edição) com Auto-Regra e Hierarquia Sincronizada */}
@@ -1560,6 +1623,81 @@ export default function App() {
           </button>
         </div>
       )}
+
+      {/* PWA Update Available Toast (Modal-safe: never forces reload while editing) */}
+      {pwaLifecycle.needRefresh && !pwaLifecycle.dismissedNeedRefresh && (
+        <div
+          className="fixed bottom-4 right-4 z-50 max-w-sm rounded-2xl bg-slate-900 text-white border border-indigo-500/40 px-4 py-3 text-xs shadow-2xl backdrop-blur-md space-y-2 animate-in fade-in slide-in-from-bottom-2"
+          role="status"
+          aria-live="polite"
+          data-testid="pwa-need-refresh-banner"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 font-bold text-indigo-300">
+              <RefreshCw className="w-4 h-4 shrink-0" />
+              <span>Nova versão do Yupee disponível</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPwaLifecycle((prev) => dismissPwaNeedRefresh(prev))}
+              className="p-0.5 text-slate-400 hover:text-white cursor-pointer"
+              aria-label="Adiar atualização do aplicativo"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-300 leading-relaxed">
+            {hasUnsavedModalOpen
+              ? 'Finalize ou feche o modal aberto antes de atualizar para não perder dados não salvos.'
+              : 'Atualize quando estiver pronto para aplicar melhorias de desempenho e cache.'}
+          </p>
+          <div className="flex items-center justify-end gap-2 pt-0.5">
+            <button
+              type="button"
+              onClick={() => setPwaLifecycle((prev) => dismissPwaNeedRefresh(prev))}
+              className="px-2.5 py-1 rounded-xl text-[11px] font-semibold text-slate-300 hover:bg-slate-800 transition cursor-pointer"
+              data-testid="pwa-btn-dismiss-refresh"
+            >
+              Depois
+            </button>
+            <button
+              type="button"
+              disabled={hasUnsavedModalOpen}
+              onClick={() => {
+                void triggerSafePwaUpdate(hasUnsavedModalOpen);
+              }}
+              className="px-3 py-1 rounded-xl text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              data-testid="pwa-btn-apply-refresh"
+            >
+              Atualizar agora
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PWA Offline Ready Toast */}
+      {!pwaLifecycle.needRefresh &&
+        pwaLifecycle.offlineReady &&
+        !pwaLifecycle.dismissedOfflineReady && (
+          <div
+            className="fixed bottom-4 right-4 z-50 max-w-sm flex items-center gap-2.5 rounded-2xl bg-emerald-700 text-white border border-emerald-400/30 px-4 py-2.5 text-xs font-semibold shadow-2xl animate-in fade-in slide-in-from-bottom-2"
+            role="status"
+            aria-live="polite"
+            data-testid="pwa-offline-ready-banner"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-200 shrink-0" />
+            <span>Aplicativo pronto para uso offline.</span>
+            <button
+              type="button"
+              onClick={() => setPwaLifecycle((prev) => dismissPwaOfflineReady(prev))}
+              className="ml-1 p-0.5 text-emerald-100 hover:text-white cursor-pointer"
+              aria-label="Fechar aviso de modo offline"
+              data-testid="pwa-btn-dismiss-offline"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
       </div>
     </MobileProvider>

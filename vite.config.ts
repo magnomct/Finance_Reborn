@@ -11,6 +11,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: 'auto',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
@@ -45,9 +46,28 @@ export default defineConfig(() => {
         },
         workbox: {
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          globIgnores: ['**/node_modules/**/*', '**/*.map'],
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
           navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
+            {
+              urlPattern: /\/api\/(metadata|categories|config|jars|goals-meta)/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'finance-metadata-swr',
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+                expiration: {
+                  maxEntries: 50,
+                  maxAgeSeconds: 60 * 60 * 24,
+                },
+              },
+            },
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
               handler: 'CacheFirst',
@@ -84,6 +104,65 @@ export default defineConfig(() => {
         },
       }),
     ],
+    build: {
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          manualChunks(id: string) {
+            const normalized = id.replace(/\\/g, '/');
+
+            if (
+              normalized.includes('/node_modules/react/') ||
+              normalized.includes('/node_modules/react-dom/') ||
+              normalized.includes('/node_modules/scheduler/') ||
+              normalized.includes('/node_modules/react-is/')
+            ) {
+              return 'vendor-react';
+            }
+
+            if (
+              normalized.includes('/node_modules/d3/') ||
+              normalized.includes('/node_modules/d3-axis/') ||
+              normalized.includes('/node_modules/d3-brush/') ||
+              normalized.includes('/node_modules/d3-chord/') ||
+              normalized.includes('/node_modules/d3-contour/') ||
+              normalized.includes('/node_modules/d3-delaunay/') ||
+              normalized.includes('/node_modules/d3-dispatch/') ||
+              normalized.includes('/node_modules/d3-drag/') ||
+              normalized.includes('/node_modules/d3-dsv/') ||
+              normalized.includes('/node_modules/d3-fetch/') ||
+              normalized.includes('/node_modules/d3-force/') ||
+              normalized.includes('/node_modules/d3-geo/') ||
+              normalized.includes('/node_modules/d3-hierarchy/') ||
+              normalized.includes('/node_modules/d3-polygon/') ||
+              normalized.includes('/node_modules/d3-quadtree/') ||
+              normalized.includes('/node_modules/d3-random/') ||
+              normalized.includes('/node_modules/d3-selection/') ||
+              normalized.includes('/node_modules/d3-transition/') ||
+              normalized.includes('/node_modules/d3-zoom/')
+            ) {
+              return 'd3-charts';
+            }
+
+            if (
+              normalized.includes('/src/utils/finance.ts') ||
+              normalized.includes('/src/utils/storage.ts') ||
+              normalized.includes('/src/utils/baseIncomeConfig.ts') ||
+              normalized.includes('/src/utils/sixJarsMetrics.ts') ||
+              normalized.includes('/src/utils/budgetAlerts.ts') ||
+              normalized.includes('/src/utils/offlineSync.ts') ||
+              normalized.includes('/src/utils/categoryHierarchy.ts') ||
+              normalized.includes('/src/utils/pwaLifecycle.ts') ||
+              normalized.includes('/src/data/initialData.ts')
+            ) {
+              return 'core-finance';
+            }
+
+            return undefined;
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
