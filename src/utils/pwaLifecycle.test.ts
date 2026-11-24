@@ -20,6 +20,7 @@ import {
   triggerSafePwaUpdate,
   writeLastSwSyncAt,
 } from './pwaLifecycle';
+import { collectTechnicalDiagnostics } from '../components/PWACacheStatusFooter';
 
 test('PWA lifecycle state transitions manage refresh and offline banners cleanly', () => {
   let state = createInitialPwaLifecycleState();
@@ -271,4 +272,95 @@ test('forceRefreshPwaAssets updates SW, posts SKIP_WAITING, purges caches withou
   assert.equal(previewResult.deletedCacheCount, 1);
   assert.equal(previewResult.shouldReload, false);
   assert.equal(writeLastSwSyncAt(syncTimestamp, mockStorage), syncTimestamp);
+});
+
+test('collectTechnicalDiagnostics assembles privacy-safe CacheStorage, SW, network, and schema health JSON', async () => {
+  const fixedDate = new Date(2026, 10, 22, 12, 18, 9);
+  const payload = await collectTechnicalDiagnostics({
+    nowDate: fixedDate,
+    navigatorObj: {
+      onLine: true,
+      connection: {
+        effectiveType: '4g',
+        downlink: 12.4,
+        rtt: 45,
+      },
+      serviceWorker: {
+        getRegistration: async () => ({
+          scope: 'https://yupee.app/',
+          active: { state: 'activated' },
+          waiting: { state: 'installed' },
+        }),
+      },
+    },
+    cachesObj: {
+      keys: async () => ['workbox-precache-v2', 'finance-metadata-swr'],
+      open: async (name: string) => ({
+        keys: async () =>
+          name === 'workbox-precache-v2'
+            ? [{ url: '/index.html' }, { url: '/assets/vendor-react.js' }, { url: '/assets/core-finance.js' }]
+            : [{ url: '/api/categories' }],
+      }),
+    },
+    storageObj: {
+      '@finance_app:schema_version': '1.0',
+      '@finance_app:last_sw_sync_at': '1795378689000',
+      '@finance_app:charts_active_subtab': 'PATRIMONIO',
+      yupee_transactions_v2: '[{"id":"tx-secret","description":"Salario Confidencial","amount":99999}]',
+    },
+  });
+
+  assert.match(payload.timestamp_br, /^22\/11\/2026 12:18:09 \(.+\)$/);
+  assert.deepEqual(payload.network, {
+    online: true,
+    effectiveType: '4g',
+    downlinkMbps: 12.4,
+    rttMs: 45,
+  });
+  assert.deepEqual(payload.serviceWorker, {
+    supported: true,
+    state: 'activated',
+    scope: 'https://yupee.app/',
+    updateWaiting: true,
+  });
+  assert.deepEqual(payload.cacheStorage, [
+    { cacheName: 'workbox-precache-v2', entryCount: 3 },
+    { cacheName: 'finance-metadata-swr', entryCount: 1 },
+  ]);
+  assert.deepEqual(payload.localStorageHealth, {
+    schemaVersion: '1.0',
+    lastAssetSyncAt: '1795378689000',
+    activeKeysCount: 3,
+  });
+
+  // Strict privacy guarantee: zero financial descriptions or amounts leak into serialized JSON
+  const serialized = JSON.stringify(payload);
+  assert.equal(serialized.includes('Salario Confidencial'), false);
+  assert.equal(serialized.includes('99999'), false);
+});
+
+test('collectTechnicalDiagnostics falls back gracefully when CacheStorage and ServiceWorker are unavailable', async () => {
+  const payload = await collectTechnicalDiagnostics({
+    nowDate: new Date(2026, 10, 22, 8, 5, 3),
+    navigatorObj: { onLine: false },
+    cachesObj: null,
+    storageObj: null,
+  });
+
+  assert.equal(payload.network.online, false);
+  assert.equal(payload.network.effectiveType, 'desconhecido');
+  assert.equal(payload.network.downlinkMbps, null);
+  assert.equal(payload.network.rttMs, null);
+  assert.deepEqual(payload.serviceWorker, {
+    supported: false,
+    state: 'nao_registrado',
+    scope: null,
+    updateWaiting: false,
+  });
+  assert.deepEqual(payload.cacheStorage, []);
+  assert.deepEqual(payload.localStorageHealth, {
+    schemaVersion: '1.0',
+    lastAssetSyncAt: null,
+    activeKeysCount: 0,
+  });
 });
