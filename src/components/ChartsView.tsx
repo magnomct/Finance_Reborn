@@ -1,292 +1,332 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import {
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  ShieldCheck,
+  BarChart3,
   Flame,
   PieChart,
+  TrendingUp,
 } from 'lucide-react';
-import { Transaction, ParentCategoryItem, DreamGoal } from '../types';
-import {
-  calculateFinancialMetrics,
-  formatBRL,
-  buildHistoricalNetWorthSeries,
-} from '../utils/finance';
-import { safeGetStorage, safeSetStorage } from '../utils/storage';
-import { MonthlyNetWorthD3Chart } from './MonthlyNetWorthD3Chart';
-import { CashFlowSankeyD3Chart } from './CashFlowSankeyD3Chart';
-import { AnnualExpenseHeatmapD3Chart } from './AnnualExpenseHeatmapD3Chart';
-import { ExpenseBalanceScatterD3Chart } from './ExpenseBalanceScatterD3Chart';
-import { FinancialDashboardCharts } from './FinancialDashboardCharts';
-import { ExpenseVariabilityCard } from './ExpenseVariabilityCard';
-import { CategoryPieChart } from './CategoryPieChart';
-import { MonthlyVariabilityCard } from './MonthlyVariabilityCard';
+import { buildHistoricalNetWorthSeries } from '../utils/finance';
 
-export type ChartsSubTab = 'PATRIMONIO' | 'COMPORTAMENTO' | 'CATEGORIAS';
+// Lazy-loading seguro (compatível tanto com named exports quanto default exports)
+const MonthlyNetWorthD3Chart = lazy(() =>
+  import('./MonthlyNetWorthD3Chart').then((mod) => ({
+    default: mod.MonthlyNetWorthD3Chart ?? mod.default,
+  }))
+);
 
-export const CHARTS_ACTIVE_SUBTAB_STORAGE_KEY = '@finance_app:charts_active_subtab';
+const CashFlowSankeyD3Chart = lazy(() =>
+  import('./CashFlowSankeyD3Chart').then((mod) => ({
+    default: mod.CashFlowSankeyD3Chart ?? mod.default,
+  }))
+);
 
-function isValidChartsSubTab(val: unknown): val is ChartsSubTab {
-  return val === 'PATRIMONIO' || val === 'COMPORTAMENTO' || val === 'CATEGORIAS';
+const AnnualExpenseHeatmapD3Chart = lazy(() =>
+  import('./AnnualExpenseHeatmapD3Chart').then((mod) => ({
+    default: mod.AnnualExpenseHeatmapD3Chart ?? mod.default,
+  }))
+);
+
+const ExpenseBalanceScatterD3Chart = lazy(() =>
+  import('./ExpenseBalanceScatterD3Chart').then((mod) => ({
+    default: mod.ExpenseBalanceScatterD3Chart ?? mod.default,
+  }))
+);
+
+const FinancialDashboardCharts = lazy(() =>
+  import('./FinancialDashboardCharts').then((mod) => ({
+    default: mod.FinancialDashboardCharts ?? mod.default,
+  }))
+);
+
+const ExpenseVariabilityCard = lazy(() =>
+  import('./ExpenseVariabilityCard').then((mod) => ({
+    default: mod.ExpenseVariabilityCard ?? mod.default,
+  }))
+);
+
+export type ChartsSubTabId = 'PATRIMONIO' | 'COMPORTAMENTO' | 'CATEGORIAS';
+
+export interface ChartsViewProps {
+  transactions: any[];
+  goals?: any[];
+  baseMonthlyIncome?: number;
 }
 
 interface SubTabDefinition {
-  id: ChartsSubTab;
+  id: ChartsSubTabId;
   label: string;
-  countLabel: string;
+  description: string;
+  chartCount: number;
   icon: React.ComponentType<{ className?: string }>;
-  panelId: string;
-  tabId: string;
 }
+
+const STORAGE_KEY = '@finance_app:charts_active_subtab';
 
 const SUB_TABS: SubTabDefinition[] = [
   {
     id: 'PATRIMONIO',
     label: 'Patrimônio & Fluxo',
-    countLabel: '2 gráficos',
+    description: 'Evolução consolidada e distribuição nos 6 Potes',
+    chartCount: 2,
     icon: TrendingUp,
-    panelId: 'charts-tabpanel-patrimonio',
-    tabId: 'charts-tab-patrimonio',
   },
   {
     id: 'COMPORTAMENTO',
     label: 'Comportamento & Calor',
-    countLabel: '2 gráficos',
+    description: 'Calendário anual de gastos e correlação de saldo',
+    chartCount: 2,
     icon: Flame,
-    panelId: 'charts-tabpanel-comportamento',
-    tabId: 'charts-tab-comportamento',
   },
   {
     id: 'CATEGORIAS',
     label: 'Categorias & Variabilidade',
-    countLabel: '4 gráficos',
+    description: 'Participação por categoria, série anual e desvio padrão',
+    chartCount: 2,
     icon: PieChart,
-    panelId: 'charts-tabpanel-categorias',
-    tabId: 'charts-tab-categorias',
   },
 ];
 
-interface ChartsViewProps {
-  transactions: Transaction[];
-  dreams?: DreamGoal[];
-  usePjProfitInPf: boolean;
-  selectedMonth: string;
-  hierarchy?: ParentCategoryItem[];
+function isValidSubTab(value: unknown): value is ChartsSubTabId {
+  return (
+    value === 'PATRIMONIO' ||
+    value === 'COMPORTAMENTO' ||
+    value === 'CATEGORIAS'
+  );
 }
 
+function readPersistedSubTab(): ChartsSubTabId {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (isValidSubTab(saved)) {
+      return saved;
+    }
+  } catch {
+    // Fallback seguro caso o localStorage esteja indisponível
+  }
+  return 'PATRIMONIO';
+}
+
+interface ChartSkeletonProps {
+  title: string;
+  heightClass?: string;
+}
+
+const ChartSkeleton: React.FC<ChartSkeletonProps> = ({
+  title,
+  heightClass = 'h-80',
+}) => (
+  <div
+    className="w-full rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 p-6 shadow-sm animate-pulse"
+    aria-busy="true"
+    aria-label={`Carregando ${title}`}
+  >
+    <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <div className="space-y-2">
+        <div className="h-5 w-52 rounded-md bg-slate-200 dark:bg-slate-800" />
+        <div className="h-3.5 w-72 rounded-md bg-slate-100 dark:bg-slate-800/70" />
+      </div>
+      <div className="flex gap-2">
+        <div className="h-8 w-20 rounded-lg bg-slate-200 dark:bg-slate-800" />
+        <div className="h-8 w-20 rounded-lg bg-slate-200 dark:bg-slate-800" />
+      </div>
+    </div>
+
+    <div
+      className={`w-full ${heightClass} rounded-xl bg-slate-100/80 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700/70 flex flex-col items-center justify-center gap-2`}
+    >
+      <BarChart3 className="w-6 h-6 text-indigo-500/70" />
+      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+        Carregando visualização D3: {title}...
+      </span>
+    </div>
+  </div>
+);
+
 export const ChartsView: React.FC<ChartsViewProps> = ({
-  transactions,
-  dreams = [],
-  usePjProfitInPf,
-  selectedMonth,
-  hierarchy,
+  transactions = [],
+  goals = [],
+  baseMonthlyIncome = 0,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<ChartsSubTab>(() =>
-    safeGetStorage<ChartsSubTab>(
-      CHARTS_ACTIVE_SUBTAB_STORAGE_KEY,
-      'PATRIMONIO',
-      isValidChartsSubTab
-    )
-  );
+  const [activeSubTab, setActiveSubTab] =
+    useState<ChartsSubTabId>(readPersistedSubTab);
 
   useEffect(() => {
-    safeSetStorage(CHARTS_ACTIVE_SUBTAB_STORAGE_KEY, activeSubTab);
+    try {
+      localStorage.setItem(STORAGE_KEY, activeSubTab);
+    } catch {
+      // Ignora erro de cota ou modo privado
+    }
   }, [activeSubTab]);
 
-  const metrics = useMemo(() => {
-    return calculateFinancialMetrics(transactions, usePjProfitInPf);
-  }, [transactions, usePjProfitInPf]);
+  // Calcula a série patrimonial apenas quando necessário e mantém memoizada
+  const netWorthSeries = useMemo(
+    () => buildHistoricalNetWorthSeries(transactions, goals),
+    [transactions, goals]
+  );
 
-  const netWorthSeries = useMemo(() => {
-    return buildHistoricalNetWorthSeries(transactions, dreams);
-  }, [transactions, dreams]);
-
-  const healthScore = useMemo(() => {
-    let score = 70;
-    if (metrics.netBalanceConsolidated > 0) score += 15;
-    if (metrics.overdraftInterest === 0) score += 15;
-    else score -= 10;
-    if (metrics.jars.NEC_55 && metrics.jars.NEC_55.usageRatio <= 100) score += 10;
-    return Math.min(100, Math.max(0, score));
-  }, [metrics]);
+  const activeTabMeta = useMemo(
+    () => SUB_TABS.find((tab) => tab.id === activeSubTab) ?? SUB_TABS[0],
+    [activeSubTab]
+  );
 
   return (
-    <div className="space-y-6" data-testid="charts-view-root">
-      {/* Top Thematic Sub-Tab Navigation Bar */}
-      <div className="bg-white dark:bg-slate-900 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div
-          role="tablist"
-          aria-label="Seções analíticas de gráficos"
-          data-testid="charts-subtab-list"
-          className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-full w-full lg:w-auto touch-pan-x p-1 rounded-xl bg-slate-100/80 dark:bg-slate-800/80"
-        >
-          {SUB_TABS.map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeSubTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                id={tab.tabId}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={tab.panelId}
-                data-testid={`btn-charts-subtab-${tab.id}`}
-                onClick={() => setActiveSubTab(tab.id)}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 cursor-pointer ${
-                  isActive
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs ring-1 ring-slate-200/80 dark:ring-slate-700'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Icon
-                  className={`w-4 h-4 shrink-0 ${
+    <section className="space-y-6">
+      {/* Cabeçalho e Barra de Navegação das Sub-Abas */}
+      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white tracking-tight">
+              Gráficos Intuitivos
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              {activeTabMeta.description}
+            </p>
+          </div>
+
+          <div
+            role="tablist"
+            aria-label="Categorias de visualizações analíticas"
+            className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100/90 dark:bg-slate-800/90 p-1.5 rounded-xl border border-slate-200/70 dark:border-slate-700/70"
+          >
+            {SUB_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeSubTab === tab.id;
+
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveSubTab(tab.id)}
+                  className={`flex items-center justify-between sm:justify-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer ${
                     isActive
-                      ? tab.id === 'PATRIMONIO'
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : tab.id === 'COMPORTAMENTO'
-                          ? 'text-orange-500'
-                          : 'text-indigo-600 dark:text-indigo-400'
-                      : 'text-slate-400'
-                  }`}
-                />
-                <span>{tab.label}</span>
-                <span
-                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums ${
-                    isActive
-                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                      : 'bg-slate-200/70 dark:bg-slate-700/60 text-slate-500 dark:text-slate-400'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-slate-200/80 dark:ring-slate-700'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-900/40'
                   }`}
                 >
-                  {tab.countLabel}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                  <span className="inline-flex items-center gap-2 truncate">
+                    <Icon
+                      className={`w-4 h-4 shrink-0 ${
+                        isActive
+                          ? 'text-indigo-600 dark:text-indigo-400'
+                          : 'text-slate-400'
+                      }`}
+                    />
+                    <span className="truncate">{tab.label}</span>
+                  </span>
 
-        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium px-2 whitespace-nowrap shrink-0 tabular-nums">
-          Referência: <strong className="text-slate-800 dark:text-slate-200">{selectedMonth}</strong>
-        </div>
-      </div>
-
-      {/* KPI Summary Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 tabular-nums">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Renda Efetiva Base</span>
-            <DollarSign className="w-4 h-4 text-blue-500 shrink-0" />
+                  <span
+                    className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full shrink-0 ${
+                      isActive
+                        ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300'
+                        : 'bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {tab.chartCount}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <div className="text-lg font-black text-slate-900 dark:text-white">
-            {formatBRL(metrics.effectiveIncomeBase)}
-          </div>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            {usePjProfitInPf ? 'CLT + Lucro Líquido PJ' : 'Apenas Salário CLT'}
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Total Gasto PF</span>
-            <TrendingDown className="w-4 h-4 text-rose-500 shrink-0" />
-          </div>
-          <div className="text-lg font-black text-rose-600 dark:text-rose-400">
-            {formatBRL(metrics.totalSpentPF)}
-          </div>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            {((metrics.totalSpentPF / (metrics.effectiveIncomeBase || 1)) * 100).toFixed(1)}% da renda
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Saldo Livre Mês</span>
-            <TrendingUp className="w-4 h-4 text-emerald-500 shrink-0" />
-          </div>
-          <div
-            className={`text-lg font-black ${
-              metrics.netBalanceConsolidated >= 0
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-rose-600 dark:text-rose-400'
-            }`}
-          >
-            {metrics.netBalanceConsolidated >= 0
-              ? `+${formatBRL(metrics.netBalanceConsolidated)}`
-              : formatBRL(metrics.netBalanceConsolidated)}
-          </div>
-          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
-            {metrics.netBalanceConsolidated >= 0 ? 'Superávit no período' : 'Atenção ao saldo'}
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Saúde Orçamentária</span>
-            <ShieldCheck className="w-4 h-4 text-indigo-500 shrink-0" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
-              {healthScore}/100
-            </span>
-            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-              · {healthScore >= 80 ? 'Excelente' : 'Ajustar'}
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-500 mt-0.5">Metodologia 6 Potes</p>
         </div>
       </div>
 
-      {/* Tab 1: Patrimônio & Fluxo (True Conditional Mounting) */}
+      {/* Montagem Condicional Estrita (evita width=0px no ResizeObserver do D3) */}
       {activeSubTab === 'PATRIMONIO' && (
         <div
-          id="charts-tabpanel-patrimonio"
           role="tabpanel"
-          aria-labelledby="charts-tab-patrimonio"
-          data-testid="charts-panel-PATRIMONIO"
-          className="space-y-6 transition-opacity duration-200 opacity-100"
+          aria-label="Patrimônio & Fluxo"
+          className="space-y-6 transition-opacity duration-200"
         >
-          <MonthlyNetWorthD3Chart data={netWorthSeries} />
-          <CashFlowSankeyD3Chart
-            transactions={transactions}
-            baseMonthlyIncome={metrics.effectiveIncomeBase}
-            referenceMonth={selectedMonth}
-          />
+          <Suspense
+            fallback={
+              <ChartSkeleton
+                title="Evolução Patrimonial Consolidada"
+                heightClass="h-80"
+              />
+            }
+          >
+            <MonthlyNetWorthD3Chart data={netWorthSeries} />
+          </Suspense>
+
+          <Suspense
+            fallback={
+              <ChartSkeleton
+                title="Fluxo de Caixa Sankey (Entradas → 6 Potes → Gastos)"
+                heightClass="h-96"
+              />
+            }
+          >
+            <CashFlowSankeyD3Chart
+              transactions={transactions}
+              baseMonthlyIncome={baseMonthlyIncome}
+            />
+          </Suspense>
         </div>
       )}
 
-      {/* Tab 2: Comportamento & Calor (True Conditional Mounting) */}
       {activeSubTab === 'COMPORTAMENTO' && (
         <div
-          id="charts-tabpanel-comportamento"
           role="tabpanel"
-          aria-labelledby="charts-tab-comportamento"
-          data-testid="charts-panel-COMPORTAMENTO"
-          className="space-y-6 transition-opacity duration-200 opacity-100"
+          aria-label="Comportamento & Calor"
+          className="space-y-6 transition-opacity duration-200"
         >
-          <AnnualExpenseHeatmapD3Chart transactions={transactions} />
-          <ExpenseBalanceScatterD3Chart transactions={transactions} />
+          <Suspense
+            fallback={
+              <ChartSkeleton
+                title="Mapa de Calor Anual de Despesas"
+                heightClass="h-64"
+              />
+            }
+          >
+            <AnnualExpenseHeatmapD3Chart transactions={transactions} />
+          </Suspense>
+
+          <Suspense
+            fallback={
+              <ChartSkeleton
+                title="Dispersão: Saldo Disponível vs. Gastos Diários"
+                heightClass="h-80"
+              />
+            }
+          >
+            <ExpenseBalanceScatterD3Chart transactions={transactions} />
+          </Suspense>
         </div>
       )}
 
-      {/* Tab 3: Categorias & Variabilidade (True Conditional Mounting) */}
       {activeSubTab === 'CATEGORIAS' && (
         <div
-          id="charts-tabpanel-categorias"
           role="tabpanel"
-          aria-labelledby="charts-tab-categorias"
-          data-testid="charts-panel-CATEGORIAS"
-          className="space-y-6 transition-opacity duration-200 opacity-100"
+          aria-label="Categorias & Variabilidade"
+          className="space-y-6 transition-opacity duration-200"
         >
-          <FinancialDashboardCharts transactions={transactions} />
-          <ExpenseVariabilityCard transactions={transactions} />
-          <CategoryPieChart transactions={transactions} />
-          <MonthlyVariabilityCard
-            transactions={transactions}
-            hierarchy={hierarchy}
-          />
+          <Suspense
+            fallback={
+              <ChartSkeleton
+                title="Distribuição por Categoria e Saldo Anual"
+                heightClass="h-80"
+              />
+            }
+          >
+            <FinancialDashboardCharts transactions={transactions} />
+          </Suspense>
+
+          <Suspense
+            fallback={
+              <ChartSkeleton
+                title="Variabilidade de Gastos (σ) e Projeção de Fechamento"
+                heightClass="h-64"
+              />
+            }
+          >
+            <ExpenseVariabilityCard transactions={transactions} />
+          </Suspense>
         </div>
       )}
-    </div>
+    </section>
   );
 };
+
+export default ChartsView;

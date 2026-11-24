@@ -115,6 +115,17 @@ var JAR_DEFINITIONS = {
   }
 };
 
+// src/utils/sixJarsMetrics.ts
+function formatPctPtBr(pct, decimals = 1) {
+  return pct.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
+}
+
+// src/utils/baseIncomeConfig.ts
+var DEFAULT_BASE_MONTHLY_INCOME = 3652.31;
+
 // src/utils/financeReading.ts
 function generateSearchQueriesForProfile(profile) {
   const queries = [];
@@ -312,7 +323,7 @@ function calculateDeterministicJarOptimization(params) {
     reserveShortfall = 1e4,
     averageMonthlyExpense = 2e3
   } = params;
-  const safeIncome = incomeBase > 0 ? incomeBase : 3652.31;
+  const safeIncome = incomeBase > 0 ? incomeBase : DEFAULT_BASE_MONTHLY_INCOME;
   const currentPercents = {};
   let totalCurrentLimit = 0;
   CORE_JAR_KEYS.forEach((k) => {
@@ -426,14 +437,6 @@ function calculateDeterministicJarOptimization(params) {
     ],
     source: "heuristic"
   };
-}
-
-// src/utils/sixJarsMetrics.ts
-function formatPctPtBr(pct, decimals = 1) {
-  return pct.toLocaleString("pt-BR", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals
-  });
 }
 
 // src/utils/savingsAdvisor.ts
